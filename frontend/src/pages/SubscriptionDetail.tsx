@@ -18,7 +18,7 @@ import {
 import { subscriptionsApi } from '@/api/subscriptions'
 import { providersApi } from '@/api/providers'
 import { customConfigsApi } from '@/api/custom-configs'
-import type { AccessRestriction } from '@/types'
+import type { AccessRestriction, Subscription } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -57,6 +57,14 @@ interface RestrictionForm {
   type: 'ip' | 'cidr' | 'country' | 'city'
   value: string
   mode: 'allow' | 'deny'
+}
+
+/** 开发走 Vite proxy（同 origin）；生产优先用后端 BASE_URL 拼的 subscription_url */
+function subscriptionPublicUrl(sub: Pick<Subscription, 'token' | 'subscription_url'>): string {
+  if (import.meta.env.DEV) {
+    return `${window.location.origin}/sub/${sub.token}`
+  }
+  return sub.subscription_url ?? `${window.location.origin}/sub/${sub.token}`
 }
 
 export function SubscriptionDetail() {
@@ -188,8 +196,7 @@ export function SubscriptionDetail() {
 
   const handleCopyUrl = () => {
     if (subscription) {
-      const url = `${window.location.origin}/sub/${subscription.token}`
-      navigator.clipboard.writeText(url)
+      navigator.clipboard.writeText(subscriptionPublicUrl(subscription))
       toast.success(t('subscriptions.copySuccess'))
     }
   }
@@ -218,7 +225,7 @@ export function SubscriptionDetail() {
     return <div className="text-center py-16 text-muted-foreground">订阅不存在</div>
   }
 
-  const subscriptionUrl = `${window.location.origin}/sub/${subscription.token}`
+  const subscriptionUrl = subscriptionPublicUrl(subscription)
 
   return (
     <div className="space-y-6">
@@ -359,14 +366,14 @@ export function SubscriptionDetail() {
               <div className="space-y-2">
                 <Label>{t('subscriptions.customConfig')}</Label>
                 <Select
-                  value={customConfigId}
-                  onValueChange={setCustomConfigId}
+                  value={customConfigId || '__none__'}
+                  onValueChange={(v) => setCustomConfigId(v === '__none__' ? '' : v)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t('subscriptions.selectCustomConfig')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{t('subscriptions.noCustomConfig')}</SelectItem>
+                    <SelectItem value="__none__">{t('subscriptions.noCustomConfig')}</SelectItem>
                     {customConfigs.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.name}

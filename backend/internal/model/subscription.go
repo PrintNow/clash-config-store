@@ -24,6 +24,8 @@ type Subscription struct {
 	ProxyPrefixEnabled bool           `gorm:"default:true" json:"proxy_prefix_enabled"`
 	// BaseConfig 存储额外的 mihomo 顶层字段（JSON），如 mixed-port、dns、tun 等
 	BaseConfig string `gorm:"type:text" json:"base_config"`
+	// 仅 JSON 输出，由 handler 根据 BASE_URL 填充
+	SubscriptionURL string `gorm:"-" json:"subscription_url,omitempty"`
 
 	User         User          `gorm:"foreignKey:UserID" json:"-"`
 	CustomConfig *CustomConfig `gorm:"foreignKey:CustomConfigID" json:"custom_config,omitempty"`

@@ -14,6 +14,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func fillSubscriptionURL(sub *model.Subscription) {
+	sub.SubscriptionURL = util.SubscriptionPublicURL(sub.Token)
+}
+
 // ListSubscriptions 列出当前用户所有订阅
 func ListSubscriptions(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
@@ -21,6 +25,9 @@ func ListSubscriptions(c *gin.Context) {
 	if err := repository.DB.Where("user_id = ?", userID).Find(&subs).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "查询失败")
 		return
+	}
+	for i := range subs {
+		fillSubscriptionURL(&subs[i])
 	}
 	OK(c, subs)
 }
@@ -75,6 +82,7 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
+	fillSubscriptionURL(sub)
 	OK(c, sub)
 }
 
@@ -98,6 +106,7 @@ func GetSubscription(c *gin.Context) {
 	var restrictions []model.AccessRestriction
 	repository.DB.Where("subscription_id = ?", id).Find(&restrictions)
 
+	fillSubscriptionURL(&sub)
 	OK(c, gin.H{"subscription": sub, "access_restrictions": restrictions})
 }
 
@@ -142,6 +151,7 @@ func UpdateSubscription(c *gin.Context) {
 		return
 	}
 
+	fillSubscriptionURL(&sub)
 	OK(c, sub)
 }
 

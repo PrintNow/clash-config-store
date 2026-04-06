@@ -10,7 +10,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8080',
-      '/sub': 'http://localhost:8080'
-    }
-  }
+      // 订阅拉取与页面同域，本地复制链接为 localhost:5173/sub/... 即可用
+      '/sub': 'http://localhost:8080',
+    },
+  },
 })
