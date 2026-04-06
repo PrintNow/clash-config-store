@@ -1,0 +1,53 @@
+---
+description: Clash Config Store 项目整体架构、目录结构和开发约定
+alwaysApply: true
+---
+
+# Clash Config Store — 项目总览
+
+## 架构
+
+```
+clash-config-store/
+├── backend/          # Go 1.25, Gin, GORM (SQLite/MySQL)
+│   ├── cmd/server/main.go         # 入口，路由注册
+│   └── internal/
+│       ├── config/config.go       # 环境变量加载
+│       ├── model/                 # GORM 数据模型
+│       ├── handler/               # HTTP 处理器（薄层，只做请求/响应）
+│       ├── service/               # 业务逻辑层
+│       ├── middleware/auth.go     # JWT 认证中间件
+│       ├── repository/db.go       # DB 初始化，暴露 repository.DB
+│       └── util/                  # jwt / geoip / token / yaml 工具函数
+└── frontend/         # React 18, TypeScript, Vite, ShadcnUI, Tailwind
+    └── src/
+        ├── api/       # axios API 模块（每个资源一个文件）
+        ├── store/     # Zustand (auth.ts / theme.ts)
+        ├── components/ui/     # ShadcnUI 组件
+        ├── components/layout/ # AppLayout + Sidebar
+        ├── pages/             # 路由页面
+        └── i18n/              # 中英文翻译
+```
+
+## 核心数据模型
+
+| 模型 | 说明 |
+|------|------|
+| User | 用户（email 唯一索引） |
+| UserAgent | 可复用 UA 字符串库 |
+| Provider | 上游订阅源（带缓存字段） |
+| CustomConfig | 用户自定义 proxies/proxy-groups/rules（YAML 文本） |
+| Subscription | 输出订阅（token、启用的 providers、关联规则集） |
+| AccessRestriction | 订阅访问限制（IP/CIDR/Country/City + allow/deny） |
+| AccessLog | 订阅访问日志 |
+
+## 关键约定
+
+- 所有代码注释使用**中文**，保持简洁
+- Handler 只做请求绑定/响应，业务逻辑放 service 层
+- 统一响应：`handler.OK(c, data)` / `handler.Fail(c, httpCode, msg)`
+- 当前用户 ID：`middleware.CurrentUserID(c)`
+- 数据库：`repository.DB`（GORM，已自动迁移）
+- 订阅链接格式：`{BASE_URL}/sub/{token}`
+- `CustomConfig` 的三个字段（Proxies/ProxyGroups/Rules）存储为 YAML 文本字符串
+- `Subscription.EnabledProviderIDs` 存储为 JSON 文本 `[]uint`

@@ -1,0 +1,90 @@
+---
+description: 前端 React/TS 规范：API 调用、状态管理、TanStack Query、ShadcnUI 使用模式
+globs: frontend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# 前端代码规范
+
+## API 调用模式
+
+```typescript
+// src/api/providers.ts — 每个资源一个文件
+import { apiClient } from './client'
+import type { Provider } from '@/types'
+
+export const providersApi = {
+  list: () => apiClient.get<Provider[]>('/providers').then(r => r.data.data),
+  create: (data: Partial<Provider>) => apiClient.post<Provider>('/providers', data).then(r => r.data.data),
+  update: (id: number, data: Partial<Provider>) => apiClient.put<Provider>(`/providers/${id}`, data).then(r => r.data.data),
+  delete: (id: number) => apiClient.delete(`/providers/${id}`),
+}
+```
+
+## TanStack Query 模式
+
+```tsx
+// 查询列表
+const { data: providers = [], isLoading } = useQuery({
+  queryKey: ['providers'],
+  queryFn: providersApi.list,
+})
+
+// 变更（创建/更新/删除）
+const queryClient = useQueryClient()
+const createMutation = useMutation({
+  mutationFn: providersApi.create,
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['providers'] })
+    toast.success(t('common.createSuccess'))
+    setDialogOpen(false)
+  },
+  onError: (err: Error) => toast.error(err.message),
+})
+```
+
+## 状态管理
+
+```typescript
+// 认证状态
+const { user, token, setAuth, logout } = useAuthStore()
+
+// 主题
+const { theme, setTheme } = useThemeStore()
+```
+
+## i18n 使用
+
+```tsx
+const { t } = useTranslation()
+// 使用翻译键，不直接写中文
+<Button>{t('common.save')}</Button>
+<CardTitle>{t('providers.title')}</CardTitle>
+```
+
+## ShadcnUI 组件导入
+
+```tsx
+// 从 @/components/ui/* 导入
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { toast } from 'sonner'  // 全局 Toast，不用 useToast
+```
+
+## 删除确认模式
+
+```tsx
+const [deleteId, setDeleteId] = useState<number | null>(null)
+
+// Dialog 确认
+<Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+  <DialogContent>
+    <DialogHeader><DialogTitle>{t('common.confirmDelete')}</DialogTitle></DialogHeader>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setDeleteId(null)}>{t('common.cancel')}</Button>
+      <Button variant="destructive" onClick={() => deleteMutation.mutate(deleteId!)}>{t('common.delete')}</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
