@@ -1,0 +1,23 @@
+# Go
+backend/clash-config-store
+backend/clash-config-store.db
+backend/*.db
+backend/GeoLite2-*.mmdb
+*.mmdb
+
+# Environment
+.env
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clash-config-store-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_TYPE=sqlite
+      - DB_DSN=/data/clash-config-store.db
+      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret}
+      - JWT_EXPIRY_HOURS=24
+      - GEOIP_PATH=/data/GeoLite2-City.mmdb
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
+    volumes:
+      - backend_data:/data
+    networks:
+      - app_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: clash-config-store-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+volumes:
+  backend_data:
+
+networks:
+  app_network:
+    driver: bridge

@@ -1,0 +1,78 @@
+---
+description: 后端 Go 代码规范：handler/service 分层、响应格式、错误处理、GORM 模式
+globs: backend/**/*.go
+alwaysApply: false
+---
+
+# 后端 Go 代码规范
+
+## Handler 规范
+
+```go
+// ✅ 正确：handler 只做绑定 + 调用 service + 返回响应
+func CreateFoo(c *gin.Context) {
+    var req struct {
+        Name string `json:"name" binding:"required"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil {
+        handler.BindFail(c, err)
+        return
+    }
+    userID := middleware.CurrentUserID(c)
+    result, err := service.CreateFoo(userID, req.Name)
+    if err != nil {
+        handler.Fail(c, http.StatusInternalServerError, err.Error())
+        return
+    }
+    handler.OK(c, result)
+}
+```
+
+## 响应格式
+
+```go
+handler.OK(c, data)                          // {code:0, message:"success", data:...}
+handler.OKMsg(c, "操作成功", data)
+handler.Fail(c, http.StatusBadRequest, "msg") // {code:400, message:"msg"}
+handler.BindFail(c, err)                      // 参数绑定失败
+```
+
+## 所有权验证（防越权）
+
+```go
+// ✅ 必须同时过滤 user_id
+var item model.Foo
+if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&item).Error; err != nil {
+    handler.Fail(c, http.StatusNotFound, "资源不存在")
+    return
+}
+```
+
+## GORM 惯例
+
+```go
+// 创建
+repository.DB.Create(&item)
+
+// 更新（只更新非零值字段用 Updates map）
+repository.DB.Model(&item).Updates(map[string]interface{}{"name": name, "url": url})
+
+// 软删除
+repository.DB.Delete(&item)
+
+// 预加载关联
+repository.DB.Preload("UserAgent").Where(...).Find(&items)
+```
+
+## JSON 字段处理（EnabledProviderIDs 等）
+
+```go
+// 序列化
+ids := []uint{1, 2, 3}
+b, _ := json.Marshal(ids)
+sub.EnabledProviderIDs = string(b)
+
+// 反序列化
+var ids []uint
+_ = json.Unmarshal([]byte(sub.EnabledProviderIDs), &ids)
+```
