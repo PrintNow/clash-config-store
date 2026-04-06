@@ -44,6 +44,8 @@ export interface Subscription {
   user_id: number
   name: string
   token: string
+  /** 后端根据 BASE_URL 拼好的对外订阅链接 */
+  subscription_url?: string
   token_expired_at?: string
   enabled_provider_ids: number[]
   custom_config_id?: number

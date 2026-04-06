@@ -30,10 +30,13 @@ export const subscriptionsApi = {
     return res.data.data
   },
 
-  // 获取单个订阅（含 restrictions）
+  // 获取单个订阅（含 restrictions，此处只取 subscription）
   get: async (id: number): Promise<Subscription> => {
-    const res = await client.get<{ code: number; data: Subscription }>(`/subscriptions/${id}`)
-    return res.data.data
+    const res = await client.get<{
+      code: number
+      data: { subscription: Subscription; access_restrictions: AccessRestriction[] }
+    }>(`/subscriptions/${id}`)
+    return res.data.data.subscription
   },
 
   // 创建订阅
