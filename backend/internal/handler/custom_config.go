@@ -7,6 +7,7 @@ import (
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository"
+	"clash-config-store/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,6 +36,11 @@ func CreateCustomConfig(c *gin.Context) {
 	var req customConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BindFail(c, err)
+		return
+	}
+
+	if err := util.ValidateCustomConfigPayload(req.Proxies, req.ProxyGroups, req.Rules); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -90,6 +96,11 @@ func UpdateCustomConfig(c *gin.Context) {
 	var req customConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BindFail(c, err)
+		return
+	}
+
+	if err := util.ValidateCustomConfigPayload(req.Proxies, req.ProxyGroups, req.Rules); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
