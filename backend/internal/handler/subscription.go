@@ -68,6 +68,11 @@ func CreateSubscription(c *gin.Context) {
 		ruleInsertMode = string(model.RuleInsertPrepend)
 	}
 
+	if err := util.ValidateSubscriptionBaseConfig(req.BaseConfig); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	sub := &model.Subscription{
 		UserID:             userID,
 		Name:               req.Name,
@@ -144,6 +149,10 @@ func UpdateSubscription(c *gin.Context) {
 	sub.CustomConfigID = req.CustomConfigID
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
 	sub.ProxyPrefixEnabled = req.ProxyPrefixEnabled
+	if err := util.ValidateSubscriptionBaseConfig(req.BaseConfig); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	sub.BaseConfig = req.BaseConfig
 	sub.TokenExpiredAt = req.TokenExpiredAt
 
