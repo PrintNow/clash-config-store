@@ -174,6 +174,7 @@ func PreviewCustomConfig(c *gin.Context) {
 		}
 	}
 
+	// preview 没有真实订阅源数据，use: 展开留空（生成订阅时才会注入）
 	yamlBytes, err := util.BuildMihomoConfig(
 		"",
 		nil,
@@ -182,6 +183,7 @@ func PreviewCustomConfig(c *gin.Context) {
 		cfg.Rules,
 		"append",
 		ruleProviderInputs,
+		nil,
 	)
 	if err != nil {
 		Fail(c, http.StatusInternalServerError, "YAML 生成失败: "+err.Error())

@@ -106,6 +106,7 @@ func ExpandCustomProxies(proxies []map[string]interface{}) []interface{} {
 // customRules:           CustomConfig.Rules（字符串列表）
 // ruleInsertMode:        prepend | append | replace（相对于模板内的 rules）
 // ruleProviders:         需注入 rule-providers 的规则集列表
+// providerNodeNames:     订阅源名称 → 该源的节点名列表（用于展开 use: 字段）
 func BuildMihomoConfig(
 	configTemplateContent string,
 	providerProxies []interface{},
@@ -114,6 +115,7 @@ func BuildMihomoConfig(
 	customRules []string,
 	ruleInsertMode string,
 	ruleProviders []RuleProviderInput,
+	providerNodeNames map[string][]string,
 ) ([]byte, error) {
 	// 从 ConfigTemplate YAML 构建初始配置 map
 	cfg := make(MihomoConfig)
@@ -139,11 +141,11 @@ func BuildMihomoConfig(
 	allProxies = append(allProxies, expandedCustom...)
 	cfg["proxies"] = allProxies
 
-	// 写入 proxy-groups（结构化 JSON 直接转 interface 列表）
+	// 写入 proxy-groups，并将 use: [providerName] 展开为具体节点名
 	if len(customGroups) > 0 {
 		groups := make([]interface{}, len(customGroups))
 		for i, g := range customGroups {
-			groups[i] = g
+			groups[i] = expandGroupUse(g, providerNodeNames)
 		}
 		cfg["proxy-groups"] = groups
 	}
@@ -182,6 +184,67 @@ func BuildMihomoConfig(
 	}
 
 	return yaml.Marshal(cfg)
+}
+
+// expandGroupUse 将代理组中的 use:[providerName,...] 展开为具体节点名追加到 proxies 中
+// 展开后从输出 map 里移除 use 字段，避免 Mihomo 找不到对应的 proxy-provider 报错
+func expandGroupUse(g map[string]interface{}, providerNodeNames map[string][]string) map[string]interface{} {
+	useRaw, hasUse := g["use"]
+	if !hasUse || providerNodeNames == nil {
+		return g
+	}
+
+	// 取出已有的 proxies 列表
+	existing := toStringSlice(g["proxies"])
+
+	// 按 use 中的每个 provider 名称展开节点
+	switch u := useRaw.(type) {
+	case []interface{}:
+		for _, item := range u {
+			name, _ := item.(string)
+			if nodes, ok := providerNodeNames[name]; ok {
+				existing = append(existing, nodes...)
+			}
+		}
+	case []string:
+		for _, name := range u {
+			if nodes, ok := providerNodeNames[name]; ok {
+				existing = append(existing, nodes...)
+			}
+		}
+	}
+
+	// 构造不含 use 字段的新 map
+	out := make(map[string]interface{}, len(g))
+	for k, v := range g {
+		if k != "use" {
+			out[k] = v
+		}
+	}
+	if len(existing) > 0 {
+		out["proxies"] = existing
+	}
+	return out
+}
+
+// toStringSlice 将 interface{} 类型的切片转为 []string
+func toStringSlice(v interface{}) []string {
+	if v == nil {
+		return nil
+	}
+	switch s := v.(type) {
+	case []string:
+		return s
+	case []interface{}:
+		out := make([]string, 0, len(s))
+		for _, item := range s {
+			if str, ok := item.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // buildRuleProvidersMap 将 RuleProviderInput 列表转为 rule-providers map

@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, Plus, Trash2, Edit, Eye, Save, Pencil, Check, X } from 'lucide-react'
 import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
+import { providersApi } from '@/api/providers'
 import type { ProxyNode, ProxyGroup, RuleProvider } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -726,8 +727,9 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
 interface ProxyGroupDialogProps {
   open: boolean
   initialGroup: ProxyGroup | null
-  proxyNames: string[]   // 所有代理节点名称
-  groupNames: string[]   // 其他代理组名称（排除自身）
+  proxyNames: string[]    // 所有代理节点名称
+  groupNames: string[]    // 其他代理组名称（排除自身）
+  providerNames: string[] // 可供 use: 引用的订阅源名称
   onClose: () => void
   onSave: (group: ProxyGroup) => void
 }
@@ -742,7 +744,7 @@ interface GroupFormState {
   name: string
   type: ProxyGroup['type']
   proxies: string[]
-  useProviders: string  // 逗号分隔的 provider 名称
+  useProviders: string[] // 选中的订阅源名称列表
   url: string
   interval: string
   tolerance: string
@@ -753,7 +755,7 @@ const defaultGroupForm: GroupFormState = {
   name: '',
   type: 'select',
   proxies: [],
-  useProviders: '',
+  useProviders: [],
   url: 'http://www.gstatic.com/generate_204',
   interval: '300',
   tolerance: '50',
@@ -765,7 +767,7 @@ function groupToForm(g: ProxyGroup): GroupFormState {
     name: g.name,
     type: g.type,
     proxies: g.proxies || [],
-    useProviders: (g.use || []).join(', '),
+    useProviders: g.use || [],
     url: g.url || 'http://www.gstatic.com/generate_204',
     interval: String(g.interval ?? 300),
     tolerance: String(g.tolerance ?? 50),
@@ -774,7 +776,7 @@ function groupToForm(g: ProxyGroup): GroupFormState {
 }
 
 function ProxyGroupDialog({
-  open, initialGroup, proxyNames, groupNames, onClose, onSave,
+  open, initialGroup, proxyNames, groupNames, providerNames, onClose, onSave,
 }: ProxyGroupDialogProps) {
   const { t } = useTranslation()
   const [form, setForm] = useState<GroupFormState>(defaultGroupForm)
@@ -797,22 +799,27 @@ function ProxyGroupDialog({
     }))
   }
 
+  const toggleProvider = (name: string) => {
+    setForm((prev) => ({
+      ...prev,
+      useProviders: prev.useProviders.includes(name)
+        ? prev.useProviders.filter((p) => p !== name)
+        : [...prev.useProviders, name],
+    }))
+  }
+
   const handleSave = () => {
     if (!form.name.trim()) {
       toast.error(t('customConfigs.groupName') + ' ' + t('common.required'))
       return
     }
-    const useArr = form.useProviders
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
 
     const group: ProxyGroup = {
       name: form.name,
       type: form.type,
     }
     if (form.proxies.length > 0) group.proxies = form.proxies
-    if (useArr.length > 0) group.use = useArr
+    if (form.useProviders.length > 0) group.use = form.useProviders
     if (form.type === 'url-test' || form.type === 'fallback' || form.type === 'load-balance') {
       group.url = form.url
       group.interval = parseInt(form.interval) || 300
@@ -877,14 +884,27 @@ function ProxyGroupDialog({
             </div>
           </div>
 
-          {/* 引用 provider（手动输入） */}
+          {/* 引用订阅源（复选框多选） */}
           <div className="space-y-1">
             <Label>{t('customConfigs.groupUse')}</Label>
-            <Input
-              value={form.useProviders}
-              onChange={(e) => set('useProviders', e.target.value)}
-              placeholder="provider1, provider2"
-            />
+            {providerNames.length === 0 ? (
+              <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
+                {t('subscriptions.noProviders')}
+              </p>
+            ) : (
+              <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
+                {providerNames.map((pName) => (
+                  <div key={pName} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`use-${pName}`}
+                      checked={form.useProviders.includes(pName)}
+                      onCheckedChange={() => toggleProvider(pName)}
+                    />
+                    <label htmlFor={`use-${pName}`} className="text-sm cursor-pointer">{pName}</label>
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">{t('customConfigs.groupUseHint')}</p>
           </div>
 
@@ -987,6 +1007,13 @@ export function CustomConfigDetail() {
     queryKey: ['rule-providers'],
     queryFn: ruleProvidersApi.list,
   })
+
+  // 加载所有订阅源，供代理组"引用订阅源"选择
+  const { data: allProviders = [] } = useQuery({
+    queryKey: ['providers'],
+    queryFn: providersApi.list,
+  })
+  const providerNames = allProviders.map((p) => p.name)
 
   // 初始化表单
   useEffect(() => {
@@ -1508,6 +1535,7 @@ export function CustomConfigDetail() {
         groupNames={proxyGroups
           .map((g) => g.name)
           .filter((_, i) => i !== editingGroupIndex)}
+        providerNames={providerNames}
         onClose={() => setGroupDialogOpen(false)}
         onSave={handleSaveGroup}
       />

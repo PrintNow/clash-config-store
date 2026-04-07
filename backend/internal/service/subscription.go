@@ -47,8 +47,9 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		repository.DB.Where("id IN ?", providerIDs).Find(&providers)
 	}
 
-	// 收集 provider 代理节点
+	// 收集 provider 代理节点，同时记录每个 provider 的节点名列表（供 use: 展开）
 	providerProxies := make([]interface{}, 0)
+	providerNodeNames := make(map[string][]string) // providerName -> []nodeName（含前缀）
 	for _, p := range providers {
 		if IsCacheStale(&p) {
 			AsyncRefresh(p.ID)
@@ -61,6 +62,17 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 			proxies = util.PrefixProxies(proxies, p.Name)
 		}
 		providerProxies = append(providerProxies, proxies...)
+
+		// 提取本 provider 所有节点名，供 proxy-group use: 展开
+		names := make([]string, 0, len(proxies))
+		for _, px := range proxies {
+			if pm, ok := px.(map[string]interface{}); ok {
+				if name, ok := pm["name"].(string); ok && name != "" {
+					names = append(names, name)
+				}
+			}
+		}
+		providerNodeNames[p.Name] = names
 	}
 
 	// 读取 CustomConfig 结构化数据
@@ -106,6 +118,7 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		customRules,
 		string(sub.RuleInsertMode),
 		ruleProviderInputs,
+		providerNodeNames,
 	)
 	if err != nil {
 		return nil, sub.ID, true, "", fmt.Errorf("构建配置失败: %w", err)
