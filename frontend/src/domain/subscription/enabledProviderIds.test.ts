@@ -42,7 +42,7 @@ describe('withParsedEnabledProviderIds', () => {
       proxy_prefix_enabled: false,
       base_config: '{}',
       created_at: '2020-01-01',
-    } as Subscription & { enabled_provider_ids: unknown }
+    } as unknown as Subscription & { enabled_provider_ids: unknown }
 
     const out = withParsedEnabledProviderIds(raw)
     expect(out.enabled_provider_ids).toEqual([10, 20])

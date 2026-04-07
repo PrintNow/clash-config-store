@@ -17,20 +17,17 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// 初始化 GeoIP 数据库（可选，路径为空时跳过）
 	if err := util.InitGeoIP(cfg.GeoIPPath); err != nil {
 		log.Printf("[main] GeoIP 初始化失败: %v", err)
 	}
 	defer util.CloseGeoIP()
 
-	// 初始化数据库并自动迁移
 	if err := repository.Init(cfg); err != nil {
 		log.Fatalf("[main] 数据库初始化失败: %v", err)
 	}
 
 	r := gin.Default()
 
-	// CORS 配置（开发模式下允许所有来源，生产环境请按需收紧）
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -43,15 +40,12 @@ func main() {
 	// 公开路由：订阅下发，无需认证
 	r.GET("/sub/:token", handler.HandleSub)
 
-	// API 路由组
 	api := r.Group("/api")
 	{
-		// 认证相关（无需 JWT）
 		auth := api.Group("/auth")
 		auth.POST("/register", handler.Register)
 		auth.POST("/login", handler.Login)
 
-		// 需要 JWT 认证的路由
 		protected := api.Group("", middleware.Auth())
 		{
 			// 用户信息
@@ -60,8 +54,9 @@ func main() {
 			user.PUT("/profile", handler.UpdateProfile)
 			user.PUT("/password", handler.UpdatePassword)
 
-			// 仪表板
+			// 仪表盘
 			protected.GET("/dashboard/stats", handler.GetDashboardStats)
+			protected.POST("/dashboard/refresh-all-providers", handler.RefreshAllProviders)
 
 			// User-Agent 管理
 			ua := protected.Group("/user-agents")
@@ -78,6 +73,22 @@ func main() {
 			prov.DELETE("/:id", handler.DeleteProvider)
 			prov.POST("/:id/refresh", handler.RefreshProvider)
 
+			// 配置模板管理
+			ct := protected.Group("/config-templates")
+			ct.GET("", handler.ListConfigTemplates)
+			ct.POST("", handler.CreateConfigTemplate)
+			ct.GET("/:id", handler.GetConfigTemplate)
+			ct.PUT("/:id", handler.UpdateConfigTemplate)
+			ct.DELETE("/:id", handler.DeleteConfigTemplate)
+
+			// 规则集库管理
+			rp := protected.Group("/rule-providers")
+			rp.GET("", handler.ListRuleProviders)
+			rp.POST("", handler.CreateRuleProvider)
+			rp.GET("/:id", handler.GetRuleProvider)
+			rp.PUT("/:id", handler.UpdateRuleProvider)
+			rp.DELETE("/:id", handler.DeleteRuleProvider)
+
 			// 自定义配置管理
 			cc := protected.Group("/custom-configs")
 			cc.GET("", handler.ListCustomConfigs)
@@ -85,6 +96,7 @@ func main() {
 			cc.GET("/:id", handler.GetCustomConfig)
 			cc.PUT("/:id", handler.UpdateCustomConfig)
 			cc.DELETE("/:id", handler.DeleteCustomConfig)
+			cc.GET("/:id/preview", handler.PreviewCustomConfig)
 
 			// 订阅管理
 			sub := protected.Group("/subscriptions")

@@ -6,9 +6,9 @@ interface SubscriptionPayload {
   name?: string
   enabled_provider_ids?: number[]
   custom_config_id?: number | null
+  config_template_id?: number | null
   rule_insert_mode?: 'prepend' | 'append' | 'replace'
   proxy_prefix_enabled?: boolean
-  base_config?: string
   token_expired_at?: string | null
 }
 
@@ -25,13 +25,11 @@ interface AccessLogResponse {
 }
 
 export const subscriptionsApi = {
-  // 获取订阅列表
   list: async (): Promise<Subscription[]> => {
     const res = await client.get<{ code: number; data: Subscription[] }>('/subscriptions')
     return res.data.data.map((s) => withParsedEnabledProviderIds(s))
   },
 
-  // 获取单个订阅（含 restrictions，此处只取 subscription）
   get: async (id: number): Promise<Subscription> => {
     const res = await client.get<{
       code: number
@@ -40,35 +38,40 @@ export const subscriptionsApi = {
     return withParsedEnabledProviderIds(res.data.data.subscription)
   },
 
-  // 创建订阅
+  getWithRestrictions: async (
+    id: number
+  ): Promise<{ subscription: Subscription; access_restrictions: AccessRestriction[] }> => {
+    const res = await client.get<{
+      code: number
+      data: { subscription: Subscription; access_restrictions: AccessRestriction[] }
+    }>(`/subscriptions/${id}`)
+    return {
+      subscription: withParsedEnabledProviderIds(res.data.data.subscription),
+      access_restrictions: res.data.data.access_restrictions,
+    }
+  },
+
   create: async (data: SubscriptionPayload): Promise<Subscription> => {
     const res = await client.post<{ code: number; data: Subscription }>('/subscriptions', data)
     return withParsedEnabledProviderIds(res.data.data)
   },
 
-  // 更新订阅
   update: async (id: number, data: SubscriptionPayload): Promise<Subscription> => {
-    const res = await client.put<{ code: number; data: Subscription }>(
-      `/subscriptions/${id}`,
-      data
-    )
+    const res = await client.put<{ code: number; data: Subscription }>(`/subscriptions/${id}`, data)
     return withParsedEnabledProviderIds(res.data.data)
   },
 
-  // 删除订阅
   delete: async (id: number): Promise<void> => {
     await client.delete(`/subscriptions/${id}`)
   },
 
-  // 重新生成 Token
-  regenerateToken: async (id: number): Promise<Subscription> => {
-    const res = await client.post<{ code: number; data: Subscription }>(
+  regenerateToken: async (id: number): Promise<{ token: string }> => {
+    const res = await client.post<{ code: number; data: { token: string } }>(
       `/subscriptions/${id}/regenerate-token`
     )
-    return withParsedEnabledProviderIds(res.data.data)
+    return res.data.data
   },
 
-  // 获取访问日志
   getAccessLogs: async (id: number, params?: AccessLogParams): Promise<AccessLogResponse> => {
     const res = await client.get<{ code: number; data: AccessLogResponse }>(
       `/subscriptions/${id}/access-logs`,
@@ -77,7 +80,6 @@ export const subscriptionsApi = {
     return res.data.data
   },
 
-  // 获取访问限制列表
   getRestrictions: async (id: number): Promise<AccessRestriction[]> => {
     const res = await client.get<{ code: number; data: AccessRestriction[] }>(
       `/subscriptions/${id}/restrictions`
@@ -85,14 +87,9 @@ export const subscriptionsApi = {
     return res.data.data
   },
 
-  // 添加访问限制
   addRestriction: async (
     id: number,
-    data: {
-      type: 'ip' | 'cidr' | 'country'
-      value: string
-      mode: 'allow' | 'deny'
-    }
+    data: { type: 'ip' | 'cidr' | 'country'; value: string; mode: 'allow' | 'deny' }
   ): Promise<AccessRestriction> => {
     const res = await client.post<{ code: number; data: AccessRestriction }>(
       `/subscriptions/${id}/restrictions`,
@@ -101,7 +98,6 @@ export const subscriptionsApi = {
     return res.data.data
   },
 
-  // 删除访问限制
   deleteRestriction: async (subscriptionId: number, restrictionId: number): Promise<void> => {
     await client.delete(`/subscriptions/${subscriptionId}/restrictions/${restrictionId}`)
   },
