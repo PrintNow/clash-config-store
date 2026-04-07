@@ -36,7 +36,7 @@ func Init(cfg *config.Config) error {
 		return fmt.Errorf("数据库连接失败: %w", err)
 	}
 
-	if err := autoMigrate(); err != nil {
+	if err := MigrateAll(DB); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
@@ -44,8 +44,12 @@ func Init(cfg *config.Config) error {
 	return nil
 }
 
-func autoMigrate() error {
-	return DB.AutoMigrate(
+// MigrateAll 对所有模型执行 AutoMigrate（生产初始化与单测共用）
+func MigrateAll(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("MigrateAll: db 不能为空")
+	}
+	return db.AutoMigrate(
 		&model.User{},
 		&model.UserAgent{},
 		&model.Provider{},

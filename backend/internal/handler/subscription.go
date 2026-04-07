@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
+	domsub "clash-config-store/internal/domain/subscription"
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository"
@@ -34,7 +34,7 @@ func ListSubscriptions(c *gin.Context) {
 
 type subscriptionRequest struct {
 	Name               string     `json:"name" binding:"required"`
-	EnabledProviderIDs []uint     `json:"enabled_provider_ids"`
+	EnabledProviderIDs *[]uint    `json:"enabled_provider_ids"` // 指针：更新时省略则不覆盖 DB
 	CustomConfigID     *uint      `json:"custom_config_id"`
 	RuleInsertMode     string     `json:"rule_insert_mode"`
 	ProxyPrefixEnabled bool       `json:"proxy_prefix_enabled"`
@@ -57,8 +57,11 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	// 将 []uint 序列化为 JSON 文本存储
-	providerIDsJSON, _ := json.Marshal(req.EnabledProviderIDs)
+	// 将 []uint 序列化为 JSON 文本存储（省略字段视为空列表）
+	ids := []uint{}
+	if req.EnabledProviderIDs != nil {
+		ids = *req.EnabledProviderIDs
+	}
 
 	ruleInsertMode := req.RuleInsertMode
 	if ruleInsertMode == "" {
@@ -70,7 +73,7 @@ func CreateSubscription(c *gin.Context) {
 		Name:               req.Name,
 		Token:              token,
 		TokenExpiredAt:     req.TokenExpiredAt,
-		EnabledProviderIDs: string(providerIDsJSON),
+		EnabledProviderIDs: domsub.EnabledProviderIDsToStore(ids),
 		CustomConfigID:     req.CustomConfigID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),
 		ProxyPrefixEnabled: req.ProxyPrefixEnabled,
@@ -131,15 +134,13 @@ func UpdateSubscription(c *gin.Context) {
 		return
 	}
 
-	providerIDsJSON, _ := json.Marshal(req.EnabledProviderIDs)
-
 	ruleInsertMode := req.RuleInsertMode
 	if ruleInsertMode == "" {
 		ruleInsertMode = string(model.RuleInsertPrepend)
 	}
 
 	sub.Name = req.Name
-	sub.EnabledProviderIDs = string(providerIDsJSON)
+	sub.EnabledProviderIDs = domsub.PatchEnabledProviderIDs(sub.EnabledProviderIDs, req.EnabledProviderIDs)
 	sub.CustomConfigID = req.CustomConfigID
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
 	sub.ProxyPrefixEnabled = req.ProxyPrefixEnabled

@@ -1,4 +1,5 @@
 import client from './client'
+import { withParsedEnabledProviderIds } from '@/domain/subscription/enabledProviderIds'
 import type { Subscription, AccessRestriction, AccessLog } from '@/types'
 
 interface SubscriptionPayload {
@@ -27,7 +28,7 @@ export const subscriptionsApi = {
   // 获取订阅列表
   list: async (): Promise<Subscription[]> => {
     const res = await client.get<{ code: number; data: Subscription[] }>('/subscriptions')
-    return res.data.data
+    return res.data.data.map((s) => withParsedEnabledProviderIds(s))
   },
 
   // 获取单个订阅（含 restrictions，此处只取 subscription）
@@ -36,13 +37,13 @@ export const subscriptionsApi = {
       code: number
       data: { subscription: Subscription; access_restrictions: AccessRestriction[] }
     }>(`/subscriptions/${id}`)
-    return res.data.data.subscription
+    return withParsedEnabledProviderIds(res.data.data.subscription)
   },
 
   // 创建订阅
   create: async (data: SubscriptionPayload): Promise<Subscription> => {
     const res = await client.post<{ code: number; data: Subscription }>('/subscriptions', data)
-    return res.data.data
+    return withParsedEnabledProviderIds(res.data.data)
   },
 
   // 更新订阅
@@ -51,7 +52,7 @@ export const subscriptionsApi = {
       `/subscriptions/${id}`,
       data
     )
-    return res.data.data
+    return withParsedEnabledProviderIds(res.data.data)
   },
 
   // 删除订阅
@@ -64,7 +65,7 @@ export const subscriptionsApi = {
     const res = await client.post<{ code: number; data: Subscription }>(
       `/subscriptions/${id}/regenerate-token`
     )
-    return res.data.data
+    return withParsedEnabledProviderIds(res.data.data)
   },
 
   // 获取访问日志
