@@ -7,6 +7,9 @@ import { Providers } from '@/pages/Providers'
 import { UserAgents } from '@/pages/UserAgents'
 import { CustomConfigs } from '@/pages/CustomConfigs'
 import { CustomConfigDetail } from '@/pages/CustomConfigDetail'
+import { ConfigTemplates } from '@/pages/ConfigTemplates'
+import { ConfigTemplateDetail } from '@/pages/ConfigTemplateDetail'
+import { RuleProviders } from '@/pages/RuleProviders'
 import { Subscriptions } from '@/pages/Subscriptions'
 import { SubscriptionDetail } from '@/pages/SubscriptionDetail'
 import { AccessLogs } from '@/pages/AccessLogs'
@@ -15,11 +18,9 @@ import { Settings } from '@/pages/Settings'
 export function App() {
   return (
     <Routes>
-      {/* 公开路由 */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* 需要认证的路由 */}
       <Route path="/" element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
@@ -27,13 +28,15 @@ export function App() {
         <Route path="user-agents" element={<UserAgents />} />
         <Route path="custom-configs" element={<CustomConfigs />} />
         <Route path="custom-configs/:id" element={<CustomConfigDetail />} />
+        <Route path="config-templates" element={<ConfigTemplates />} />
+        <Route path="config-templates/:id" element={<ConfigTemplateDetail />} />
+        <Route path="rule-providers" element={<RuleProviders />} />
         <Route path="subscriptions" element={<Subscriptions />} />
         <Route path="subscriptions/:id" element={<SubscriptionDetail />} />
         <Route path="subscriptions/:id/logs" element={<AccessLogs />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 
-      {/* 未匹配路由重定向到首页 */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

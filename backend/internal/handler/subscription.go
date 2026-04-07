@@ -34,11 +34,11 @@ func ListSubscriptions(c *gin.Context) {
 
 type subscriptionRequest struct {
 	Name               string     `json:"name" binding:"required"`
-	EnabledProviderIDs *[]uint    `json:"enabled_provider_ids"` // 指针：更新时省略则不覆盖 DB
+	EnabledProviderIDs *[]uint    `json:"enabled_provider_ids"`
 	CustomConfigID     *uint      `json:"custom_config_id"`
+	ConfigTemplateID   *uint      `json:"config_template_id"`
 	RuleInsertMode     string     `json:"rule_insert_mode"`
 	ProxyPrefixEnabled bool       `json:"proxy_prefix_enabled"`
-	BaseConfig         string     `json:"base_config"`
 	TokenExpiredAt     *time.Time `json:"token_expired_at"`
 }
 
@@ -57,7 +57,6 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	// 将 []uint 序列化为 JSON 文本存储（省略字段视为空列表）
 	ids := []uint{}
 	if req.EnabledProviderIDs != nil {
 		ids = *req.EnabledProviderIDs
@@ -68,11 +67,6 @@ func CreateSubscription(c *gin.Context) {
 		ruleInsertMode = string(model.RuleInsertPrepend)
 	}
 
-	if err := util.ValidateSubscriptionBaseConfig(req.BaseConfig); err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	sub := &model.Subscription{
 		UserID:             userID,
 		Name:               req.Name,
@@ -80,9 +74,9 @@ func CreateSubscription(c *gin.Context) {
 		TokenExpiredAt:     req.TokenExpiredAt,
 		EnabledProviderIDs: domsub.EnabledProviderIDsToStore(ids),
 		CustomConfigID:     req.CustomConfigID,
+		ConfigTemplateID:   req.ConfigTemplateID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),
 		ProxyPrefixEnabled: req.ProxyPrefixEnabled,
-		BaseConfig:         req.BaseConfig,
 	}
 
 	if err := repository.DB.Create(sub).Error; err != nil {
@@ -104,7 +98,9 @@ func GetSubscription(c *gin.Context) {
 	}
 
 	var sub model.Subscription
-	if err := repository.DB.Preload("CustomConfig").
+	if err := repository.DB.
+		Preload("CustomConfig").
+		Preload("ConfigTemplate").
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&sub).Error; err != nil {
 		Fail(c, http.StatusNotFound, "订阅不存在或无权限")
@@ -147,13 +143,9 @@ func UpdateSubscription(c *gin.Context) {
 	sub.Name = req.Name
 	sub.EnabledProviderIDs = domsub.PatchEnabledProviderIDs(sub.EnabledProviderIDs, req.EnabledProviderIDs)
 	sub.CustomConfigID = req.CustomConfigID
+	sub.ConfigTemplateID = req.ConfigTemplateID
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
 	sub.ProxyPrefixEnabled = req.ProxyPrefixEnabled
-	if err := util.ValidateSubscriptionBaseConfig(req.BaseConfig); err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	sub.BaseConfig = req.BaseConfig
 	sub.TokenExpiredAt = req.TokenExpiredAt
 
 	if err := repository.DB.Save(&sub).Error; err != nil {
@@ -184,7 +176,6 @@ func DeleteSubscription(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
-
 	OKMsg(c, "删除成功", nil)
 }
 
@@ -213,7 +204,6 @@ func RegenerateToken(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
-
 	OK(c, gin.H{"token": token})
 }
 
@@ -226,7 +216,6 @@ func GetAccessLogs(c *gin.Context) {
 		return
 	}
 
-	// 验证归属关系
 	var sub model.Subscription
 	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&sub).Error; err != nil {
 		Fail(c, http.StatusNotFound, "订阅不存在或无权限")
@@ -325,7 +314,6 @@ func CreateRestriction(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "创建失败")
 		return
 	}
-
 	OK(c, restriction)
 }
 
@@ -343,7 +331,6 @@ func DeleteRestriction(c *gin.Context) {
 		return
 	}
 
-	// 先验证订阅归属
 	var sub model.Subscription
 	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&sub).Error; err != nil {
 		Fail(c, http.StatusNotFound, "订阅不存在或无权限")
@@ -360,6 +347,5 @@ func DeleteRestriction(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
-
 	OKMsg(c, "删除成功", nil)
 }
