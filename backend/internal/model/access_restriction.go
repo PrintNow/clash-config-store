@@ -7,7 +7,6 @@ const (
 	RestrictionTypeIP      RestrictionType = "ip"      // 单个 IP
 	RestrictionTypeCIDR    RestrictionType = "cidr"    // CIDR 段
 	RestrictionTypeCountry RestrictionType = "country" // 国家代码 ISO 3166-1 alpha-2
-	RestrictionTypeCity    RestrictionType = "city"    // 城市名
 )
 
 // RestrictionMode 允许/拒绝

@@ -119,7 +119,7 @@ func checkAccess(clientIP string, restrictions []model.AccessRestriction) (bool,
 	// 按需查询地理信息（避免不必要的查询）
 	var geoInfo *util.GeoInfo
 	for _, r := range restrictions {
-		if r.Type == model.RestrictionTypeCountry || r.Type == model.RestrictionTypeCity {
+		if r.Type == model.RestrictionTypeCountry {
 			geoInfo = util.LookupIP(clientIP)
 			break
 		}
@@ -142,11 +142,6 @@ func checkAccess(clientIP string, restrictions []model.AccessRestriction) (bool,
 				return false
 			}
 			return strings.EqualFold(geoInfo.CountryCode, r.Value)
-		case model.RestrictionTypeCity:
-			if geoInfo == nil {
-				return false
-			}
-			return strings.EqualFold(geoInfo.City, r.Value)
 		}
 		return false
 	}

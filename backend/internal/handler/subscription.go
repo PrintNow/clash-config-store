@@ -297,9 +297,17 @@ func CreateRestriction(c *gin.Context) {
 		return
 	}
 
+	rt := model.RestrictionType(req.Type)
+	switch rt {
+	case model.RestrictionTypeIP, model.RestrictionTypeCIDR, model.RestrictionTypeCountry:
+	default:
+		Fail(c, http.StatusBadRequest, "不支持的限制类型")
+		return
+	}
+
 	restriction := &model.AccessRestriction{
 		SubscriptionID: uint(id),
-		Type:           model.RestrictionType(req.Type),
+		Type:           rt,
 		Value:          req.Value,
 		Mode:           model.RestrictionMode(req.Mode),
 	}

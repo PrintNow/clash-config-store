@@ -59,7 +59,7 @@ export interface Subscription {
 export interface AccessRestriction {
   id: number
   subscription_id: number
-  type: 'ip' | 'cidr' | 'country' | 'city'
+  type: 'ip' | 'cidr' | 'country'
   value: string
   mode: 'allow' | 'deny'
 }

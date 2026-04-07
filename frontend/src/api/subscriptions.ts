@@ -89,7 +89,7 @@ export const subscriptionsApi = {
   addRestriction: async (
     id: number,
     data: {
-      type: 'ip' | 'cidr' | 'country' | 'city'
+      type: 'ip' | 'cidr' | 'country'
       value: string
       mode: 'allow' | 'deny'
     }

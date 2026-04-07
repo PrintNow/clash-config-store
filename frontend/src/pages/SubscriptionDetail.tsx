@@ -18,7 +18,7 @@ import {
 import { subscriptionsApi } from '@/api/subscriptions'
 import { providersApi } from '@/api/providers'
 import { customConfigsApi } from '@/api/custom-configs'
-import type { AccessRestriction, Subscription } from '@/types'
+import type { Subscription } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,7 +54,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface RestrictionForm {
-  type: 'ip' | 'cidr' | 'country' | 'city'
+  type: 'ip' | 'cidr' | 'country'
   value: string
   mode: 'allow' | 'deny'
 }
@@ -202,14 +202,13 @@ export function SubscriptionDetail() {
   }
 
   // 限制类型翻译
-  const getTypeLabel = (type: AccessRestriction['type']) => {
-    const map = {
+  const getTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
       ip: t('subscriptions.typeIP'),
       cidr: t('subscriptions.typeCIDR'),
       country: t('subscriptions.typeCountry'),
-      city: t('subscriptions.typeCity'),
     }
-    return map[type]
+    return map[type] ?? type
   }
 
   if (isLoading) {
@@ -541,7 +540,6 @@ export function SubscriptionDetail() {
                   <SelectItem value="ip">{t('subscriptions.typeIP')}</SelectItem>
                   <SelectItem value="cidr">{t('subscriptions.typeCIDR')}</SelectItem>
                   <SelectItem value="country">{t('subscriptions.typeCountry')}</SelectItem>
-                  <SelectItem value="city">{t('subscriptions.typeCity')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -553,10 +551,8 @@ export function SubscriptionDetail() {
                   restrictionForm.type === 'ip'
                     ? '192.168.1.1'
                     : restrictionForm.type === 'cidr'
-                    ? '192.168.1.0/24'
-                    : restrictionForm.type === 'country'
-                    ? 'CN'
-                    : '北京'
+                      ? '192.168.1.0/24'
+                      : 'CN'
                 }
                 value={restrictionForm.value}
                 onChange={(e) =>
