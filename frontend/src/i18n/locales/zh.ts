@@ -197,7 +197,6 @@ const zh = {
     typeIP: 'IP 地址',
     typeCIDR: 'CIDR 网段',
     typeCountry: '国家/地区',
-    typeCity: '城市',
     accessLogs: '访问日志',
     viewLogs: '查看日志',
     tabProviders: '代理源',

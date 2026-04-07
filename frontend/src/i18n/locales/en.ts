@@ -189,7 +189,6 @@ const en = {
     typeIP: 'IP Address',
     typeCIDR: 'CIDR Range',
     typeCountry: 'Country',
-    typeCity: 'City',
     accessLogs: 'Access Logs',
     viewLogs: 'View Logs',
     tabProviders: 'Providers',
