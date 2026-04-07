@@ -3,7 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Trash2, Edit, Eye, Save, Pencil, Check, X } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Edit, Eye, Save, Pencil, Check, X, GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
 import { providersApi } from '@/api/providers'
@@ -139,6 +154,121 @@ function parseRule(rule: string): ParsedRule {
 function ruleToString(r: ParsedRule): string {
   if (r.type === 'MATCH') return `MATCH,${r.target}`
   return `${r.type},${r.payload},${r.target}`
+}
+
+// ─────────────────────────────────────────────
+// 可拖拽规则行组件
+// ─────────────────────────────────────────────
+
+interface SortableRuleRowProps {
+  id: string
+  rule: string
+  idx: number
+  allRuleProviders: RuleProvider[]
+  proxyGroups: ProxyGroup[]
+  proxies: ProxyNode[]
+  onUpdate: (idx: number, field: keyof ParsedRule, value: string) => void
+  onDelete: (idx: number) => void
+  t: (key: string) => string
+}
+
+function SortableRuleRow({
+  id, rule, idx, allRuleProviders, proxyGroups, proxies, onUpdate, onDelete, t,
+}: SortableRuleRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  const parsed = parseRule(rule)
+
+  return (
+    <tr ref={setNodeRef} style={style} className="border-t">
+      {/* 拖拽把手 */}
+      <td className="px-1 py-1 w-[28px]">
+        <button
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      </td>
+      {/* 规则类型 */}
+      <td className="px-3 py-1">
+        <Select value={parsed.type} onValueChange={(v) => onUpdate(idx, 'type', v)}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RULE_TYPES.map((rt) => (
+              <SelectItem key={rt} value={rt}>{rt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      {/* 匹配内容 */}
+      <td className="px-3 py-1">
+        {parsed.type !== 'MATCH' && (
+          parsed.type === 'RULE-SET' ? (
+            <Select
+              value={parsed.payload}
+              onValueChange={(v) => onUpdate(idx, 'payload', v)}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue placeholder={t('customConfigs.selectRuleSets')} />
+              </SelectTrigger>
+              <SelectContent>
+                {allRuleProviders.map((rp) => (
+                  <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              className="h-7 text-xs font-mono"
+              value={parsed.payload}
+              onChange={(e) => onUpdate(idx, 'payload', e.target.value)}
+            />
+          )
+        )}
+      </td>
+      {/* 目标策略 */}
+      <td className="px-3 py-1">
+        <Select value={parsed.target} onValueChange={(v) => onUpdate(idx, 'target', v)}>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue placeholder="DIRECT / PROXY" />
+          </SelectTrigger>
+          <SelectContent>
+            {BUILTIN_PROXIES.map((b) => (
+              <SelectItem key={b} value={b}>{b}</SelectItem>
+            ))}
+            {proxyGroups.map((g) => (
+              <SelectItem key={`group-${g.name}`} value={g.name}>{g.name}</SelectItem>
+            ))}
+            {proxies.map((p) => (
+              <SelectItem key={`proxy-${p.name}`} value={p.name}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      {/* 删除 */}
+      <td className="px-3 py-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-destructive hover:text-destructive"
+          onClick={() => onDelete(idx)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </td>
+    </tr>
+  )
 }
 
 // 规则类型可选项
@@ -906,6 +1036,11 @@ function ProxyGroupDialog({
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t('customConfigs.groupUseHint')}</p>
+            {form.useProviders.length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                ⚠️ 请确保在订阅管理 →「订阅源」Tab 中同时启用这些订阅源，否则生成时节点为空。
+              </p>
+            )}
           </div>
 
           {/* 条件字段：url-test / fallback / load-balance */}
@@ -1117,6 +1252,22 @@ export function CustomConfigDetail() {
 
   const handleDeleteGroup = (idx: number) => {
     setProxyGroups((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  // ── DnD 传感器 ──
+  const sensors = useSensors(useSensor(PointerSensor, {
+    activationConstraint: { distance: 5 },
+  }))
+
+  const handleRulesDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setRules((prev) => {
+        const oldIndex = prev.findIndex((_, i) => `rule-${i}` === active.id)
+        const newIndex = prev.findIndex((_, i) => `rule-${i}` === over.id)
+        return arrayMove(prev, oldIndex, newIndex)
+      })
+    }
   }
 
   // ── 规则操作 ──
@@ -1415,63 +1566,40 @@ export function CustomConfigDetail() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
+                    <th className="w-[28px] px-1 py-2"></th>
                     <th className="text-left px-3 py-2 font-medium w-[180px]">{t('customConfigs.ruleType')}</th>
                     <th className="text-left px-3 py-2 font-medium">{t('customConfigs.rulePayload')}</th>
                     <th className="text-left px-3 py-2 font-medium w-[160px]">{t('customConfigs.ruleTarget')}</th>
                     <th className="w-[50px] px-3 py-2"></th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rules.map((rule, idx) => {
-                    const parsed = parseRule(rule)
-                    return (
-                      <tr key={idx} className="border-t">
-                        <td className="px-3 py-1">
-                          <Select
-                            value={parsed.type}
-                            onValueChange={(v) => updateParsedRule(idx, 'type', v)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {RULE_TYPES.map((rt) => (
-                                <SelectItem key={rt} value={rt}>{rt}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-3 py-1">
-                          {parsed.type !== 'MATCH' && (
-                            <Input
-                              className="h-7 text-xs font-mono"
-                              value={parsed.payload}
-                              onChange={(e) => updateParsedRule(idx, 'payload', e.target.value)}
-                            />
-                          )}
-                        </td>
-                        <td className="px-3 py-1">
-                          <Input
-                            className="h-7 text-xs"
-                            value={parsed.target}
-                            onChange={(e) => updateParsedRule(idx, 'target', e.target.value)}
-                            placeholder="DIRECT / PROXY"
-                          />
-                        </td>
-                        <td className="px-3 py-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => deleteRule(idx)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleRulesDragEnd}
+                >
+                  <SortableContext
+                    items={rules.map((_, i) => `rule-${i}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <tbody>
+                      {rules.map((rule, idx) => (
+                        <SortableRuleRow
+                          key={`rule-${idx}`}
+                          id={`rule-${idx}`}
+                          rule={rule}
+                          idx={idx}
+                          allRuleProviders={allRuleProviders}
+                          proxyGroups={proxyGroups}
+                          proxies={proxies}
+                          onUpdate={updateParsedRule}
+                          onDelete={deleteRule}
+                          t={t}
+                        />
+                      ))}
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
             </div>
           )}
@@ -1479,7 +1607,24 @@ export function CustomConfigDetail() {
 
         {/* ── Tab 4: 规则集引用 ── */}
         <TabsContent value="ruleSets" className="space-y-4 mt-4">
-          <p className="text-xs text-muted-foreground">{t('customConfigs.ruleSetHint')}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">{t('customConfigs.ruleSetHint')}</p>
+            {allRuleProviders.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const allIds = allRuleProviders.map((rp) => rp.id)
+                  const allSelected = allIds.every((id) => ruleProviderIds.includes(id))
+                  setRuleProviderIds(allSelected ? [] : allIds)
+                }}
+              >
+                {allRuleProviders.every((rp) => ruleProviderIds.includes(rp.id))
+                  ? t('common.deselectAll')
+                  : t('common.selectAll')}
+              </Button>
+            )}
+          </div>
 
           {allRuleProviders.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">

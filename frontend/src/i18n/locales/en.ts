@@ -28,6 +28,8 @@ const en = {
     enabled: 'Enabled',
     disabled: 'Disabled',
     back: 'Back',
+    selectAll: 'Select All',
+    deselectAll: 'Deselect All',
     detail: 'Detail',
     status: 'Status',
     type: 'Type',
