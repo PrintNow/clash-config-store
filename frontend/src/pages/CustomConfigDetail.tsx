@@ -7,7 +7,7 @@ import { ArrowLeft, Save, Pencil, Check, X } from 'lucide-react'
 import { customConfigsApi } from '@/api/custom-configs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { YamlEditor } from '@/components/YamlEditor'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -140,11 +140,11 @@ export function CustomConfigDetail() {
             <CardTitle className="text-base">{t('customConfigs.proxies')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              className="font-mono text-sm min-h-[200px] resize-y"
+            <YamlEditor
+              minHeight="200px"
               placeholder={t('customConfigs.proxiesPlaceholder')}
               value={proxies}
-              onChange={(e) => setProxies(e.target.value)}
+              onChange={setProxies}
             />
           </CardContent>
         </Card>
@@ -154,11 +154,11 @@ export function CustomConfigDetail() {
             <CardTitle className="text-base">{t('customConfigs.proxyGroups')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              className="font-mono text-sm min-h-[200px] resize-y"
+            <YamlEditor
+              minHeight="200px"
               placeholder={t('customConfigs.proxyGroupsPlaceholder')}
               value={proxyGroups}
-              onChange={(e) => setProxyGroups(e.target.value)}
+              onChange={setProxyGroups}
             />
           </CardContent>
         </Card>
@@ -168,11 +168,11 @@ export function CustomConfigDetail() {
             <CardTitle className="text-base">{t('customConfigs.rules')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              className="font-mono text-sm min-h-[300px] resize-y"
+            <YamlEditor
+              minHeight="300px"
               placeholder={t('customConfigs.rulesPlaceholder')}
               value={rules}
-              onChange={(e) => setRules(e.target.value)}
+              onChange={setRules}
             />
           </CardContent>
         </Card>
