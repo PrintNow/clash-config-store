@@ -226,6 +226,33 @@ export function SubscriptionDetail() {
   // 当前选中的配置模板对象
   const selectedTemplate = configTemplates.find((t) => String(t.id) === configTemplateId)
 
+  // 计算自定义配置里 proxy-groups use: 引用了哪些 Provider 名称
+  const referencedProviderNames: string[] = (() => {
+    if (!selectedCustomConfig?.proxy_groups) return []
+    const names = new Set<string>()
+    for (const g of selectedCustomConfig.proxy_groups) {
+      const use = (g as Record<string, unknown>)['use']
+      if (Array.isArray(use)) {
+        use.forEach((n) => typeof n === 'string' && names.add(n))
+      }
+    }
+    return [...names]
+  })()
+
+  // 找出"被引用但未在本订阅启用"的 Provider
+  const unenabledReferencedProviders = referencedProviderNames.filter((name) => {
+    const provider = providers.find((p) => p.name === name)
+    return provider && !enabledProviderIds.includes(provider.id)
+  })
+
+  // 一键启用引用中未启用的 Provider
+  const handleEnableReferenced = () => {
+    const idsToAdd = referencedProviderNames
+      .map((name) => providers.find((p) => p.name === name)?.id)
+      .filter((id): id is number => id !== undefined && !enabledProviderIds.includes(id))
+    setEnabledProviderIds((prev) => [...prev, ...idsToAdd])
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -379,9 +406,21 @@ export function SubscriptionDetail() {
               <div className="space-y-1">
                 <Label>{t('subscriptions.enabledProviders')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('subscriptions.noProviders')}
+                  勾选后点击右上角「保存」生效。代理组中通过「引用订阅源」使用的 Provider 必须在此启用。
                 </p>
               </div>
+
+              {/* 检测到引用未启用的快捷提示 */}
+              {unenabledReferencedProviders.length > 0 && (
+                <div className="flex items-center justify-between rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    ⚠️ 自定义配置引用了 <strong>{unenabledReferencedProviders.join(', ')}</strong>，但未启用
+                  </p>
+                  <Button size="sm" variant="ghost" className="h-6 text-xs text-amber-700 dark:text-amber-400 px-2" onClick={handleEnableReferenced}>
+                    一键启用
+                  </Button>
+                </div>
+              )}
 
               {providers.length === 0 ? (
                 <div className="text-sm text-muted-foreground py-8 text-center">
@@ -467,6 +506,31 @@ export function SubscriptionDetail() {
                       {t('customConfigs.tabRules')}：{selectedCustomConfig.rules?.length ?? 0}
                     </span>
                   </div>
+
+                  {/* 引用了订阅源但未启用的警告 */}
+                  {unenabledReferencedProviders.length > 0 && (
+                    <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        以下订阅源被代理组引用，但尚未在「订阅源」Tab 中启用，生成的 YAML 将缺少这些节点：
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unenabledReferencedProviders.map((name) => (
+                          <Badge key={name} variant="outline" className="text-amber-700 dark:text-amber-400 border-amber-400">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950"
+                        onClick={handleEnableReferenced}
+                      >
+                        一键启用这些订阅源
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 

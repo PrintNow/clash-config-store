@@ -29,6 +29,8 @@ const zh = {
     enabled: '已启用',
     disabled: '已禁用',
     back: '返回',
+    selectAll: '全选',
+    deselectAll: '取消全选',
     detail: '详情',
     status: '状态',
     type: '类型',
