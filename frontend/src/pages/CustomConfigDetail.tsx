@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
 
 // ─────────────────────────────────────────────
 // 工具函数：简单对象 <-> YAML 字符串互转
@@ -1380,9 +1381,38 @@ export function CustomConfigDetail() {
   }
 
   const handleSaveProxy = (node: ProxyNode) => {
+    const newName = node.name.trim()
     if (editingProxyIndex >= 0) {
+      const oldName = editingProxy?.name.trim() ?? ''
+      const renaming = oldName !== '' && oldName !== newName
+      if (renaming) {
+        if (
+          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
+            kind: 'proxy',
+            index: editingProxyIndex,
+          })
+        ) {
+          toast.error(t('customConfigs.renameConflict'))
+          return
+        }
+        const { proxyGroups: pg, rules: r, rulesText: rt, replaceCount } = renameProxyOrGroupRefs(
+          oldName,
+          newName,
+          { proxyGroups, rules, rulesText, rulesTextMode }
+        )
+        setProxyGroups(pg)
+        setRules(r)
+        setRulesText(rt)
+        if (replaceCount > 0) {
+          toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
+        }
+      }
       setProxies((prev) => prev.map((p, i) => (i === editingProxyIndex ? node : p)))
     } else {
+      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
+        toast.error(t('customConfigs.renameConflict'))
+        return
+      }
       setProxies((prev) => [...prev, node])
     }
     setProxyDialogOpen(false)
@@ -1406,9 +1436,39 @@ export function CustomConfigDetail() {
   }
 
   const handleSaveGroup = (group: ProxyGroup) => {
+    const newName = group.name.trim()
     if (editingGroupIndex >= 0) {
-      setProxyGroups((prev) => prev.map((g, i) => (i === editingGroupIndex ? group : g)))
+      const oldName = editingGroup?.name.trim() ?? ''
+      const renaming = oldName !== '' && oldName !== newName
+      if (renaming) {
+        if (
+          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
+            kind: 'group',
+            index: editingGroupIndex,
+          })
+        ) {
+          toast.error(t('customConfigs.renameConflict'))
+          return
+        }
+        const { proxyGroups: pg, rules: r, rulesText: rt, replaceCount } = renameProxyOrGroupRefs(
+          oldName,
+          newName,
+          { proxyGroups, rules, rulesText, rulesTextMode }
+        )
+        setProxyGroups(pg.map((g, i) => (i === editingGroupIndex ? group : g)))
+        setRules(r)
+        setRulesText(rt)
+        if (replaceCount > 0) {
+          toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
+        }
+      } else {
+        setProxyGroups((prev) => prev.map((g, i) => (i === editingGroupIndex ? group : g)))
+      }
     } else {
+      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
+        toast.error(t('customConfigs.renameConflict'))
+        return
+      }
       setProxyGroups((prev) => [...prev, group])
     }
     setGroupDialogOpen(false)
