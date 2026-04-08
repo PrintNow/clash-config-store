@@ -1,49 +1,51 @@
 import client from './client'
-import type { CustomConfig } from '@/types'
+import type { CustomConfig, ProxyNode, ProxyGroup } from '@/types'
 
 export const customConfigsApi = {
-  // 获取规则集列表
   list: async (): Promise<CustomConfig[]> => {
     const res = await client.get<{ code: number; data: CustomConfig[] }>('/custom-configs')
     return res.data.data
   },
 
-  // 获取单个规则集
   get: async (id: number): Promise<CustomConfig> => {
     const res = await client.get<{ code: number; data: CustomConfig }>(`/custom-configs/${id}`)
     return res.data.data
   },
 
-  // 创建规则集
   create: async (data: {
     name: string
-    proxies?: string
-    proxy_groups?: string
-    rules?: string
+    proxies?: ProxyNode[]
+    proxy_groups?: ProxyGroup[]
+    rules?: string[]
+    rule_provider_ids?: number[]
   }): Promise<CustomConfig> => {
     const res = await client.post<{ code: number; data: CustomConfig }>('/custom-configs', data)
     return res.data.data
   },
 
-  // 更新规则集
   update: async (
     id: number,
     data: {
-      name?: string
-      proxies?: string
-      proxy_groups?: string
-      rules?: string
+      name: string
+      proxies?: ProxyNode[]
+      proxy_groups?: ProxyGroup[]
+      rules?: string[]
+      rule_provider_ids?: number[]
     }
   ): Promise<CustomConfig> => {
-    const res = await client.put<{ code: number; data: CustomConfig }>(
-      `/custom-configs/${id}`,
-      data
-    )
+    const res = await client.put<{ code: number; data: CustomConfig }>(`/custom-configs/${id}`, data)
     return res.data.data
   },
 
-  // 删除规则集
   delete: async (id: number): Promise<void> => {
     await client.delete(`/custom-configs/${id}`)
+  },
+
+  // 获取当前配置的 YAML 预览
+  preview: async (id: number): Promise<string> => {
+    const res = await client.get<string>(`/custom-configs/${id}/preview`, {
+      responseType: 'text',
+    })
+    return res.data as unknown as string
   },
 }
