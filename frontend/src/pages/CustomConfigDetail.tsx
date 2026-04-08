@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -19,10 +19,11 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import equal from 'fast-deep-equal'
 import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
 import { providersApi } from '@/api/providers'
-import type { ProxyNode, ProxyGroup, RuleProvider } from '@/types'
+import type { CustomConfig, ProxyNode, ProxyGroup, RuleProvider } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -357,6 +358,33 @@ const sortableInstantReorder = {
   transition: null,
   animateLayoutChanges: () => false,
 } as const
+
+/** 与保存 API 一致的规则草稿（表格模式用 rules，原文模式解析 rulesText） */
+function rulesFromDraft(
+  rulesTextMode: boolean,
+  rulesText: string,
+  rules: string[]
+): string[] {
+  return rulesTextMode
+    ? rulesText.split('\n').map((s) => s.trim()).filter(Boolean)
+    : rules
+}
+
+/** 用于脏检查与提交的 payload 形状 */
+type CustomConfigDraftPayload = Pick<
+  CustomConfig,
+  'name' | 'proxies' | 'proxy_groups' | 'rules' | 'rule_provider_ids'
+>
+
+function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
+  return {
+    name: c.name,
+    proxies: c.proxies || [],
+    proxy_groups: c.proxy_groups || [],
+    rules: c.rules || [],
+    rule_provider_ids: c.rule_provider_ids || [],
+  }
+}
 
 // 规则类型可选项
 const RULE_TYPES = [
@@ -1290,11 +1318,31 @@ export function CustomConfigDetail() {
     onError: () => toast.error(t('common.error')),
   })
 
+  const isDirty = useMemo(() => {
+    if (!config) return false
+    const saved = savedPayloadFromConfig(config)
+    const draft: CustomConfigDraftPayload = {
+      name,
+      proxies,
+      proxy_groups: proxyGroups,
+      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      rule_provider_ids: ruleProviderIds,
+    }
+    return !equal(draft, saved)
+  }, [
+    config,
+    name,
+    proxies,
+    proxyGroups,
+    rules,
+    ruleProviderIds,
+    rulesTextMode,
+    rulesText,
+  ])
+
   const handleSave = () => {
-    // 若当前在文本模式，先同步规则
-    const finalRules = rulesTextMode
-      ? rulesText.split('\n').map((s) => s.trim()).filter(Boolean)
-      : rules
+    if (!isDirty) return
+    const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
     updateMutation.mutate({
       name,
       proxies,
@@ -1473,7 +1521,12 @@ export function CustomConfigDetail() {
                 }}
                 autoFocus
               />
-              <Button size="icon" variant="ghost" onClick={() => handleSave()}>
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={!isDirty || updateMutation.isPending}
+                onClick={() => handleSave()}
+              >
                 <Check className="h-4 w-4" />
               </Button>
               <Button
@@ -1504,7 +1557,10 @@ export function CustomConfigDetail() {
             <Eye className="mr-2 h-4 w-4" />
             {t('customConfigs.previewYaml')}
           </Button>
-          <Button onClick={handleSave} disabled={updateMutation.isPending}>
+          <Button
+            onClick={handleSave}
+            disabled={!isDirty || updateMutation.isPending || !config}
+          >
             <Save className="mr-2 h-4 w-4" />
             {updateMutation.isPending ? t('common.saving') : t('common.save')}
           </Button>
