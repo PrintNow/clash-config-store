@@ -212,6 +212,8 @@ const zh = {
     ruleSetHint: '选中后，生成配置时会自动注入对应的 rule-providers',
     previewYaml: 'YAML 预览',
     previewLoading: '生成预览中...',
+    renameConflict: '该名称已被其他代理节点或代理组使用',
+    renameRefsSynced: '已同步更新 {{count}} 处引用',
   },
 
   // 配置模板
