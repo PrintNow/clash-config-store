@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ArrowLeft, Plus, Trash2, Edit, Eye, Save, Pencil, Check, X, GripVertical } from 'lucide-react'
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   PointerSensor,
   useSensor,
   useSensors,
@@ -46,6 +46,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { cn } from '@/lib/utils'
 
 // ─────────────────────────────────────────────
 // 工具函数：简单对象 <-> YAML 字符串互转
@@ -176,7 +177,7 @@ function SortableRuleRow({
   id, rule, idx, allRuleProviders, proxyGroups, proxies, onUpdate, onDelete, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id })
+    useSortable({ id, ...sortableInstantReorder })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -187,7 +188,11 @@ function SortableRuleRow({
   const parsed = parseRule(rule)
 
   return (
-    <tr ref={setNodeRef} style={style} className="border-t">
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={cn('border-t', isDragging && 'relative z-10')}
+    >
       {/* 拖拽把手 */}
       <td className="px-1 py-1 w-[28px]">
         <button
@@ -270,6 +275,88 @@ function SortableRuleRow({
     </tr>
   )
 }
+
+// ─────────────────────────────────────────────
+// 可拖拽代理组行
+// ─────────────────────────────────────────────
+
+interface SortableProxyGroupRowProps {
+  id: string
+  group: ProxyGroup
+  idx: number
+  onEdit: (group: ProxyGroup, idx: number) => void
+  onDelete: (idx: number) => void
+}
+
+function SortableProxyGroupRow({
+  id, group, idx, onEdit, onDelete,
+}: SortableProxyGroupRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id, ...sortableInstantReorder })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+  }
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={cn('border-t hover:bg-muted/30', isDragging && 'relative z-10')}
+    >
+      <td className="px-1 py-2 w-[28px]">
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      </td>
+      <td className="px-4 py-2 font-medium">{group.name}</td>
+      <td className="px-4 py-2">
+        <Badge variant="outline">{group.type}</Badge>
+      </td>
+      <td className="px-4 py-2 text-muted-foreground text-xs">
+        {(group.proxies || []).slice(0, 3).join(', ')}
+        {(group.proxies || []).length > 3 && ` +${(group.proxies || []).length - 3}`}
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onEdit(group, idx)}
+          >
+            <Edit className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={() => onDelete(idx)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+/** dnd-kit 纵向排序：tbody 为 block、tr 为 table 时行上 transform 才能正确挤位 */
+const SORTABLE_TABLE_LAYOUT =
+  'w-full text-sm [&_thead_tr]:table [&_thead_tr]:w-full [&_thead_tr]:table-fixed [&_tbody]:block [&_tbody_tr]:table [&_tbody_tr]:w-full [&_tbody_tr]:table-fixed'
+
+/** 关闭 transform 过渡与布局动画，避免松手后动画与 React 重排冲突出现回弹 */
+const sortableInstantReorder = {
+  transition: null,
+  animateLayoutChanges: () => false,
+} as const
 
 // 规则类型可选项
 const RULE_TYPES = [
@@ -1088,6 +1175,17 @@ function ProxyGroupDialog({
   )
 }
 
+// 自定义配置详情页 Tab，与 URL ?tab= 同步以便刷新保留
+const CONFIG_DETAIL_TABS = ['proxies', 'proxyGroups', 'rules', 'ruleSets'] as const
+type ConfigDetailTab = (typeof CONFIG_DETAIL_TABS)[number]
+
+function parseConfigDetailTab(raw: string | null): ConfigDetailTab {
+  if (raw && (CONFIG_DETAIL_TABS as readonly string[]).includes(raw)) {
+    return raw as ConfigDetailTab
+  }
+  return 'proxies'
+}
+
 // ─────────────────────────────────────────────
 // 主页面组件
 // ─────────────────────────────────────────────
@@ -1095,9 +1193,27 @@ function ProxyGroupDialog({
 export function CustomConfigDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const configId = Number(id)
+  const activeTab = parseConfigDetailTab(searchParams.get('tab'))
+
+  const handleDetailTabChange = (value: string) => {
+    const next = parseConfigDetailTab(value)
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (next === 'proxies') {
+          p.delete('tab')
+        } else {
+          p.set('tab', next)
+        }
+        return p
+      },
+      { replace: true }
+    )
+  }
 
   // ── 页面级状态 ──
   const [editingName, setEditingName] = useState(false)
@@ -1261,13 +1377,24 @@ export function CustomConfigDetail() {
 
   const handleRulesDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
-    if (over && active.id !== over.id) {
-      setRules((prev) => {
-        const oldIndex = prev.findIndex((_, i) => `rule-${i}` === active.id)
-        const newIndex = prev.findIndex((_, i) => `rule-${i}` === over.id)
-        return arrayMove(prev, oldIndex, newIndex)
-      })
-    }
+    if (!over || active.id === over.id) return
+    setRules((prev) => {
+      const oldIndex = prev.findIndex((_, j) => `rule-${j}` === active.id)
+      const newIndex = prev.findIndex((_, j) => `rule-${j}` === over.id)
+      if (oldIndex < 0 || newIndex < 0) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+
+  const handleProxyGroupsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setProxyGroups((prev) => {
+      const oldIndex = prev.findIndex((_, j) => `group-${j}` === active.id)
+      const newIndex = prev.findIndex((_, j) => `group-${j}` === over.id)
+      if (oldIndex < 0 || newIndex < 0) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
   }
 
   // ── 规则操作 ──
@@ -1384,8 +1511,8 @@ export function CustomConfigDetail() {
         </div>
       </div>
 
-      {/* ── 主体 Tabs ── */}
-      <Tabs defaultValue="proxies">
+      {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
+      <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
         <TabsList>
           <TabsTrigger value="proxies">
             {t('customConfigs.tabProxies')}
@@ -1484,47 +1611,39 @@ export function CustomConfigDetail() {
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
+              <table className={SORTABLE_TABLE_LAYOUT}>
                 <thead className="bg-muted/50">
                   <tr>
+                    <th className="w-[28px] px-1 py-2" aria-hidden />
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupName')}</th>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupType')}</th>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupProxies')}</th>
                     <th className="w-[100px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {proxyGroups.map((group, idx) => (
-                    <tr key={idx} className="border-t hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-2 font-medium">{group.name}</td>
-                      <td className="px-4 py-2">
-                        <Badge variant="outline">{group.type}</Badge>
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground text-xs">
-                        {(group.proxies || []).slice(0, 3).join(', ')}
-                        {(group.proxies || []).length > 3 && ` +${(group.proxies || []).length - 3}`}
-                      </td>
-                      <td className="px-4 py-2 flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEditGroup(group, idx)}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteGroup(idx)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCorners}
+                  onDragEnd={handleProxyGroupsDragEnd}
+                >
+                  <SortableContext
+                    items={proxyGroups.map((_, i) => `group-${i}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <tbody>
+                      {proxyGroups.map((group, idx) => (
+                        <SortableProxyGroupRow
+                          key={`group-${idx}`}
+                          id={`group-${idx}`}
+                          group={group}
+                          idx={idx}
+                          onEdit={openEditGroup}
+                          onDelete={handleDeleteGroup}
+                        />
+                      ))}
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
             </div>
           )}
@@ -1563,7 +1682,7 @@ export function CustomConfigDetail() {
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
+              <table className={SORTABLE_TABLE_LAYOUT}>
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="w-[28px] px-1 py-2"></th>
@@ -1575,7 +1694,7 @@ export function CustomConfigDetail() {
                 </thead>
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
+                  collisionDetection={closestCorners}
                   onDragEnd={handleRulesDragEnd}
                 >
                   <SortableContext
