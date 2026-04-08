@@ -205,6 +205,8 @@ const en = {
     ruleSetHint: 'Selected rule sets will be injected as rule-providers in the generated config',
     previewYaml: 'YAML Preview',
     previewLoading: 'Generating preview...',
+    renameConflict: 'This name is already used by another proxy or proxy group',
+    renameRefsSynced: 'Updated {{count}} reference(s) automatically',
   },
 
   configTemplates: {
