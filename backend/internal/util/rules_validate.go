@@ -273,7 +273,7 @@ func ValidateCustomConfigProxyGroups(proxyGroupsYAML string) error {
 	return nil
 }
 
-// ValidateCustomConfigPayload 校验自定义配置三字段，在写入 DB 前调用
+// ValidateCustomConfigPayload 校验自定义配置三字段，在写入 DB 前调用（兼容旧逻辑，保留备用）
 func ValidateCustomConfigPayload(proxies, proxyGroups, rules string) error {
 	if err := ValidateCustomConfigProxies(proxies); err != nil {
 		return err
@@ -285,4 +285,9 @@ func ValidateCustomConfigPayload(proxies, proxyGroups, rules string) error {
 		return err
 	}
 	return nil
+}
+
+// ValidateMihomoRuleLine 校验单条规则行（公开导出版本）
+func ValidateMihomoRuleLine(line string) error {
+	return validateMihomoRuleLine(line)
 }

@@ -20,13 +20,14 @@ type Subscription struct {
 	TokenExpiredAt     *time.Time     `json:"token_expired_at"`
 	EnabledProviderIDs string         `gorm:"type:text" json:"enabled_provider_ids"` // JSON 编码的 []uint
 	CustomConfigID     *uint          `json:"custom_config_id"`
+	// ConfigTemplateID 引用可复用的顶层配置模板（替代内联 BaseConfig）
+	ConfigTemplateID   *uint          `json:"config_template_id"`
 	RuleInsertMode     RuleInsertMode `gorm:"default:'prepend'" json:"rule_insert_mode"`
 	ProxyPrefixEnabled bool           `gorm:"default:true" json:"proxy_prefix_enabled"`
-	// BaseConfig 存储额外的 mihomo 顶层字段（JSON），如 mixed-port、dns、tun 等
-	BaseConfig string `gorm:"type:text" json:"base_config"`
 	// 仅 JSON 输出，由 handler 根据 BASE_URL 填充
 	SubscriptionURL string `gorm:"-" json:"subscription_url,omitempty"`
 
-	User         User          `gorm:"foreignKey:UserID" json:"-"`
-	CustomConfig *CustomConfig `gorm:"foreignKey:CustomConfigID" json:"custom_config,omitempty"`
+	User           User            `gorm:"foreignKey:UserID" json:"-"`
+	CustomConfig   *CustomConfig   `gorm:"foreignKey:CustomConfigID" json:"custom_config,omitempty"`
+	ConfigTemplate *ConfigTemplate `gorm:"foreignKey:ConfigTemplateID" json:"config_template,omitempty"`
 }

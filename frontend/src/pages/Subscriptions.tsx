@@ -72,7 +72,6 @@ export function Subscriptions() {
       enabled_provider_ids: [],
       rule_insert_mode: 'append',
       proxy_prefix_enabled: false,
-      base_config: '{}',
     })
   }
 
