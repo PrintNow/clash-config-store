@@ -46,7 +46,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { YamlEditor } from '@/components/YamlEditor'
 import { cn } from '@/lib/utils'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
 
@@ -1922,11 +1923,24 @@ export function CustomConfigDetail() {
 
       {/* ── YAML 预览 Sheet ── */}
       <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
-        <SheetContent className="w-[600px] sm:w-[720px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{t('customConfigs.previewYaml')}</SheetTitle>
+        <SheetContent
+          resizable
+          defaultWidth={720}
+          minWidth={520}
+          maxWidth={1200}
+          showClose={false}
+          className="overflow-hidden"
+        >
+          <SheetHeader className="sticky top-0 z-10 shrink-0 bg-background">
+            <div className="flex items-center justify-between gap-4 pr-2">
+              <SheetTitle>{t('customConfigs.previewYaml')}</SheetTitle>
+              <SheetClose className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                <X className="h-5 w-5" />
+                <span className="sr-only">关闭</span>
+              </SheetClose>
+            </div>
           </SheetHeader>
-          <div className="p-6 pt-4">
+          <div className="flex-1 overflow-y-auto p-6 pt-4">
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -1937,9 +1951,12 @@ export function CustomConfigDetail() {
                 </p>
               </div>
             ) : (
-              <pre className="text-xs font-mono bg-muted rounded-lg p-4 overflow-auto whitespace-pre">
-                {previewYaml}
-              </pre>
+              <YamlEditor
+                value={previewYaml}
+                readOnly
+                minHeight="480px"
+                className="bg-muted/30"
+              />
             )}
           </div>
         </SheetContent>

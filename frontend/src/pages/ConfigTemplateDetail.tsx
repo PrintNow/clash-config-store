@@ -8,8 +8,8 @@ import { configTemplatesApi } from '@/api/config-templates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { YamlEditor } from '@/components/YamlEditor'
 
 export function ConfigTemplateDetail() {
   const { t } = useTranslation()
@@ -157,12 +157,11 @@ export function ConfigTemplateDetail() {
           {t('configTemplates.contentHint')}
         </p>
 
-        <Textarea
+        <YamlEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={setContent}
           placeholder={t('configTemplates.contentPlaceholder')}
-          className="font-mono text-sm h-96 min-h-96 resize-y"
-          spellCheck={false}
+          minHeight="24rem"
         />
       </div>
     </div>
