@@ -3,7 +3,24 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Trash2, Edit, Eye, Save, Pencil, Check, X, GripVertical } from 'lucide-react'
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Edit,
+  Eye,
+  Save,
+  Pencil,
+  Check,
+  X,
+  GripVertical,
+  Search,
+  CircleAlert,
+  CircleCheck,
+  FileText,
+  ListFilter,
+  ArrowDownUp,
+} from 'lucide-react'
 import {
   DndContext,
   closestCorners,
@@ -35,7 +52,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -50,6 +70,18 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/comp
 import { YamlEditor } from '@/components/YamlEditor'
 import { cn } from '@/lib/utils'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
+import {
+  buildRuleAnalysis,
+  canUseMatchType,
+  hasMatchRule as hasMatchRuleInList,
+  insertRule,
+  parseRule,
+  ParsedRule,
+  parseRulesText,
+  RULE_TEMPLATE_MAP,
+  RULE_TYPES,
+  ruleToString,
+} from '@/domain/rules'
 
 // ─────────────────────────────────────────────
 // 工具函数：简单对象 <-> YAML 字符串互转
@@ -141,23 +173,125 @@ function yamlToProxy(yaml: string): Record<string, unknown> {
 // 规则解析工具
 // ─────────────────────────────────────────────
 
-interface ParsedRule {
-  type: string
-  payload: string
-  target: string
+interface RuleAnalysis {
+  rule: string
+  parsed: ParsedRule
+  status: 'valid' | 'warning' | 'error'
+  errors: string[]
+  warnings: string[]
 }
 
-function parseRule(rule: string): ParsedRule {
-  const parts = rule.split(',').map((s) => s.trim())
-  if (parts[0] === 'MATCH') {
-    return { type: 'MATCH', payload: '', target: parts[1] || '' }
+interface RuleListItem {
+  sourceIndex: number
+  lineNumber?: number
+  analysis: RuleAnalysis
+}
+
+interface RuleTypeMeta {
+  payloadLabel: string
+  payloadPlaceholder: string
+  hint: string
+  category: RuleFilterValue
+}
+
+type RuleFilterValue = 'all' | 'domain' | 'rule-set' | 'geoip' | 'match'
+
+const RULE_FILTER_OPTIONS: Array<{ value: RuleFilterValue; labelKey: string }> = [
+  { value: 'all', labelKey: 'customConfigs.ruleFilterAll' },
+  { value: 'domain', labelKey: 'customConfigs.ruleFilterDomain' },
+  { value: 'rule-set', labelKey: 'customConfigs.ruleFilterRuleSet' },
+  { value: 'geoip', labelKey: 'customConfigs.ruleFilterGeoIp' },
+  { value: 'match', labelKey: 'customConfigs.ruleFilterMatch' },
+]
+
+const RULE_TYPE_META: Record<string, RuleTypeMeta> = {
+  DOMAIN: {
+    payloadLabel: 'Domain',
+    payloadPlaceholder: 'github.com',
+    hint: '精确域名匹配',
+    category: 'domain',
+  },
+  'DOMAIN-SUFFIX': {
+    payloadLabel: 'Suffix',
+    payloadPlaceholder: 'github.com',
+    hint: '匹配域名后缀',
+    category: 'domain',
+  },
+  'DOMAIN-KEYWORD': {
+    payloadLabel: 'Keyword',
+    payloadPlaceholder: 'github',
+    hint: '匹配域名关键字',
+    category: 'domain',
+  },
+  'DOMAIN-REGEX': {
+    payloadLabel: 'Regex',
+    payloadPlaceholder: '^.*github.*$',
+    hint: '支持逗号，使用正则表达式',
+    category: 'domain',
+  },
+  'DOMAIN-WILDCARD': {
+    payloadLabel: 'Wildcard',
+    payloadPlaceholder: '*.github.com',
+    hint: '匹配通配符域名',
+    category: 'domain',
+  },
+  GEOSITE: {
+    payloadLabel: 'GeoSite',
+    payloadPlaceholder: 'github',
+    hint: 'GeoSite 分类名称',
+    category: 'domain',
+  },
+  GEOIP: {
+    payloadLabel: 'Country Code',
+    payloadPlaceholder: 'CN',
+    hint: '国家/地区代码',
+    category: 'geoip',
+  },
+  'SRC-GEOIP': {
+    payloadLabel: 'Country Code',
+    payloadPlaceholder: 'CN',
+    hint: '源地址国家/地区代码',
+    category: 'geoip',
+  },
+  'IP-CIDR': {
+    payloadLabel: 'CIDR',
+    payloadPlaceholder: '1.1.1.0/24',
+    hint: 'IPv4 CIDR',
+    category: 'all',
+  },
+  'IP-CIDR6': {
+    payloadLabel: 'CIDR6',
+    payloadPlaceholder: '240c::/32',
+    hint: 'IPv6 CIDR',
+    category: 'all',
+  },
+  'RULE-SET': {
+    payloadLabel: 'Rule Set',
+    payloadPlaceholder: 'apple',
+    hint: '引用规则集库中的名称',
+    category: 'rule-set',
+  },
+  'PROCESS-NAME': {
+    payloadLabel: 'Process',
+    payloadPlaceholder: 'Telegram',
+    hint: '进程名匹配',
+    category: 'all',
+  },
+  MATCH: {
+    payloadLabel: '',
+    payloadPlaceholder: '',
+    hint: '兜底规则，通常应放在最后',
+    category: 'match',
+  },
+}
+
+function getRuleTypeMeta(type: string): RuleTypeMeta {
+  return RULE_TYPE_META[type.trim().toUpperCase()] ?? {
+    payloadLabel: 'Payload',
+    payloadPlaceholder: 'rule payload',
+    hint: '当前规则类型未提供专用提示',
+    category: 'all',
   }
-  return { type: parts[0] || '', payload: parts[1] || '', target: parts[2] || '' }
-}
-
-function ruleToString(r: ParsedRule): string {
-  if (r.type === 'MATCH') return `MATCH,${r.target}`
-  return `${r.type},${r.payload},${r.target}`
 }
 
 // ─────────────────────────────────────────────
@@ -166,18 +300,19 @@ function ruleToString(r: ParsedRule): string {
 
 interface SortableRuleRowProps {
   id: string
-  rule: string
-  idx: number
+  item: RuleListItem
   allRuleProviders: RuleProvider[]
   proxyGroups: ProxyGroup[]
   proxies: ProxyNode[]
-  onUpdate: (idx: number, field: keyof ParsedRule, value: string) => void
-  onDelete: (idx: number) => void
+  onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
+  onDelete: (sourceIndex: number) => void
+  isActive: boolean
+  onFocus: (sourceIndex: number) => void
   t: (key: string) => string
 }
 
 function SortableRuleRow({
-  id, rule, idx, allRuleProviders, proxyGroups, proxies, onUpdate, onDelete, t,
+  id, item, allRuleProviders, proxyGroups, proxies, onUpdate, onDelete, isActive, onFocus, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -188,94 +323,209 @@ function SortableRuleRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const parsed = parseRule(rule)
+  const { analysis, sourceIndex, lineNumber } = item
+  const parsed = analysis.parsed
+  const meta = getRuleTypeMeta(parsed.type)
+  const ruleProviderExists = allRuleProviders.some((rp) => rp.name === parsed.payload)
+  const targetOptions = [
+    ...BUILTIN_PROXIES,
+    ...proxyGroups.map((g) => g.name),
+    ...proxies.map((p) => p.name),
+  ]
+  const targetExists = parsed.target === '' || targetOptions.includes(parsed.target)
+  const currentRuleProvider = parsed.payload && !ruleProviderExists ? parsed.payload : null
+  const currentTarget = parsed.target && !targetExists ? parsed.target : null
+  const showHelp = isActive && analysis.errors.length === 0 && analysis.warnings.length === 0
+  const helpMessage =
+    parsed.type === 'MATCH'
+      ? t('customConfigs.matchRuleHint')
+      : parsed.type === 'RULE-SET'
+        ? t('customConfigs.ruleSetSelectionHint')
+        : `${meta.hint} · ${t('customConfigs.ruleTargetHint')}`
 
   return (
-    <tr
+    <div
       ref={setNodeRef}
       style={style}
-      className={cn('border-t', isDragging && 'relative z-10')}
+      className={cn(
+        'rounded-lg border bg-background transition-colors',
+        analysis.status === 'valid' && 'border-border/70',
+        isActive && 'bg-accent/20',
+        analysis.status === 'error' && 'border-destructive/40',
+        analysis.status === 'warning' && 'border-amber-500/40',
+        isDragging && 'relative z-10 shadow-md'
+      )}
+      onClick={() => onFocus(sourceIndex)}
     >
-      {/* 拖拽把手 */}
-      <td className="px-1 py-1 w-[28px]">
-        <button
-          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-      </td>
-      {/* 规则类型 */}
-      <td className="px-3 py-1">
-        <Select value={parsed.type} onValueChange={(v) => onUpdate(idx, 'type', v)}>
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RULE_TYPES.map((rt) => (
-              <SelectItem key={rt} value={rt}>{rt}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </td>
-      {/* 匹配内容 */}
-      <td className="px-3 py-1">
-        {parsed.type !== 'MATCH' && (
-          parsed.type === 'RULE-SET' ? (
+      <div className={cn(
+        'grid gap-3 px-3 py-2.5 lg:grid-cols-[84px_180px_minmax(220px,1fr)_minmax(220px,1fr)_40px] lg:items-center',
+        (analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && 'pb-3'
+      )}>
+        <div className="flex items-center gap-2 self-stretch">
+          <button
+            type="button"
+            className="flex h-9 w-8 items-center justify-center rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+          <div className="flex h-9 min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <span>{lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}</span>
+            {analysis.status === 'error' ? (
+              <CircleAlert className="h-3.5 w-3.5 text-destructive" />
+            ) : analysis.status === 'warning' ? (
+              <CircleAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleType')}</Label>
+          <Select value={parsed.type} onValueChange={(v) => onUpdate(sourceIndex, 'type', v)}>
+            <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
+                <>
+                  <SelectItem value={parsed.type}>{parsed.type}</SelectItem>
+                  <SelectSeparator />
+                </>
+              )}
+              {RULE_TYPES.map((rt) => (
+                <SelectItem key={rt} value={rt}>{rt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">
+            {parsed.type === 'MATCH'
+              ? t('customConfigs.rulePayloadNotRequired')
+              : meta.payloadLabel || t('customConfigs.rulePayload')}
+          </Label>
+          {parsed.type === 'MATCH' ? (
+            <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+              {t('customConfigs.matchRuleCompactHint')}
+            </div>
+          ) : parsed.type === 'RULE-SET' ? (
             <Select
               value={parsed.payload}
-              onValueChange={(v) => onUpdate(idx, 'payload', v)}
+              onValueChange={(v) => onUpdate(sourceIndex, 'payload', v)}
             >
-              <SelectTrigger className="h-7 text-xs">
+              <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
                 <SelectValue placeholder={t('customConfigs.selectRuleSets')} />
               </SelectTrigger>
               <SelectContent>
-                {allRuleProviders.map((rp) => (
-                  <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
-                ))}
+                {currentRuleProvider && (
+                  <>
+                    <SelectItem value={currentRuleProvider}>{currentRuleProvider}</SelectItem>
+                    <SelectSeparator />
+                  </>
+                )}
+                {allRuleProviders.some((rp) => rp.is_preset) && (
+                  <SelectGroup>
+                    <SelectLabel>{t('ruleProviders.loyalsoldierSection')}</SelectLabel>
+                    {allRuleProviders.filter((rp) => rp.is_preset).map((rp) => (
+                      <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {allRuleProviders.some((rp) => !rp.is_preset) && (
+                  <SelectGroup>
+                    <SelectLabel>{t('ruleProviders.customSection')}</SelectLabel>
+                    {allRuleProviders.filter((rp) => !rp.is_preset).map((rp) => (
+                      <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           ) : (
             <Input
-              className="h-7 text-xs font-mono"
+              className="h-9 text-sm font-mono"
               value={parsed.payload}
-              onChange={(e) => onUpdate(idx, 'payload', e.target.value)}
+              onFocus={() => onFocus(sourceIndex)}
+              onChange={(e) => onUpdate(sourceIndex, 'payload', e.target.value)}
+              placeholder={meta.payloadPlaceholder}
             />
-          )
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleTarget')}</Label>
+          <Select value={parsed.target} onValueChange={(v) => onUpdate(sourceIndex, 'target', v)}>
+            <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
+              <SelectValue placeholder="DIRECT / PROXY" />
+            </SelectTrigger>
+            <SelectContent>
+              {currentTarget && (
+                <>
+                  <SelectItem value={currentTarget}>{currentTarget}</SelectItem>
+                  <SelectSeparator />
+                </>
+              )}
+              <SelectGroup>
+                <SelectLabel>{t('customConfigs.targetBuiltin')}</SelectLabel>
+                {BUILTIN_PROXIES.map((b) => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectGroup>
+              {proxyGroups.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>{t('customConfigs.targetProxyGroups')}</SelectLabel>
+                  {proxyGroups.map((g) => (
+                    <SelectItem key={`group-${g.name}`} value={g.name}>{g.name}</SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+              {proxies.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>{t('customConfigs.targetProxies')}</SelectLabel>
+                  {proxies.map((p) => (
+                    <SelectItem key={`proxy-${p.name}`} value={p.name}>{p.name}</SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={() => onDelete(sourceIndex)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {(analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && (
+          <div className="lg:col-start-2 lg:col-end-5">
+            <div className="px-1 pt-0.5 text-xs">
+              {analysis.errors.map((message) => (
+                <p key={`e-${message}`} className="text-destructive">{message}</p>
+              ))}
+              {analysis.warnings.map((message) => (
+                <p
+                  key={`w-${message}`}
+                  className="text-amber-700 dark:text-amber-300"
+                >
+                  {message}
+                </p>
+              ))}
+              {showHelp && analysis.errors.length === 0 && analysis.warnings.length === 0 && (
+                <p className="text-muted-foreground">{helpMessage}</p>
+              )}
+            </div>
+          </div>
         )}
-      </td>
-      {/* 目标策略 */}
-      <td className="px-3 py-1">
-        <Select value={parsed.target} onValueChange={(v) => onUpdate(idx, 'target', v)}>
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue placeholder="DIRECT / PROXY" />
-          </SelectTrigger>
-          <SelectContent>
-            {BUILTIN_PROXIES.map((b) => (
-              <SelectItem key={b} value={b}>{b}</SelectItem>
-            ))}
-            {proxyGroups.map((g) => (
-              <SelectItem key={`group-${g.name}`} value={g.name}>{g.name}</SelectItem>
-            ))}
-            {proxies.map((p) => (
-              <SelectItem key={`proxy-${p.name}`} value={p.name}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </td>
-      {/* 删除 */}
-      <td className="px-3 py-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive"
-          onClick={() => onDelete(idx)}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }
 
@@ -368,7 +618,7 @@ function rulesFromDraft(
   rules: string[]
 ): string[] {
   return rulesTextMode
-    ? rulesText.split('\n').map((s) => s.trim()).filter(Boolean)
+    ? parseRulesText(rulesText).rules
     : rules
 }
 
@@ -387,13 +637,6 @@ function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
     rule_provider_ids: c.rule_provider_ids || [],
   }
 }
-
-// 规则类型可选项
-const RULE_TYPES = [
-  'DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-REGEX',
-  'IP-CIDR', 'IP-CIDR6', 'GEOIP', 'GEOSITE',
-  'RULE-SET', 'PROCESS-NAME', 'MATCH',
-]
 
 // ─────────────────────────────────────────────
 // 代理节点协议类型
@@ -1271,6 +1514,10 @@ export function CustomConfigDetail() {
   // 规则编辑状态
   const [rulesTextMode, setRulesTextMode] = useState(false)
   const [rulesText, setRulesText] = useState('')
+  const [ruleSearch, setRuleSearch] = useState('')
+  const [ruleFilter, setRuleFilter] = useState<RuleFilterValue>('all')
+  const [showOnlyIssues, setShowOnlyIssues] = useState(false)
+  const [activeRuleIndex, setActiveRuleIndex] = useState<number | null>(null)
 
   // YAML 预览面板
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -1303,9 +1550,16 @@ export function CustomConfigDetail() {
       setProxies(config.proxies || [])
       setProxyGroups(config.proxy_groups || [])
       setRules(config.rules || [])
+      setRulesText((config.rules || []).join('\n'))
       setRuleProviderIds(config.rule_provider_ids || [])
     }
   }, [config])
+
+  useEffect(() => {
+    if (!rulesTextMode) {
+      setRulesText(rules.join('\n'))
+    }
+  }, [rules, rulesTextMode])
 
   // ── 保存 mutation ──
   const updateMutation = useMutation({
@@ -1507,20 +1761,34 @@ export function CustomConfigDetail() {
   }
 
   // ── 规则操作 ──
-  const addRule = () => {
-    setRules((prev) => [...prev, 'DOMAIN,example.com,DIRECT'])
+  const addRule = (template: keyof typeof RULE_TEMPLATE_MAP = 'DOMAIN') => {
+    const result = insertRule(rules, template)
+    setRules(result.rules)
+    setActiveRuleIndex(result.inserted ? result.insertIndex : null)
   }
 
   const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string) => {
     setRules((prev) => {
       const parsed = parseRule(prev[idx])
+      if (field === 'type' && value === 'MATCH' && !canUseMatchType(prev, idx)) {
+        toast.error(t('customConfigs.matchRuleUnique'))
+        return prev
+      }
       parsed[field] = value
+      if (field === 'type' && value === 'MATCH') {
+        parsed.payload = ''
+      }
       return prev.map((r, i) => (i === idx ? ruleToString(parsed) : r))
     })
   }
 
   const deleteRule = (idx: number) => {
     setRules((prev) => prev.filter((_, i) => i !== idx))
+    setActiveRuleIndex((prev) => {
+      if (prev === null) return null
+      if (prev === idx) return null
+      return prev > idx ? prev - 1 : prev
+    })
   }
 
   // 切换到文本模式：把数组序列化为换行字符串
@@ -1531,9 +1799,21 @@ export function CustomConfigDetail() {
 
   // 切换回表格模式：解析文本
   const switchToTableMode = () => {
-    const parsed = rulesText.split('\n').map((s) => s.trim()).filter(Boolean)
-    setRules(parsed)
+    const parsed = parseRulesText(rulesText)
+    setRules(parsed.rules)
     setRulesTextMode(false)
+  }
+
+  const handleRulesTextChange = (value: string) => {
+    setRulesText(value)
+  }
+
+  const normalizeMatchRuleOrder = () => {
+    setRules((prev) => {
+      const matchRules = prev.filter((rule) => parseRule(rule).type === 'MATCH')
+      const otherRules = prev.filter((rule) => parseRule(rule).type !== 'MATCH')
+      return [...otherRules, ...matchRules]
+    })
   }
 
   // ── 规则集操作 ──
@@ -1542,6 +1822,102 @@ export function CustomConfigDetail() {
       prev.includes(rpId) ? prev.filter((id) => id !== rpId) : [...prev, rpId]
     )
   }
+
+  // 所有代理节点名称（供代理组选择使用）
+  const proxyNames = proxies.map((p) => p.name)
+  const selectedRuleProviderNames = useMemo(
+    () => new Set(
+      allRuleProviders
+        .filter((rp) => ruleProviderIds.includes(rp.id))
+        .map((rp) => rp.name)
+    ),
+    [allRuleProviders, ruleProviderIds]
+  )
+  const availableRuleProviderNames = useMemo(
+    () => new Set(allRuleProviders.map((rp) => rp.name)),
+    [allRuleProviders]
+  )
+  const availableTargets = useMemo(
+    () => new Set([
+      ...BUILTIN_PROXIES,
+      ...proxyGroups.map((g) => g.name),
+      ...proxies.map((p) => p.name),
+    ]),
+    [proxyGroups, proxies]
+  )
+  const parsedRulesText = useMemo(() => parseRulesText(rulesText), [rulesText])
+  const currentRuleStrings = rulesTextMode ? parsedRulesText.rules : rules
+  const currentLineNumbers = rulesTextMode ? parsedRulesText.lineNumbers : undefined
+  const ruleDuplicateCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    currentRuleStrings.forEach((rule) => {
+      counts.set(rule, (counts.get(rule) || 0) + 1)
+    })
+    return counts
+  }, [currentRuleStrings])
+  const ruleListItems = useMemo<RuleListItem[]>(() => (
+    currentRuleStrings.map((rule, index) => ({
+      sourceIndex: index,
+      lineNumber: currentLineNumbers?.[index],
+      analysis: buildRuleAnalysis(
+        rule,
+        {
+          availableTargets,
+          availableRuleProviders: availableRuleProviderNames,
+          selectedRuleProviders: selectedRuleProviderNames,
+          duplicateCount: ruleDuplicateCounts.get(rule) || 1,
+          isLastRule: index === currentRuleStrings.length - 1,
+        }
+      ),
+    }))
+  ), [
+    availableRuleProviderNames,
+    availableTargets,
+    currentLineNumbers,
+    currentRuleStrings,
+    ruleDuplicateCounts,
+    selectedRuleProviderNames,
+  ])
+  const filteredRuleListItems = useMemo(() => (
+    ruleListItems.filter(({ analysis }) => {
+      const search = ruleSearch.trim().toLowerCase()
+      const inSearch = search === ''
+        || analysis.rule.toLowerCase().includes(search)
+        || analysis.parsed.type.toLowerCase().includes(search)
+        || analysis.parsed.payload.toLowerCase().includes(search)
+        || analysis.parsed.target.toLowerCase().includes(search)
+      if (!inSearch) return false
+      if (showOnlyIssues && analysis.status === 'valid') return false
+      if (ruleFilter === 'all') return true
+      return getRuleTypeMeta(analysis.parsed.type).category === ruleFilter
+    })
+  ), [ruleFilter, ruleListItems, ruleSearch, showOnlyIssues])
+  const ruleStats = useMemo(() => ({
+    total: ruleListItems.length,
+    errors: ruleListItems.filter((item) => item.analysis.status === 'error').length,
+    warnings: ruleListItems.filter((item) => item.analysis.status === 'warning').length,
+    selectedRuleSets: ruleListItems.filter((item) => item.analysis.parsed.type === 'RULE-SET').length,
+  }), [ruleListItems])
+  const hasMatchRule = useMemo(
+    () => hasMatchRuleInList(rules),
+    [rules]
+  )
+  const referencedTargets = useMemo(() => {
+    const values = new Set<string>()
+    ruleListItems.forEach(({ analysis }) => {
+      if (analysis.parsed.target) values.add(analysis.parsed.target)
+    })
+    return [...values]
+  }, [ruleListItems])
+  const referencedRuleSets = useMemo(() => {
+    const values = new Set<string>()
+    ruleListItems.forEach(({ analysis }) => {
+      if (analysis.parsed.type === 'RULE-SET' && analysis.parsed.payload) {
+        values.add(analysis.parsed.payload)
+      }
+    })
+    return [...values]
+  }, [ruleListItems])
 
   // ── 加载/错误状态 ──
   if (isLoading) {
@@ -1557,9 +1933,6 @@ export function CustomConfigDetail() {
   if (!config) {
     return <div className="text-center py-16 text-muted-foreground">配置不存在</div>
   }
-
-  // 所有代理节点名称（供代理组选择使用）
-  const proxyNames = proxies.map((p) => p.name)
 
   return (
     <div className="space-y-6">
@@ -1768,77 +2141,346 @@ export function CustomConfigDetail() {
 
         {/* ── Tab 3: 规则 ── */}
         <TabsContent value="rules" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              {!rulesTextMode && (
-                <Button onClick={addRule} size="sm">
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  {t('customConfigs.addRule')}
-                </Button>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={rulesTextMode ? switchToTableMode : switchToTextMode}
-            >
-              {rulesTextMode ? t('customConfigs.tableRulesMode') : t('customConfigs.rawRulesMode')}
-            </Button>
-          </div>
+          <div className="space-y-4">
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t('customConfigs.rulesWorkspaceTitle')}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {rulesTextMode
+                        ? t('customConfigs.rulesWorkspaceTextHint')
+                        : t('customConfigs.rulesWorkspaceStructuredHint')}
+                    </p>
+                  </div>
+                  <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
+                        !rulesTextMode
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      onClick={switchToTableMode}
+                    >
+                      {t('customConfigs.structuredRulesMode')}
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
+                        rulesTextMode
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      onClick={switchToTextMode}
+                    >
+                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                      {t('customConfigs.rawRulesMode')}
+                    </button>
+                  </div>
+                </div>
 
-          {rulesTextMode ? (
-            <Textarea
-              className="font-mono text-sm min-h-[400px] resize-y"
-              value={rulesText}
-              onChange={(e) => setRulesText(e.target.value)}
-              placeholder="DOMAIN,example.com,DIRECT&#10;GEOIP,CN,DIRECT&#10;MATCH,PROXY"
-            />
-          ) : rules.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
-              {t('common.noData')}
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!rulesTextMode && (
+                        <>
+                          <Button onClick={() => addRule('DOMAIN')} size="sm">
+                            <Plus className="mr-1 h-3.5 w-3.5" />
+                            {t('customConfigs.addRule')}
+                          </Button>
+                          {(Object.keys(RULE_TEMPLATE_MAP) as Array<keyof typeof RULE_TEMPLATE_MAP>).map((key) => (
+                            <Button
+                              key={key}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={key === 'MATCH' && hasMatchRule}
+                              onClick={() => addRule(key)}
+                            >
+                              {key}
+                            </Button>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={normalizeMatchRuleOrder}
+                          >
+                            <ArrowDownUp className="mr-1.5 h-3.5 w-3.5" />
+                            {t('customConfigs.normalizeMatch')}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+
+                    {!rulesTextMode && (
+                      <div className="space-y-3 rounded-lg bg-muted/30 p-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                          <div className="relative flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              className="pl-9"
+                              value={ruleSearch}
+                              onChange={(e) => setRuleSearch(e.target.value)}
+                              placeholder={t('customConfigs.ruleSearchPlaceholder')}
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-2 px-1 py-2">
+                              <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">
+                                {t('customConfigs.ruleQuickFilter')}
+                              </span>
+                            </div>
+                            {RULE_FILTER_OPTIONS.map((option) => (
+                              <Button
+                                key={option.value}
+                                type="button"
+                                size="sm"
+                                variant={ruleFilter === option.value ? 'secondary' : 'outline'}
+                                onClick={() => setRuleFilter(option.value)}
+                              >
+                                {t(option.labelKey)}
+                              </Button>
+                            ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showOnlyIssues ? 'secondary' : 'outline'}
+                              onClick={() => setShowOnlyIssues((prev) => !prev)}
+                            >
+                              <CircleAlert className="mr-1.5 h-3.5 w-3.5" />
+                              {t('customConfigs.onlyShowIssues')}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-lg bg-muted/20 p-3">
+                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
+                        <p className="mt-2 text-2xl font-semibold">{ruleStats.total}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/20 p-3">
+                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
+                        <p className="mt-2 text-2xl font-semibold">{ruleStats.selectedRuleSets}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/20 p-3">
+                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
+                        <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">
+                          {ruleStats.warnings}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-muted/20 p-3">
+                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
+                        <p className="mt-2 text-2xl font-semibold text-destructive">{ruleStats.errors}</p>
+                      </div>
+                    </div>
+
+                    {rulesTextMode ? (
+                        <div className="space-y-3">
+                          <div className="rounded-lg p-1">
+                            <YamlEditor
+                              value={rulesText}
+                              onChange={handleRulesTextChange}
+                            minHeight="420px"
+                            placeholder={'DOMAIN,example.com,DIRECT\nGEOIP,CN,DIRECT\nMATCH,PROXY'}
+                          />
+                        </div>
+                          <div className="rounded-lg bg-muted/20 p-4">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <h4 className="text-sm font-semibold">{t('customConfigs.ruleDiagnostics')}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {t('customConfigs.ruleDiagnosticsHint')}
+                              </p>
+                            </div>
+                            <Badge variant="outline">{ruleListItems.length}</Badge>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {ruleListItems.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                            ) : (
+                              ruleListItems.map((item) => (
+                                  <div key={`text-rule-${item.sourceIndex}`} className="rounded-md border-b border-border/60 px-0 py-2 last:border-b-0">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="font-mono text-xs text-muted-foreground">
+                                        L{item.lineNumber}: {item.analysis.rule}
+                                      </p>
+                                      {item.analysis.status === 'error' ? (
+                                        <CircleAlert className="h-3.5 w-3.5 text-destructive" />
+                                      ) : item.analysis.status === 'warning' ? (
+                                        <CircleAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+                                      ) : (
+                                        <CircleCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                      )}
+                                    </div>
+                                  {item.analysis.errors.map((message) => (
+                                    <p key={`e-${message}`} className="mt-2 text-xs text-destructive">
+                                      {message}
+                                    </p>
+                                  ))}
+                                  {item.analysis.warnings.map((message) => (
+                                    <p
+                                      key={`w-${message}`}
+                                      className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                                    >
+                                      {message}
+                                    </p>
+                                  ))}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : filteredRuleListItems.length === 0 ? (
+                      <div className="rounded-lg border border-dashed bg-background px-6 py-12 text-center">
+                        <p className="text-sm font-medium">{t('customConfigs.noMatchingRules')}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {t('customConfigs.noMatchingRulesHint')}
+                        </p>
+                      </div>
+                    ) : (
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCorners}
+                        onDragEnd={handleRulesDragEnd}
+                      >
+                        <SortableContext
+                          items={filteredRuleListItems.map((item) => `rule-${item.sourceIndex}`)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-3">
+                            {filteredRuleListItems.map((item) => (
+                              <SortableRuleRow
+                                key={`rule-${item.sourceIndex}`}
+                                id={`rule-${item.sourceIndex}`}
+                                item={item}
+                                allRuleProviders={allRuleProviders}
+                                proxyGroups={proxyGroups}
+                                proxies={proxies}
+                                onUpdate={updateParsedRule}
+                                onDelete={deleteRule}
+                                isActive={activeRuleIndex === item.sourceIndex}
+                                onFocus={setActiveRuleIndex}
+                                t={t}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg bg-muted/20 p-4">
+                    <div>
+                      <h4 className="text-sm font-semibold">{t('customConfigs.ruleContextTitle')}</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t('customConfigs.ruleContextHint')}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 border-t pt-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold">{t('customConfigs.ruleContextRuleSets')}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {t('customConfigs.ruleContextRuleSetsHint')}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{referencedRuleSets.length}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {referencedRuleSets.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                        ) : (
+                          referencedRuleSets.map((name) => {
+                            const provider = allRuleProviders.find((item) => item.name === name)
+                            const selected = provider ? ruleProviderIds.includes(provider.id) : false
+                            return (
+                              <Badge
+                                key={name}
+                                variant={selected ? 'secondary' : 'outline'}
+                                className={cn(
+                                  !provider && 'border-destructive/40 text-destructive',
+                                  provider && !selected && 'border-amber-500/40 text-amber-700 dark:text-amber-300'
+                                )}
+                              >
+                                {name}
+                                {provider
+                                  ? ` · ${provider.is_preset ? t('ruleProviders.presetBadge') : t('ruleProviders.customSection')}`
+                                  : ` · ${t('customConfigs.ruleSetMissing')}`}
+                              </Badge>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t pt-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold">{t('customConfigs.ruleContextTargets')}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {t('customConfigs.ruleContextTargetsHint')}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{referencedTargets.length}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {referencedTargets.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                        ) : (
+                          referencedTargets.map((name) => {
+                            const isBuiltin = BUILTIN_PROXIES.includes(name)
+                            const isGroup = proxyGroups.some((group) => group.name === name)
+                            const isProxy = proxies.some((proxy) => proxy.name === name)
+                            return (
+                              <Badge
+                                key={name}
+                                variant="outline"
+                                className={cn(
+                                  !isBuiltin && !isGroup && !isProxy && 'border-destructive/40 text-destructive'
+                                )}
+                              >
+                                {name}
+                                {isBuiltin
+                                  ? ` · ${t('customConfigs.targetBuiltin')}`
+                                  : isGroup
+                                    ? ` · ${t('customConfigs.targetProxyGroups')}`
+                                    : isProxy
+                                      ? ` · ${t('customConfigs.targetProxies')}`
+                                      : ` · ${t('customConfigs.ruleTargetMissing')}`}
+                              </Badge>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t pt-4">
+                      <div className="flex items-center gap-2">
+                        {ruleStats.errors > 0 || ruleStats.warnings > 0 ? (
+                          <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                        ) : (
+                          <CircleCheck className="h-4 w-4 text-emerald-600" />
+                        )}
+                        <h4 className="text-sm font-semibold">{t('customConfigs.ruleChecklistTitle')}</h4>
+                      </div>
+                      <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                        <p>{t('customConfigs.ruleChecklistRuleSets')}</p>
+                        <p>{t('customConfigs.ruleChecklistTargets')}</p>
+                        <p>{t('customConfigs.ruleChecklistMatch')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
             </div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <table className={SORTABLE_TABLE_LAYOUT}>
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="w-[28px] px-1 py-2"></th>
-                    <th className="text-left px-3 py-2 font-medium w-[180px]">{t('customConfigs.ruleType')}</th>
-                    <th className="text-left px-3 py-2 font-medium">{t('customConfigs.rulePayload')}</th>
-                    <th className="text-left px-3 py-2 font-medium w-[160px]">{t('customConfigs.ruleTarget')}</th>
-                    <th className="w-[50px] px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCorners}
-                  onDragEnd={handleRulesDragEnd}
-                >
-                  <SortableContext
-                    items={rules.map((_, i) => `rule-${i}`)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <tbody>
-                      {rules.map((rule, idx) => (
-                        <SortableRuleRow
-                          key={`rule-${idx}`}
-                          id={`rule-${idx}`}
-                          rule={rule}
-                          idx={idx}
-                          allRuleProviders={allRuleProviders}
-                          proxyGroups={proxyGroups}
-                          proxies={proxies}
-                          onUpdate={updateParsedRule}
-                          onDelete={deleteRule}
-                          t={t}
-                        />
-                      ))}
-                    </tbody>
-                  </SortableContext>
-                </DndContext>
-              </table>
-            </div>
-          )}
+          </div>
         </TabsContent>
 
         {/* ── Tab 4: 规则集引用 ── */}
