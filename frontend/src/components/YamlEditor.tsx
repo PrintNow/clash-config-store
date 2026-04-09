@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { yaml } from '@codemirror/lang-yaml'
+import { EditorState, type Extension } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
 import { useThemeStore } from '@/store/theme'
 import { cn } from '@/lib/utils'
 
@@ -31,11 +33,12 @@ function useResolvedDark(): boolean {
 
 export interface YamlEditorProps {
   value: string
-  onChange: (value: string) => void
+  onChange?: (value: string) => void
   placeholder?: string
   /** 编辑器最小高度，如 200px、300px */
   minHeight?: string
   className?: string
+  readOnly?: boolean
 }
 
 /** YAML 语法高亮编辑区，主题随应用亮/暗/system 切换 */
@@ -45,8 +48,29 @@ export function YamlEditor({
   placeholder,
   minHeight = '200px',
   className,
+  readOnly = false,
 }: YamlEditorProps) {
   const isDark = useResolvedDark()
+  const extensions: Extension[] = [yaml()]
+
+  if (readOnly) {
+    extensions.push(
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+      EditorView.contentAttributes.of({ tabIndex: '0' }),
+      keymap.of([
+        {
+          key: 'Mod-a',
+          run: (view) => {
+            view.dispatch({
+              selection: { anchor: 0, head: view.state.doc.length },
+            })
+            return true
+          },
+        },
+      ])
+    )
+  }
 
   return (
     <div className={cn('rounded-md border border-input overflow-hidden', className)}>
@@ -54,14 +78,16 @@ export function YamlEditor({
         value={value}
         minHeight={minHeight}
         theme={isDark ? 'dark' : 'light'}
-        extensions={[yaml()]}
+        extensions={extensions}
         onChange={onChange}
         placeholder={placeholder}
+        editable={!readOnly}
         basicSetup={{
           lineNumbers: true,
           autocompletion: false,
+          foldGutter: !readOnly,
         }}
-        className="text-sm font-mono"
+        className={cn('text-sm font-mono', readOnly && '[&_.cm-content]:cursor-text')}
       />
     </div>
   )
