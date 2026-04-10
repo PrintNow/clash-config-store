@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { CircleAlert, GitCompare, Loader2 } from 'lucide-react'
+import { CircleAlert, CircleCheck, GitCompare, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useContextSaveBarStore, type ContextSaveBarExtraActionIcon } from '@/store/context-save-bar'
@@ -16,23 +16,36 @@ export function ContextSaveBar() {
   const { t } = useTranslation()
   const registration = useContextSaveBarStore((s) => s.registration)
 
-  if (!registration?.dirty) {
+  // 无注册方时不占位（例如非详情页）
+  if (!registration) {
     return null
   }
 
-  const { saving, saveDisabled, onSave, onDiscard, extraActions } = registration
+  const { dirty, saving, saveDisabled, onSave, onDiscard, extraActions } = registration
 
   return (
     <div
       className={cn(
         'flex w-full min-w-0 max-w-[min(100%,26rem)] items-center gap-2 rounded-full border bg-muted/80 px-3 py-2 shadow-sm backdrop-blur-sm',
         'sm:max-w-[min(100%,36rem)] sm:gap-3 sm:px-5 sm:py-2',
-        'md:max-w-[min(100%,40rem)] lg:max-w-[min(100%,48rem)]'
+        'md:max-w-[min(100%,40rem)] lg:max-w-[min(100%,48rem)]',
+        !dirty && 'border-muted/60 bg-muted/50'
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground sm:text-base">
-        <CircleAlert className="h-4 w-4 shrink-0 text-muted-foreground sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
-        <span className="truncate font-medium">{t('contextSaveBar.unsaved')}</span>
+        {dirty ? (
+          <>
+            <CircleAlert className="h-4 w-4 shrink-0 text-muted-foreground sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
+            <span className="truncate font-medium">{t('contextSaveBar.unsaved')}</span>
+          </>
+        ) : (
+          <>
+            <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-500 sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
+            <span className="truncate font-medium text-muted-foreground">
+              {t('customConfigs.allChangesSaved')}
+            </span>
+          </>
+        )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 sm:gap-2">
         {extraActions?.map((action) => (
@@ -49,32 +62,36 @@ export function ContextSaveBar() {
             <span className="max-w-[7rem] truncate sm:max-w-none">{action.label}</span>
           </Button>
         ))}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-9 px-2 sm:h-9 sm:px-3"
-          disabled={saving}
-          onClick={() => onDiscard()}
-        >
-          {t('contextSaveBar.discard')}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="h-9 shrink-0 rounded-full px-3 sm:px-4"
-          disabled={saveDisabled}
-          onClick={() => onSave()}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="hidden sm:inline">{t('common.saving')}</span>
-            </>
-          ) : (
-            t('common.save')
-          )}
-        </Button>
+        {dirty && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 sm:h-9 sm:px-3"
+              disabled={saving}
+              onClick={() => onDiscard()}
+            >
+              {t('contextSaveBar.discard')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 shrink-0 rounded-full px-3 sm:px-4"
+              disabled={saveDisabled}
+              onClick={() => onSave()}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="hidden sm:inline">{t('common.saving')}</span>
+                </>
+              ) : (
+                t('common.save')
+              )}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )

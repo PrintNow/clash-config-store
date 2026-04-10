@@ -60,6 +60,7 @@ export function useRegisterContextSaveBar(options: RegisterContextSaveBarOptions
   } = options
   const setRegistration = useContextSaveBarStore((s) => s.setRegistration)
 
+  // 依赖变化时直接覆盖 registration，不在 cleanup 里先置 null（否则每次 deps 变都会闪成无注册，顶栏消失）
   useEffect(() => {
     if (!enabled) {
       setRegistration(null)
@@ -73,7 +74,6 @@ export function useRegisterContextSaveBar(options: RegisterContextSaveBarOptions
       onDiscard,
       ...(extraActions?.length ? { extraActions } : {}),
     })
-    return () => setRegistration(null)
   }, [
     enabled,
     dirty,
@@ -84,4 +84,9 @@ export function useRegisterContextSaveBar(options: RegisterContextSaveBarOptions
     extraActions,
     setRegistration,
   ])
+
+  // 仅页面卸载时注销，避免与其它 effect 的「先清空再写入」竞态
+  useEffect(() => {
+    return () => setRegistration(null)
+  }, [setRegistration])
 }
