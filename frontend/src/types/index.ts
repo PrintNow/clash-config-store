@@ -90,6 +90,14 @@ export interface CustomConfig {
   updated_at: string
 }
 
+export interface CustomConfigTransferPayload {
+  name: string
+  proxies: ProxyNode[]
+  proxy_groups: ProxyGroup[]
+  rules: string[]
+  rule_provider_ids: number[]
+}
+
 // 输出订阅配置
 export interface Subscription {
   id: number

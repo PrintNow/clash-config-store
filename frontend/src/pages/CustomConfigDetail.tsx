@@ -20,6 +20,9 @@ import {
   FileText,
   ListFilter,
   ArrowDownUp,
+  Copy,
+  RefreshCw,
+  PanelRightOpen,
 } from 'lucide-react'
 import {
   DndContext,
@@ -78,6 +81,7 @@ import {
   parseRule,
   ParsedRule,
   parseRulesText,
+  RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
   RULE_TYPES,
   ruleToString,
@@ -179,12 +183,19 @@ interface RuleAnalysis {
   status: 'valid' | 'warning' | 'error'
   errors: string[]
   warnings: string[]
+  quickFixes: Array<{ type: RuleQuickFixAction; label: string }>
 }
 
 interface RuleListItem {
   sourceIndex: number
   lineNumber?: number
   analysis: RuleAnalysis
+}
+
+interface RuleTargetOptionGroup {
+  key: string
+  label: string
+  values: string[]
 }
 
 interface RuleTypeMeta {
@@ -294,6 +305,39 @@ function getRuleTypeMeta(type: string): RuleTypeMeta {
   }
 }
 
+function getRuleStatusTone(status: RuleAnalysis['status']) {
+  if (status === 'error') return 'text-destructive border-destructive/40 bg-destructive/5'
+  if (status === 'warning') return 'text-amber-700 border-amber-500/40 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/10'
+  return 'text-emerald-700 border-emerald-500/30 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/10'
+}
+
+function getRuleStatusLabel(status: RuleAnalysis['status'], t: (key: string) => string) {
+  if (status === 'error') return t('customConfigs.ruleStatusError')
+  if (status === 'warning') return t('customConfigs.ruleStatusWarning')
+  return t('customConfigs.ruleStatusValid')
+}
+
+function buildRuleSaveChecklist(
+  finalRules: string[],
+  currentRuleStrings: string[],
+  ruleListItems: RuleListItem[]
+): 'valid' | 'warning' | 'error' {
+  if (ruleListItems.some((item) => item.analysis.status === 'error')) {
+    return 'error'
+  }
+  const matchIndex = finalRules.findIndex((rule) => parseRule(rule).type === 'MATCH')
+  if (matchIndex >= 0 && matchIndex !== finalRules.length - 1) {
+    return 'warning'
+  }
+  if (
+    ruleListItems.some((item) => item.analysis.status === 'warning')
+    || currentRuleStrings.length !== finalRules.length
+  ) {
+    return 'warning'
+  }
+  return 'valid'
+}
+
 // ─────────────────────────────────────────────
 // 可拖拽规则行组件
 // ─────────────────────────────────────────────
@@ -302,17 +346,17 @@ interface SortableRuleRowProps {
   id: string
   item: RuleListItem
   allRuleProviders: RuleProvider[]
-  proxyGroups: ProxyGroup[]
-  proxies: ProxyNode[]
+  targetOptionGroups: RuleTargetOptionGroup[]
   onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
   onDelete: (sourceIndex: number) => void
   isActive: boolean
   onFocus: (sourceIndex: number) => void
+  onQuickFix: (sourceIndex: number, action: RuleQuickFixAction) => void
   t: (key: string) => string
 }
 
 function SortableRuleRow({
-  id, item, allRuleProviders, proxyGroups, proxies, onUpdate, onDelete, isActive, onFocus, t,
+  id, item, allRuleProviders, targetOptionGroups, onUpdate, onDelete, isActive, onFocus, onQuickFix, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -327,11 +371,7 @@ function SortableRuleRow({
   const parsed = analysis.parsed
   const meta = getRuleTypeMeta(parsed.type)
   const ruleProviderExists = allRuleProviders.some((rp) => rp.name === parsed.payload)
-  const targetOptions = [
-    ...BUILTIN_PROXIES,
-    ...proxyGroups.map((g) => g.name),
-    ...proxies.map((p) => p.name),
-  ]
+  const targetOptions = targetOptionGroups.flatMap((group) => group.values)
   const targetExists = parsed.target === '' || targetOptions.includes(parsed.target)
   const currentRuleProvider = parsed.payload && !ruleProviderExists ? parsed.payload : null
   const currentTarget = parsed.target && !targetExists ? parsed.target : null
@@ -348,183 +388,242 @@ function SortableRuleRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'rounded-lg border bg-background transition-colors',
+        'group rounded-xl border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
-        isActive && 'bg-accent/20',
+        isActive && 'border-primary/30 bg-accent/20 shadow-sm',
         analysis.status === 'error' && 'border-destructive/40',
         analysis.status === 'warning' && 'border-amber-500/40',
         isDragging && 'relative z-10 shadow-md'
       )}
       onClick={() => onFocus(sourceIndex)}
     >
-      <div className={cn(
-        'grid gap-3 px-3 py-2.5 lg:grid-cols-[84px_180px_minmax(220px,1fr)_minmax(220px,1fr)_40px] lg:items-center',
-        (analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && 'pb-3'
-      )}>
+      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
         <div className="flex items-center gap-2 self-stretch">
           <button
             type="button"
-            className="flex h-9 w-8 items-center justify-center rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+            className={cn(
+              'flex h-9 w-8 items-center justify-center rounded text-muted-foreground transition-opacity hover:text-foreground cursor-grab active:cursor-grabbing',
+              isActive ? 'opacity-100' : 'opacity-30 group-hover:opacity-100'
+            )}
             {...attributes}
             {...listeners}
           >
             <GripVertical className="h-3.5 w-3.5" />
           </button>
-          <div className="flex h-9 min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <span>{lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}</span>
-            {analysis.status === 'error' ? (
-              <CircleAlert className="h-3.5 w-3.5 text-destructive" />
-            ) : analysis.status === 'warning' ? (
-              <CircleAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
-            ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}
+            </span>
+            <Badge variant="outline">{parsed.type || 'UNKNOWN'}</Badge>
+            <Badge variant="outline" className={cn('border', getRuleStatusTone(analysis.status))}>
+              {getRuleStatusLabel(analysis.status, t)}
+            </Badge>
+            {!isActive && parsed.payload && (
+              <span className="max-w-[240px] truncate rounded-full bg-muted px-2 py-1 text-xs font-mono text-muted-foreground">
+                {parsed.payload}
+              </span>
+            )}
+            {!isActive && parsed.target && (
+              <span className="max-w-[220px] truncate rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground/80">
+                {parsed.target}
+              </span>
+            )}
           </div>
-        </div>
+          </div>
+          <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(sourceIndex)
+          }}
+          >
+          <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+          </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleType')}</Label>
-          <Select value={parsed.type} onValueChange={(v) => onUpdate(sourceIndex, 'type', v)}>
-            <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
-                <>
-                  <SelectItem value={parsed.type}>{parsed.type}</SelectItem>
-                  <SelectSeparator />
-                </>
-              )}
-              {RULE_TYPES.map((rt) => (
-                <SelectItem key={rt} value={rt}>{rt}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          {isActive && (
+          <div className="space-y-3 px-3 py-3">
+          <div className="grid gap-3 lg:grid-cols-[160px_minmax(220px,1fr)_minmax(220px,1fr)] lg:items-start">
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">
-            {parsed.type === 'MATCH'
-              ? t('customConfigs.rulePayloadNotRequired')
-              : meta.payloadLabel || t('customConfigs.rulePayload')}
-          </Label>
-          {parsed.type === 'MATCH' ? (
-            <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-              {t('customConfigs.matchRuleCompactHint')}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleType')}</Label>
+              <Select value={parsed.type} onValueChange={(v) => onUpdate(sourceIndex, 'type', v)}>
+                <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
+                    <>
+                      <SelectItem value={parsed.type}>{parsed.type}</SelectItem>
+                      <SelectSeparator />
+                    </>
+                  )}
+                  {RULE_TYPES.map((rt) => (
+                    <SelectItem key={rt} value={rt}>{rt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : parsed.type === 'RULE-SET' ? (
-            <Select
-              value={parsed.payload}
-              onValueChange={(v) => onUpdate(sourceIndex, 'payload', v)}
-            >
-              <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
-                <SelectValue placeholder={t('customConfigs.selectRuleSets')} />
-              </SelectTrigger>
-              <SelectContent>
-                {currentRuleProvider && (
-                  <>
-                    <SelectItem value={currentRuleProvider}>{currentRuleProvider}</SelectItem>
-                    <SelectSeparator />
-                  </>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">
+                {parsed.type === 'MATCH'
+                  ? t('customConfigs.rulePayloadNotRequired')
+                  : meta.payloadLabel || t('customConfigs.rulePayload')}
+              </Label>
+              {parsed.type === 'MATCH' ? (
+                <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                  {t('customConfigs.matchRuleCompactHint')}
+                </div>
+              ) : parsed.type === 'RULE-SET' ? (
+                <Select
+                  value={parsed.payload}
+                  onValueChange={(v) => onUpdate(sourceIndex, 'payload', v)}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      'h-9 text-sm',
+                      !ruleProviderExists && parsed.payload && 'border-destructive text-destructive',
+                      ruleProviderExists && analysis.warnings.some((message) => message.includes('尚未')) && 'border-amber-500'
+                    )}
+                    onFocus={() => onFocus(sourceIndex)}
+                  >
+                    <SelectValue placeholder={t('customConfigs.selectRuleSets')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentRuleProvider && (
+                      <>
+                        <SelectItem value={currentRuleProvider}>{currentRuleProvider}</SelectItem>
+                        <SelectSeparator />
+                      </>
+                    )}
+                    {allRuleProviders.some((rp) => rp.is_preset) && (
+                      <SelectGroup>
+                        <SelectLabel>{t('ruleProviders.loyalsoldierSection')}</SelectLabel>
+                        {allRuleProviders.filter((rp) => rp.is_preset).map((rp) => (
+                          <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {allRuleProviders.some((rp) => !rp.is_preset) && (
+                      <SelectGroup>
+                        <SelectLabel>{t('ruleProviders.customSection')}</SelectLabel>
+                        {allRuleProviders.filter((rp) => !rp.is_preset).map((rp) => (
+                          <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  className="h-9 text-sm font-mono"
+                  value={parsed.payload}
+                  onFocus={() => onFocus(sourceIndex)}
+                  onChange={(e) => onUpdate(sourceIndex, 'payload', e.target.value)}
+                  placeholder={meta.payloadPlaceholder}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleTarget')}</Label>
+              <Select value={parsed.target} onValueChange={(v) => onUpdate(sourceIndex, 'target', v)}>
+                <SelectTrigger
+                  className={cn(
+                    'h-9 text-sm',
+                    !targetExists && parsed.target && 'border-destructive text-destructive'
+                  )}
+                  onFocus={() => onFocus(sourceIndex)}
+                >
+                  <SelectValue placeholder="DIRECT / PROXY" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentTarget && (
+                    <>
+                      <SelectItem value={currentTarget}>{currentTarget}</SelectItem>
+                      <SelectSeparator />
+                    </>
+                  )}
+                  {targetOptionGroups.map((group) => (
+                    group.values.length > 0 && (
+                      <SelectGroup key={group.key}>
+                        <SelectLabel>{group.label}</SelectLabel>
+                        {group.values.map((value) => (
+                          <SelectItem key={`${group.key}-${value}`} value={value}>{value}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {parsed.type === 'MATCH' && analysis.warnings.some((message) => message.includes('MATCH')) && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{t('customConfigs.matchShouldBeLast')}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/40 bg-background"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onQuickFix(sourceIndex, 'move-match-to-bottom')
+                  }}
+                >
+                  {t('customConfigs.normalizeMatch')}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {(analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && (
+            <div className="rounded-lg bg-muted/20 px-3 py-2 text-xs">
+              <div className="space-y-1">
+                {analysis.errors.map((message) => (
+                  <p key={`e-${message}`} className="text-destructive">{message}</p>
+                ))}
+                {analysis.warnings.map((message) => (
+                  <p
+                    key={`w-${message}`}
+                    className="text-amber-700 dark:text-amber-300"
+                  >
+                    {message}
+                  </p>
+                ))}
+                {showHelp && analysis.errors.length === 0 && analysis.warnings.length === 0 && (
+                  <p className="text-muted-foreground">{helpMessage}</p>
                 )}
-                {allRuleProviders.some((rp) => rp.is_preset) && (
-                  <SelectGroup>
-                    <SelectLabel>{t('ruleProviders.loyalsoldierSection')}</SelectLabel>
-                    {allRuleProviders.filter((rp) => rp.is_preset).map((rp) => (
-                      <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-                {allRuleProviders.some((rp) => !rp.is_preset) && (
-                  <SelectGroup>
-                    <SelectLabel>{t('ruleProviders.customSection')}</SelectLabel>
-                    {allRuleProviders.filter((rp) => !rp.is_preset).map((rp) => (
-                      <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              className="h-9 text-sm font-mono"
-              value={parsed.payload}
-              onFocus={() => onFocus(sourceIndex)}
-              onChange={(e) => onUpdate(sourceIndex, 'payload', e.target.value)}
-              placeholder={meta.payloadPlaceholder}
-            />
+              </div>
+              {analysis.quickFixes.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {analysis.quickFixes.map((fix) => (
+                    <Button
+                      key={`${sourceIndex}-${fix.type}`}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onQuickFix(sourceIndex, fix.type)
+                      }}
+                    >
+                      {fix.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleTarget')}</Label>
-          <Select value={parsed.target} onValueChange={(v) => onUpdate(sourceIndex, 'target', v)}>
-            <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
-              <SelectValue placeholder="DIRECT / PROXY" />
-            </SelectTrigger>
-            <SelectContent>
-              {currentTarget && (
-                <>
-                  <SelectItem value={currentTarget}>{currentTarget}</SelectItem>
-                  <SelectSeparator />
-                </>
-              )}
-              <SelectGroup>
-                <SelectLabel>{t('customConfigs.targetBuiltin')}</SelectLabel>
-                {BUILTIN_PROXIES.map((b) => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectGroup>
-              {proxyGroups.length > 0 && (
-                <SelectGroup>
-                  <SelectLabel>{t('customConfigs.targetProxyGroups')}</SelectLabel>
-                  {proxyGroups.map((g) => (
-                    <SelectItem key={`group-${g.name}`} value={g.name}>{g.name}</SelectItem>
-                  ))}
-                </SelectGroup>
-              )}
-              {proxies.length > 0 && (
-                <SelectGroup>
-                  <SelectLabel>{t('customConfigs.targetProxies')}</SelectLabel>
-                  {proxies.map((p) => (
-                    <SelectItem key={`proxy-${p.name}`} value={p.name}>{p.name}</SelectItem>
-                  ))}
-                </SelectGroup>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(sourceIndex)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-
-        {(analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && (
-          <div className="lg:col-start-2 lg:col-end-5">
-            <div className="px-1 pt-0.5 text-xs">
-              {analysis.errors.map((message) => (
-                <p key={`e-${message}`} className="text-destructive">{message}</p>
-              ))}
-              {analysis.warnings.map((message) => (
-                <p
-                  key={`w-${message}`}
-                  className="text-amber-700 dark:text-amber-300"
-                >
-                  {message}
-                </p>
-              ))}
-              {showHelp && analysis.errors.length === 0 && analysis.warnings.length === 0 && (
-                <p className="text-muted-foreground">{helpMessage}</p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
@@ -1518,6 +1617,8 @@ export function CustomConfigDetail() {
   const [ruleFilter, setRuleFilter] = useState<RuleFilterValue>('all')
   const [showOnlyIssues, setShowOnlyIssues] = useState(false)
   const [activeRuleIndex, setActiveRuleIndex] = useState<number | null>(null)
+  const [selectedDiagnosticLine, setSelectedDiagnosticLine] = useState<number | null>(null)
+  const [lastValidationState, setLastValidationState] = useState<'idle' | 'valid' | 'warning' | 'error'>('idle')
 
   // YAML 预览面板
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -1570,6 +1671,7 @@ export function CustomConfigDetail() {
       queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
       toast.success(t('customConfigs.saveSuccess'))
       setEditingName(false)
+      setLastValidationState('idle')
     },
     onError: () => toast.error(t('common.error')),
   })
@@ -1599,6 +1701,13 @@ export function CustomConfigDetail() {
   const handleSave = () => {
     if (!isDirty) return
     const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
+    const issues = buildRuleSaveChecklist(finalRules, currentRuleStrings, ruleListItems)
+    if (issues === 'error') {
+      setLastValidationState('error')
+      toast.error(t('customConfigs.saveBlockedByErrors'))
+      return
+    }
+    setLastValidationState(issues)
     updateMutation.mutate({
       name,
       proxies,
@@ -1611,6 +1720,10 @@ export function CustomConfigDetail() {
   // ── YAML 预览 ──
   const handleOpenPreview = async () => {
     setPreviewOpen(true)
+    await refreshPreview()
+  }
+
+  const refreshPreview = async () => {
     setPreviewLoading(true)
     try {
       const yaml = await customConfigsApi.preview(configId)
@@ -1619,6 +1732,15 @@ export function CustomConfigDetail() {
       setPreviewYaml('# 预览生成失败')
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  const handleCopyPreview = async () => {
+    try {
+      await navigator.clipboard.writeText(previewYaml)
+      toast.success(t('common.copied'))
+    } catch {
+      toast.error(t('common.error'))
     }
   }
 
@@ -1800,8 +1922,30 @@ export function CustomConfigDetail() {
   // 切换回表格模式：解析文本
   const switchToTableMode = () => {
     const parsed = parseRulesText(rulesText)
+    const nextRuleList = parsed.rules.map((rule, index) => ({
+      sourceIndex: index,
+      lineNumber: parsed.lineNumbers[index],
+      analysis: buildRuleAnalysis(
+        rule,
+        {
+          availableTargets,
+          availableRuleProviders: availableRuleProviderNames,
+          selectedRuleProviders: selectedRuleProviderNames,
+          duplicateCount: parsed.rules.filter((candidate) => candidate === rule).length,
+          isLastRule: index === parsed.rules.length - 1,
+        }
+      ),
+    }))
+    const firstError = nextRuleList.find((item) => item.analysis.status === 'error')
+    if (firstError?.lineNumber) {
+      setSelectedDiagnosticLine(firstError.lineNumber)
+      setLastValidationState('error')
+      toast.error(t('customConfigs.ruleTextFixErrorsFirst'))
+      return
+    }
     setRules(parsed.rules)
     setRulesTextMode(false)
+    setSelectedDiagnosticLine(null)
   }
 
   const handleRulesTextChange = (value: string) => {
@@ -1814,6 +1958,25 @@ export function CustomConfigDetail() {
       const otherRules = prev.filter((rule) => parseRule(rule).type !== 'MATCH')
       return [...otherRules, ...matchRules]
     })
+  }
+
+  const handleRuleQuickFix = (_sourceIndex: number, action: RuleQuickFixAction) => {
+    if (action === 'move-match-to-bottom') {
+      normalizeMatchRuleOrder()
+      setActiveRuleIndex(rules.length - 1)
+      return
+    }
+    if (action === 'go-rule-sets') {
+      handleDetailTabChange('ruleSets')
+      return
+    }
+    if (action === 'go-target-groups') {
+      handleDetailTabChange('proxyGroups')
+      return
+    }
+    if (action === 'go-target-proxies') {
+      handleDetailTabChange('proxies')
+    }
   }
 
   // ── 规则集操作 ──
@@ -1902,6 +2065,10 @@ export function CustomConfigDetail() {
     () => hasMatchRuleInList(rules),
     [rules]
   )
+  const matchRuleNeedsNormalize = useMemo(() => {
+    const matchIndex = rules.findIndex((rule) => parseRule(rule).type === 'MATCH')
+    return matchIndex >= 0 && matchIndex !== rules.length - 1
+  }, [rules])
   const referencedTargets = useMemo(() => {
     const values = new Set<string>()
     ruleListItems.forEach(({ analysis }) => {
@@ -1918,6 +2085,45 @@ export function CustomConfigDetail() {
     })
     return [...values]
   }, [ruleListItems])
+  const activeRuleItem = useMemo(() => (
+    filteredRuleListItems.find((item) => item.sourceIndex === activeRuleIndex)
+      ?? ruleListItems.find((item) => item.sourceIndex === activeRuleIndex)
+      ?? filteredRuleListItems[0]
+      ?? ruleListItems[0]
+      ?? null
+  ), [activeRuleIndex, filteredRuleListItems, ruleListItems])
+  const targetOptionGroups = useMemo<RuleTargetOptionGroup[]>(() => ([
+    { key: 'builtin', label: t('customConfigs.targetBuiltin'), values: BUILTIN_PROXIES },
+    { key: 'groups', label: t('customConfigs.targetProxyGroups'), values: proxyGroups.map((g) => g.name) },
+    { key: 'proxies', label: t('customConfigs.targetProxies'), values: proxies.map((p) => p.name) },
+  ]), [proxyGroups, proxies, t])
+  const visibleRuleCount = filteredRuleListItems.length
+  const hasActiveFilters = ruleSearch.trim() !== '' || ruleFilter !== 'all' || showOnlyIssues
+  const saveHealth = buildRuleSaveChecklist(rulesFromDraft(rulesTextMode, rulesText, rules), currentRuleStrings, ruleListItems)
+  const checklistItems = [
+    {
+      key: 'rulesets',
+      ok: !ruleListItems.some((item) => item.analysis.errors.some((message) => message.includes('规则集')))
+        && !ruleListItems.some((item) => item.analysis.warnings.some((message) => message.includes('尚未'))),
+      label: t('customConfigs.ruleChecklistRuleSets'),
+    },
+    {
+      key: 'targets',
+      ok: !ruleListItems.some((item) => item.analysis.warnings.some((message) => message.includes('目标策略'))),
+      label: t('customConfigs.ruleChecklistTargets'),
+    },
+    {
+      key: 'match',
+      ok: !matchRuleNeedsNormalize,
+      label: t('customConfigs.ruleChecklistMatch'),
+    },
+  ]
+
+  useEffect(() => {
+    if (activeRuleItem && activeRuleIndex !== activeRuleItem.sourceIndex) {
+      setActiveRuleIndex(activeRuleItem.sourceIndex)
+    }
+  }, [activeRuleIndex, activeRuleItem])
 
   // ── 加载/错误状态 ──
   if (isLoading) {
@@ -1937,98 +2143,149 @@ export function CustomConfigDetail() {
   return (
     <div className="space-y-6">
       {/* ── 顶部操作栏 ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/custom-configs')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+      <div className="rounded-2xl border bg-background/95 p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-ml-1 mt-1"
+              onClick={() => navigate('/custom-configs')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
 
-          {editingName ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-9 text-lg font-bold"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSave()
-                  if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
-                }}
-                autoFocus
-              />
-              <Button
-                size="icon"
-                variant="ghost"
-                disabled={!isDirty || updateMutation.isPending}
-                onClick={() => handleSave()}
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => { setName(config.name); setEditingName(false) }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+            <div className="space-y-2">
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="h-9 text-lg font-bold"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSave()
+                      if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
+                    }}
+                    autoFocus
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={!isDirty || updateMutation.isPending}
+                    onClick={() => handleSave()}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => { setName(config.name); setEditingName(false) }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold">{name}</h1>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => setEditingName(true)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={isDirty ? 'secondary' : 'outline'}>
+                  {isDirty ? t('customConfigs.unsavedChanges') : t('customConfigs.allChangesSaved')}
+                </Badge>
+                {activeTab === 'rules' && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'border',
+                      saveHealth === 'error' && 'border-destructive/40 text-destructive',
+                      saveHealth === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                      saveHealth === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                    )}
+                  >
+                    {saveHealth === 'error'
+                      ? t('customConfigs.validationErrorsBadge', { count: ruleStats.errors })
+                      : saveHealth === 'warning'
+                        ? t('customConfigs.validationWarningsBadge', { count: ruleStats.warnings })
+                        : t('customConfigs.validationReady')}
+                  </Badge>
+                )}
+                {lastValidationState !== 'idle' && (
+                  <Badge variant="outline" className={cn(
+                    lastValidationState === 'error' && 'border-destructive/40 text-destructive',
+                    lastValidationState === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                    lastValidationState === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                  )}>
+                    {lastValidationState === 'error'
+                      ? t('customConfigs.lastCheckError')
+                      : lastValidationState === 'warning'
+                        ? t('customConfigs.lastCheckWarning')
+                        : t('customConfigs.lastCheckValid')}
+                  </Badge>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{name}</h1>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() => setEditingName(true)}
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
-        </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleOpenPreview}>
-            <Eye className="mr-2 h-4 w-4" />
-            {t('customConfigs.previewYaml')}
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!isDirty || updateMutation.isPending || !config}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {updateMutation.isPending ? t('common.saving') : t('common.save')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Button variant="outline" onClick={handleOpenPreview}>
+              <Eye className="mr-2 h-4 w-4" />
+              {t('customConfigs.previewYaml')}
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!isDirty || updateMutation.isPending || !config}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {updateMutation.isPending ? t('common.saving') : t('common.save')}
+              {activeTab === 'rules' && (ruleStats.errors > 0 || ruleStats.warnings > 0) && (
+                <span className="ml-2 rounded-full bg-background/20 px-1.5 py-0.5 text-xs">
+                  {ruleStats.errors > 0 ? `${ruleStats.errors}E` : `${ruleStats.warnings}W`}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
       <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
-        <TabsList>
-          <TabsTrigger value="proxies">
-            {t('customConfigs.tabProxies')}
-            {proxies.length > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxies.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="proxyGroups">
-            {t('customConfigs.tabProxyGroups')}
-            {proxyGroups.length > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="rules">
-            {t('customConfigs.tabRules')}
-            {rules.length > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="ruleSets">
-            {t('customConfigs.tabRuleSets')}
-            {ruleProviderIds.length > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{ruleProviderIds.length}</Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList>
+            <TabsTrigger value="proxies">
+              {t('customConfigs.tabProxies')}
+              {proxies.length > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxies.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="proxyGroups">
+              {t('customConfigs.tabProxyGroups')}
+              {proxyGroups.length > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="rules">
+              {t('customConfigs.tabRules')}
+              {rules.length > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="ruleSets">
+              {t('customConfigs.tabRuleSets')}
+              {ruleProviderIds.length > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{ruleProviderIds.length}</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Tab 1: 代理节点 ── */}
         <TabsContent value="proxies" className="space-y-4 mt-4">
@@ -2044,7 +2301,7 @@ export function CustomConfigDetail() {
               {t('common.noData')}
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
@@ -2056,27 +2313,29 @@ export function CustomConfigDetail() {
                 <tbody>
                   {proxies.map((proxy, idx) => (
                     <tr key={idx} className="border-t hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-2 font-medium">{proxy.name}</td>
+                      <td className="px-4 py-2 font-medium whitespace-nowrap">{proxy.name}</td>
                       <td className="px-4 py-2">
                         <Badge variant="secondary">{proxy.type}</Badge>
                       </td>
-                      <td className="px-4 py-2 flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEditProxy(proxy, idx)}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteProxy(idx)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEditProxy(proxy, idx)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteProxy(idx)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2100,7 +2359,7 @@ export function CustomConfigDetail() {
               {t('common.noData')}
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
               <table className={SORTABLE_TABLE_LAYOUT}>
                 <thead className="bg-muted/50">
                   <tr>
@@ -2143,65 +2402,83 @@ export function CustomConfigDetail() {
         <TabsContent value="rules" className="space-y-4 mt-4">
           <div className="space-y-4">
             <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold">{t('customConfigs.rulesWorkspaceTitle')}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {rulesTextMode
-                        ? t('customConfigs.rulesWorkspaceTextHint')
-                        : t('customConfigs.rulesWorkspaceStructuredHint')}
-                    </p>
+              <div className="rounded-2xl border bg-background p-4 shadow-sm">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('customConfigs.rulesWorkspaceTitle')}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {rulesTextMode
+                          ? t('customConfigs.rulesWorkspaceTextHint')
+                          : t('customConfigs.rulesWorkspaceStructuredHint')}
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-xl border bg-muted/40 px-2 py-2">
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors',
+                          !rulesTextMode
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                        onClick={switchToTableMode}
+                      >
+                        {t('customConfigs.structuredRulesMode')}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors',
+                          rulesTextMode
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                        onClick={switchToTextMode}
+                      >
+                        <FileText className="mr-1.5 h-3.5 w-3.5" />
+                        {t('customConfigs.rawRulesMode')}
+                      </button>
+                    </div>
                   </div>
-                  <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
-                        !rulesTextMode
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
-                      onClick={switchToTableMode}
-                    >
-                      {t('customConfigs.structuredRulesMode')}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
-                        rulesTextMode
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
-                      onClick={switchToTextMode}
-                    >
-                      <FileText className="mr-1.5 h-3.5 w-3.5" />
-                      {t('customConfigs.rawRulesMode')}
-                    </button>
-                  </div>
-                </div>
 
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!rulesTextMode && (
-                        <>
-                          <Button onClick={() => addRule('DOMAIN')} size="sm">
-                            <Plus className="mr-1 h-3.5 w-3.5" />
-                            {t('customConfigs.addRule')}
-                          </Button>
+                  {!rulesTextMode && (
+                    <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={() => addRule('DOMAIN')} size="sm">
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          {t('customConfigs.addRule')}
+                        </Button>
+                        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-muted/20 p-1 px-1.5">
+                          <span className="px-1 text-xs font-medium text-muted-foreground">
+                            {t('customConfigs.quickInsert')}
+                          </span>
                           {(Object.keys(RULE_TEMPLATE_MAP) as Array<keyof typeof RULE_TEMPLATE_MAP>).map((key) => (
                             <Button
                               key={key}
                               type="button"
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
+                              className="h-7 px-2 text-xs"
                               disabled={key === 'MATCH' && hasMatchRule}
                               onClick={() => addRule(key)}
                             >
                               {key}
                             </Button>
                           ))}
+                        </div>
+                      </div>
+                      <div className="relative min-w-0">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          className="pl-9"
+                          value={ruleSearch}
+                          onChange={(e) => setRuleSearch(e.target.value)}
+                          placeholder={t('customConfigs.ruleSearchPlaceholder')}
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {matchRuleNeedsNormalize && (
                           <Button
                             type="button"
                             variant="outline"
@@ -2211,177 +2488,263 @@ export function CustomConfigDetail() {
                             <ArrowDownUp className="mr-1.5 h-3.5 w-3.5" />
                             {t('customConfigs.normalizeMatch')}
                           </Button>
-                        </>
-                      )}
-                    </div>
-
-                    {!rulesTextMode && (
-                      <div className="space-y-3 rounded-lg bg-muted/30 p-3">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                          <div className="relative flex-1">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                              className="pl-9"
-                              value={ruleSearch}
-                              onChange={(e) => setRuleSearch(e.target.value)}
-                              placeholder={t('customConfigs.ruleSearchPlaceholder')}
-                            />
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-2 px-1 py-2">
-                              <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">
-                                {t('customConfigs.ruleQuickFilter')}
-                              </span>
-                            </div>
-                            {RULE_FILTER_OPTIONS.map((option) => (
-                              <Button
-                                key={option.value}
-                                type="button"
-                                size="sm"
-                                variant={ruleFilter === option.value ? 'secondary' : 'outline'}
-                                onClick={() => setRuleFilter(option.value)}
-                              >
-                                {t(option.labelKey)}
-                              </Button>
-                            ))}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={showOnlyIssues ? 'secondary' : 'outline'}
-                              onClick={() => setShowOnlyIssues((prev) => !prev)}
-                            >
-                              <CircleAlert className="mr-1.5 h-3.5 w-3.5" />
-                              {t('customConfigs.onlyShowIssues')}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-lg bg-muted/20 p-3">
-                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
-                        <p className="mt-2 text-2xl font-semibold">{ruleStats.total}</p>
-                      </div>
-                      <div className="rounded-lg bg-muted/20 p-3">
-                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
-                        <p className="mt-2 text-2xl font-semibold">{ruleStats.selectedRuleSets}</p>
-                      </div>
-                      <div className="rounded-lg bg-muted/20 p-3">
-                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
-                        <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">
-                          {ruleStats.warnings}
-                        </p>
-                      </div>
-                      <div className="rounded-lg bg-muted/20 p-3">
-                        <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
-                        <p className="mt-2 text-2xl font-semibold text-destructive">{ruleStats.errors}</p>
-                      </div>
-                    </div>
-
-                    {rulesTextMode ? (
-                        <div className="space-y-3">
-                          <div className="rounded-lg p-1">
-                            <YamlEditor
-                              value={rulesText}
-                              onChange={handleRulesTextChange}
-                            minHeight="420px"
-                            placeholder={'DOMAIN,example.com,DIRECT\nGEOIP,CN,DIRECT\nMATCH,PROXY'}
-                          />
-                        </div>
-                          <div className="rounded-lg bg-muted/20 p-4">
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <h4 className="text-sm font-semibold">{t('customConfigs.ruleDiagnostics')}</h4>
-                              <p className="text-xs text-muted-foreground">
-                                {t('customConfigs.ruleDiagnosticsHint')}
-                              </p>
-                            </div>
-                            <Badge variant="outline">{ruleListItems.length}</Badge>
-                          </div>
-                          <div className="mt-3 space-y-2">
-                            {ruleListItems.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
-                            ) : (
-                              ruleListItems.map((item) => (
-                                  <div key={`text-rule-${item.sourceIndex}`} className="rounded-md border-b border-border/60 px-0 py-2 last:border-b-0">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <p className="font-mono text-xs text-muted-foreground">
-                                        L{item.lineNumber}: {item.analysis.rule}
-                                      </p>
-                                      {item.analysis.status === 'error' ? (
-                                        <CircleAlert className="h-3.5 w-3.5 text-destructive" />
-                                      ) : item.analysis.status === 'warning' ? (
-                                        <CircleAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
-                                      ) : (
-                                        <CircleCheck className="h-3.5 w-3.5 text-emerald-600" />
-                                      )}
-                                    </div>
-                                  {item.analysis.errors.map((message) => (
-                                    <p key={`e-${message}`} className="mt-2 text-xs text-destructive">
-                                      {message}
-                                    </p>
-                                  ))}
-                                  {item.analysis.warnings.map((message) => (
-                                    <p
-                                      key={`w-${message}`}
-                                      className="mt-2 text-xs text-amber-700 dark:text-amber-300"
-                                    >
-                                      {message}
-                                    </p>
-                                  ))}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : filteredRuleListItems.length === 0 ? (
-                      <div className="rounded-lg border border-dashed bg-background px-6 py-12 text-center">
-                        <p className="text-sm font-medium">{t('customConfigs.noMatchingRules')}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {t('customConfigs.noMatchingRulesHint')}
-                        </p>
-                      </div>
-                    ) : (
-                      <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCorners}
-                        onDragEnd={handleRulesDragEnd}
-                      >
-                        <SortableContext
-                          items={filteredRuleListItems.map((item) => `rule-${item.sourceIndex}`)}
-                          strategy={verticalListSortingStrategy}
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={showOnlyIssues ? 'secondary' : 'outline'}
+                          onClick={() => setShowOnlyIssues((prev) => !prev)}
                         >
-                          <div className="space-y-3">
-                            {filteredRuleListItems.map((item) => (
-                              <SortableRuleRow
-                                key={`rule-${item.sourceIndex}`}
-                                id={`rule-${item.sourceIndex}`}
-                                item={item}
-                                allRuleProviders={allRuleProviders}
-                                proxyGroups={proxyGroups}
-                                proxies={proxies}
-                                onUpdate={updateParsedRule}
-                                onDelete={deleteRule}
-                                isActive={activeRuleIndex === item.sourceIndex}
-                                onFocus={setActiveRuleIndex}
-                                t={t}
-                              />
-                            ))}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
-                    )}
-                  </div>
+                          <CircleAlert className="mr-1.5 h-3.5 w-3.5" />
+                          {t('customConfigs.onlyShowIssues')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="rounded-lg bg-muted/20 p-4">
-                    <div>
-                      <h4 className="text-sm font-semibold">{t('customConfigs.ruleContextTitle')}</h4>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t('customConfigs.ruleContextHint')}
+                  {!rulesTextMode && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 px-2 py-2">
+                      <div className="flex items-center gap-2 px-1 py-2">
+                        <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          {t('customConfigs.ruleQuickFilter')}
+                        </span>
+                      </div>
+                      {RULE_FILTER_OPTIONS.map((option) => (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          size="sm"
+                          variant={ruleFilter === option.value ? 'secondary' : 'outline'}
+                          onClick={() => setRuleFilter(option.value)}
+                        >
+                          {t(option.labelKey)}
+                        </Button>
+                      ))}
+                      {hasActiveFilters && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setRuleSearch('')
+                            setRuleFilter('all')
+                            setShowOnlyIssues(false)
+                          }}
+                        >
+                          {t('customConfigs.clearFilters')}
+                        </Button>
+                      )}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {t('customConfigs.visibleRules', { count: visibleRuleCount, total: ruleStats.total })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <button
+                  type="button"
+                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-muted/20"
+                  onClick={() => {
+                    setRuleFilter('all')
+                    setShowOnlyIssues(false)
+                  }}
+                >
+                  <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
+                  <p className="mt-2 text-2xl font-semibold">{ruleStats.total}</p>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-muted/20"
+                  onClick={() => setRuleFilter('rule-set')}
+                >
+                  <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
+                  <p className="mt-2 text-2xl font-semibold">{ruleStats.selectedRuleSets}</p>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-amber-50"
+                  onClick={() => {
+                    setShowOnlyIssues(true)
+                    setRuleFilter('all')
+                  }}
+                >
+                  <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">
+                    {ruleStats.warnings}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-destructive/5"
+                  onClick={() => {
+                    setShowOnlyIssues(true)
+                    setRuleFilter('all')
+                  }}
+                >
+                  <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
+                  <p className="mt-2 text-2xl font-semibold text-destructive">{ruleStats.errors}</p>
+                </button>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-3">
+                  {rulesTextMode ? (
+                    <div className="space-y-3">
+                      <div className="rounded-2xl border bg-background p-3 shadow-sm">
+                        <YamlEditor
+                          value={rulesText}
+                          onChange={handleRulesTextChange}
+                          minHeight="420px"
+                          highlightedLine={selectedDiagnosticLine}
+                          placeholder={'DOMAIN,example.com,DIRECT\nGEOIP,CN,DIRECT\nMATCH,PROXY'}
+                        />
+                      </div>
+                      <div className="rounded-2xl border bg-background p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-semibold">{t('customConfigs.ruleDiagnostics')}</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {t('customConfigs.ruleDiagnosticsHint')}
+                            </p>
+                          </div>
+                          <Badge variant="outline">{ruleListItems.length}</Badge>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {ruleListItems.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                          ) : (
+                            ruleListItems.map((item) => (
+                              <button
+                                key={`text-rule-${item.sourceIndex}`}
+                                type="button"
+                                className={cn(
+                                  'block w-full rounded-lg border px-3 py-3 text-left transition-colors',
+                                  selectedDiagnosticLine === item.lineNumber && 'border-primary bg-accent/20'
+                                )}
+                                onClick={() => setSelectedDiagnosticLine(item.lineNumber ?? null)}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="font-mono text-xs text-muted-foreground">
+                                    L{item.lineNumber}: {item.analysis.rule}
+                                  </p>
+                                  <Badge variant="outline" className={cn('border', getRuleStatusTone(item.analysis.status))}>
+                                    {getRuleStatusLabel(item.analysis.status, t)}
+                                  </Badge>
+                                </div>
+                                {item.analysis.errors.map((message) => (
+                                  <p key={`e-${message}`} className="mt-2 text-xs text-destructive">
+                                    {message}
+                                  </p>
+                                ))}
+                                {item.analysis.warnings.map((message) => (
+                                  <p
+                                    key={`w-${message}`}
+                                    className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                                  >
+                                    {message}
+                                  </p>
+                                ))}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : filteredRuleListItems.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed bg-background px-6 py-12 text-center">
+                      <p className="text-sm font-medium">{t('customConfigs.noMatchingRules')}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t('customConfigs.noMatchingRulesHint')}
                       </p>
+                    </div>
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCorners}
+                      onDragEnd={handleRulesDragEnd}
+                    >
+                      <SortableContext
+                        items={filteredRuleListItems.map((item) => `rule-${item.sourceIndex}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3">
+                          {filteredRuleListItems.map((item) => (
+                            <SortableRuleRow
+                              key={`rule-${item.sourceIndex}`}
+                              id={`rule-${item.sourceIndex}`}
+                              item={item}
+                              allRuleProviders={allRuleProviders}
+                              targetOptionGroups={targetOptionGroups}
+                              onUpdate={updateParsedRule}
+                              onDelete={deleteRule}
+                              isActive={activeRuleItem?.sourceIndex === item.sourceIndex}
+                              onFocus={setActiveRuleIndex}
+                              onQuickFix={handleRuleQuickFix}
+                              t={t}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-2xl border bg-background p-4 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <PanelRightOpen className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <h4 className="text-sm font-semibold">{t('customConfigs.ruleContextTitle')}</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('customConfigs.ruleContextHint')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border bg-muted/10 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h5 className="text-sm font-semibold">{t('customConfigs.currentRuleCard')}</h5>
+                        {activeRuleItem ? (
+                          <Badge variant="outline" className={cn('border', getRuleStatusTone(activeRuleItem.analysis.status))}>
+                            {getRuleStatusLabel(activeRuleItem.analysis.status, t)}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {!activeRuleItem ? (
+                        <p className="mt-3 text-sm text-muted-foreground">{t('customConfigs.noActiveRule')}</p>
+                      ) : (
+                        <div className="mt-3 space-y-3">
+                          <div className="rounded-lg bg-background px-3 py-2">
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {activeRuleItem.analysis.rule}
+                            </p>
+                          </div>
+                          {activeRuleItem.analysis.errors.map((message) => (
+                            <p key={`active-e-${message}`} className="text-xs text-destructive">{message}</p>
+                          ))}
+                          {activeRuleItem.analysis.warnings.map((message) => (
+                            <p key={`active-w-${message}`} className="text-xs text-amber-700 dark:text-amber-300">{message}</p>
+                          ))}
+                          {activeRuleItem.analysis.quickFixes.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {activeRuleItem.analysis.quickFixes.map((fix) => (
+                                <Button
+                                  key={`active-fix-${fix.type}`}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRuleQuickFix(activeRuleItem.sourceIndex, fix.type)}
+                                >
+                                  {fix.label}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 border-t pt-4">
@@ -2402,10 +2765,13 @@ export function CustomConfigDetail() {
                             const provider = allRuleProviders.find((item) => item.name === name)
                             const selected = provider ? ruleProviderIds.includes(provider.id) : false
                             return (
-                              <Badge
+                              <button
                                 key={name}
-                                variant={selected ? 'secondary' : 'outline'}
+                                type="button"
+                                onClick={() => handleDetailTabChange('ruleSets')}
                                 className={cn(
+                                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                                  selected ? 'border-border bg-secondary text-secondary-foreground' : 'bg-background',
                                   !provider && 'border-destructive/40 text-destructive',
                                   provider && !selected && 'border-amber-500/40 text-amber-700 dark:text-amber-300'
                                 )}
@@ -2414,7 +2780,7 @@ export function CustomConfigDetail() {
                                 {provider
                                   ? ` · ${provider.is_preset ? t('ruleProviders.presetBadge') : t('ruleProviders.customSection')}`
                                   : ` · ${t('customConfigs.ruleSetMissing')}`}
-                              </Badge>
+                              </button>
                             )
                           })
                         )}
@@ -2440,10 +2806,12 @@ export function CustomConfigDetail() {
                             const isGroup = proxyGroups.some((group) => group.name === name)
                             const isProxy = proxies.some((proxy) => proxy.name === name)
                             return (
-                              <Badge
+                              <button
                                 key={name}
-                                variant="outline"
+                                type="button"
+                                onClick={() => handleDetailTabChange(isProxy ? 'proxies' : 'proxyGroups')}
                                 className={cn(
+                                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                                   !isBuiltin && !isGroup && !isProxy && 'border-destructive/40 text-destructive'
                                 )}
                               >
@@ -2455,7 +2823,7 @@ export function CustomConfigDetail() {
                                     : isProxy
                                       ? ` · ${t('customConfigs.targetProxies')}`
                                       : ` · ${t('customConfigs.ruleTargetMissing')}`}
-                              </Badge>
+                              </button>
                             )
                           })
                         )}
@@ -2464,21 +2832,29 @@ export function CustomConfigDetail() {
 
                     <div className="mt-4 border-t pt-4">
                       <div className="flex items-center gap-2">
-                        {ruleStats.errors > 0 || ruleStats.warnings > 0 ? (
+                        {saveHealth === 'error' || saveHealth === 'warning' ? (
                           <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-300" />
                         ) : (
                           <CircleCheck className="h-4 w-4 text-emerald-600" />
                         )}
                         <h4 className="text-sm font-semibold">{t('customConfigs.ruleChecklistTitle')}</h4>
                       </div>
-                      <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                        <p>{t('customConfigs.ruleChecklistRuleSets')}</p>
-                        <p>{t('customConfigs.ruleChecklistTargets')}</p>
-                        <p>{t('customConfigs.ruleChecklistMatch')}</p>
+                      <div className="mt-3 space-y-2">
+                        {checklistItems.map((item) => (
+                          <div key={item.key} className="flex items-start gap-2 text-xs">
+                            {item.ok ? (
+                              <CircleCheck className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
+                            ) : (
+                              <CircleAlert className="mt-0.5 h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+                            )}
+                            <p className={item.ok ? 'text-muted-foreground' : 'text-foreground'}>{item.label}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -2574,12 +2950,35 @@ export function CustomConfigDetail() {
           className="overflow-hidden"
         >
           <SheetHeader className="sticky top-0 z-10 shrink-0 bg-background">
-            <div className="flex items-center justify-between gap-4 pr-2">
-              <SheetTitle>{t('customConfigs.previewYaml')}</SheetTitle>
-              <SheetClose className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                <X className="h-5 w-5" />
-                <span className="sr-only">关闭</span>
-              </SheetClose>
+            <div className="flex flex-wrap items-start justify-between gap-4 pr-2">
+              <div className="space-y-2">
+                <SheetTitle>{t('customConfigs.previewYaml')}</SheetTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{t('customConfigs.previewRulesCount', { count: ruleStats.total })}</Badge>
+                  <Badge variant="outline">{t('customConfigs.previewGroupsCount', { count: proxyGroups.length })}</Badge>
+                  <Badge variant="outline">{t('customConfigs.previewRuleSetsCount', { count: ruleProviderIds.length })}</Badge>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={refreshPreview} disabled={previewLoading}>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.refreshPreview')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyPreview}
+                  disabled={!previewYaml || previewLoading}
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.copyPreview')}
+                </Button>
+                <SheetClose className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  <X className="h-5 w-5" />
+                  <span className="sr-only">关闭</span>
+                </SheetClose>
+              </div>
             </div>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto p-6 pt-4">

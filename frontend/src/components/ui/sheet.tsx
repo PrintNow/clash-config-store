@@ -101,7 +101,7 @@ const SheetContent = React.forwardRef<
             resizable ? 'max-w-none' : 'w-3/4 max-w-2xl',
             className
           )}
-          style={resizable ? { ...style, width: `${width}px` } : style}
+          style={resizable ? { ...style, width: `${width}px`, maxWidth: '100vw' } : { ...style, maxWidth: '100vw' }}
           {...props}
         >
           {resizable && (

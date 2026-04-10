@@ -15,6 +15,18 @@ export interface RuleAnalysis {
   status: 'valid' | 'warning' | 'error'
   errors: string[]
   warnings: string[]
+  quickFixes: RuleQuickFix[]
+}
+
+export type RuleQuickFixAction =
+  | 'move-match-to-bottom'
+  | 'go-rule-sets'
+  | 'go-target-groups'
+  | 'go-target-proxies'
+
+export interface RuleQuickFix {
+  type: RuleQuickFixAction
+  label: string
 }
 
 export const RULE_TYPES = [
@@ -156,6 +168,7 @@ export function buildRuleAnalysis(rule: string, ctx: RuleAnalysisContext): RuleA
   const target = parsed.target.trim()
   const errors: string[] = []
   const warnings: string[] = []
+  const quickFixes: RuleQuickFix[] = []
 
   if (!rule.trim()) {
     errors.push('空规则不会被保存')
@@ -174,20 +187,25 @@ export function buildRuleAnalysis(rule: string, ctx: RuleAnalysisContext): RuleA
   if (type === 'RULE-SET' && payload) {
     if (!ctx.availableRuleProviders.has(payload)) {
       errors.push(`规则集 "${payload}" 不存在`)
+      quickFixes.push({ type: 'go-rule-sets', label: '检查规则集引用' })
     } else if (!ctx.selectedRuleProviders.has(payload)) {
       warnings.push(`规则集 "${payload}" 尚未在“规则集引用”中勾选`)
+      quickFixes.push({ type: 'go-rule-sets', label: '前往勾选规则集' })
     }
   }
   if (target && !ctx.availableTargets.has(target)) {
     warnings.push(`目标策略 "${target}" 当前不存在于内置策略、代理组或节点中`)
+    quickFixes.push({ type: 'go-target-groups', label: '检查代理组' })
+    quickFixes.push({ type: 'go-target-proxies', label: '检查代理节点' })
   }
   if (type === 'MATCH' && target && !ctx.isLastRule) {
     warnings.push('MATCH 建议保持在规则列表最后')
+    quickFixes.push({ type: 'move-match-to-bottom', label: '移到底部' })
   }
   if (ctx.duplicateCount > 1) {
     warnings.push(`存在 ${ctx.duplicateCount} 条完全相同的规则`)
   }
 
   const status = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid'
-  return { rule, parsed, status, errors, warnings }
+  return { rule, parsed, status, errors, warnings, quickFixes }
 }

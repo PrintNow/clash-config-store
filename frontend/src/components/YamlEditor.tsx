@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { yaml } from '@codemirror/lang-yaml'
 import { EditorState, type Extension } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
+import { Decoration, EditorView, keymap, ViewPlugin } from '@codemirror/view'
 import { useThemeStore } from '@/store/theme'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +39,7 @@ export interface YamlEditorProps {
   minHeight?: string
   className?: string
   readOnly?: boolean
+  highlightedLine?: number | null
 }
 
 /** YAML 语法高亮编辑区，主题随应用亮/暗/system 切换 */
@@ -49,9 +50,40 @@ export function YamlEditor({
   minHeight = '200px',
   className,
   readOnly = false,
+  highlightedLine = null,
 }: YamlEditorProps) {
   const isDark = useResolvedDark()
   const extensions: Extension[] = [yaml()]
+
+  if (highlightedLine && highlightedLine > 0) {
+    const highlightTheme = EditorView.theme({
+      '.cm-active-line-highlighted': {
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+      },
+    })
+    const highlightPlugin = ViewPlugin.fromClass(class {
+      decorations
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view)
+      }
+
+      update(update: { view: EditorView }) {
+        this.decorations = this.buildDecorations(update.view)
+      }
+
+      buildDecorations(view: EditorView) {
+        const line = view.state.doc.line(Math.min(highlightedLine, view.state.doc.lines))
+        return Decoration.set([
+          Decoration.line({ class: 'cm-active-line-highlighted' }).range(line.from),
+        ])
+      }
+    }, {
+      decorations: (value) => value.decorations,
+    })
+
+    extensions.push(highlightTheme, highlightPlugin)
+  }
 
   if (readOnly) {
     extensions.push(
@@ -86,6 +118,7 @@ export function YamlEditor({
           lineNumbers: true,
           autocompletion: false,
           foldGutter: !readOnly,
+          highlightActiveLine: true,
         }}
         className={cn('text-sm font-mono', readOnly && '[&_.cm-content]:cursor-text')}
       />
