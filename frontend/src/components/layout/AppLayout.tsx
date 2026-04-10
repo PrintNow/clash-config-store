@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { useThemeStore } from '@/store/theme'
 import { Sidebar } from './Sidebar'
+import { ContextSaveBar } from './ContextSaveBar'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -91,21 +92,23 @@ export function AppLayout() {
       {/* 右侧主内容区 */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* 顶部导航栏 */}
-        <header className="flex h-16 items-center justify-between border-b bg-background px-4 gap-4">
-          {/* 移动端菜单按钮 */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
+        <header className="flex h-16 items-center border-b bg-background px-4 gap-2">
+          <div className="flex min-w-0 flex-1 items-center justify-start">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
 
-          <div className="flex-1" />
+          <div className="flex shrink-0 justify-center px-2">
+            <ContextSaveBar />
+          </div>
 
-          {/* 右侧工具栏 */}
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             {/* 语言切换 */}
             <Button
               variant="ghost"
