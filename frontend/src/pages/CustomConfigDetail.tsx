@@ -1682,17 +1682,17 @@ export function CustomConfigDetail() {
   })
   const providerNames = allProviders.map((p) => p.name)
 
-  // 初始化表单
+  // 从服务端同步到表单：仅在「配置 id / 服务端版本」变化时执行，避免 React Query refetch
+  // 返回新对象引用时误重置草稿，导致 isDirty 恒为 false、Context Save Bar 不出现。
   useEffect(() => {
-    if (config) {
-      setName(config.name)
-      setProxies(config.proxies || [])
-      setProxyGroups(config.proxy_groups || [])
-      setRules(config.rules || [])
-      setRulesText((config.rules || []).join('\n'))
-      setRuleProviderIds(config.rule_provider_ids || [])
-    }
-  }, [config])
+    if (!config) return
+    setName(config.name)
+    setProxies(config.proxies || [])
+    setProxyGroups(config.proxy_groups || [])
+    setRules(config.rules || [])
+    setRulesText((config.rules || []).join('\n'))
+    setRuleProviderIds(config.rule_provider_ids || [])
+  }, [config?.id, config?.updated_at])
 
   useEffect(() => {
     if (!rulesTextMode) {
@@ -2219,7 +2219,8 @@ export function CustomConfigDetail() {
             },
           ]
         : [],
-    [config, t, isDirty, openDiffPreview]
+    // 用 id 而非整个 config，避免 refetch 换新对象时反复触发注册 effect
+    [config?.id, t, isDirty, openDiffPreview]
   )
 
   useRegisterContextSaveBar({

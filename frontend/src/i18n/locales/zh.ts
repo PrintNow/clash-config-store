@@ -180,6 +180,12 @@ const zh = {
   // 自定义配置
   customConfigs: {
     title: '自定义配置',
+    updatedAt: '更新时间',
+    statsSummary: '节点 {{proxies}} / 组 {{groups}} / 规则 {{rules}} / 规则集 {{ruleSets}}',
+    relativeJustNow: '刚刚',
+    relativeMinutesAgo: '{{count}} 分钟前',
+    relativeHoursAgo: '{{count}} 小时前',
+    relativeDaysAgo: '{{count}} 天前',
     addConfig: '新建配置',
     cloneConfig: '克隆配置',
     cloneSuccess: '已创建配置副本',

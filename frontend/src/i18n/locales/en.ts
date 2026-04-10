@@ -173,6 +173,12 @@ const en = {
 
   customConfigs: {
     title: 'Custom Configs',
+    updatedAt: 'Updated At',
+    statsSummary: 'Proxies {{proxies}} / Groups {{groups}} / Rules {{rules}} / Rule Sets {{ruleSets}}',
+    relativeJustNow: 'just now',
+    relativeMinutesAgo: '{{count}} minutes ago',
+    relativeHoursAgo: '{{count}} hours ago',
+    relativeDaysAgo: '{{count}} days ago',
     addConfig: 'New Config',
     cloneConfig: 'Clone Config',
     cloneSuccess: 'Config duplicated',
