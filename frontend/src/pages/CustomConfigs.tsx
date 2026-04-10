@@ -169,6 +169,33 @@ export function CustomConfigs() {
     }
   }
 
+  const formatDateTime = (value: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    const second = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`
+  }
+
+  const formatRelativeTime = (value: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+    const diffMs = Date.now() - date.getTime()
+    if (diffMs < 0) return t('customConfigs.relativeJustNow')
+    const diffSeconds = Math.floor(diffMs / 1000)
+    if (diffSeconds < 60) return t('customConfigs.relativeJustNow')
+    const diffMinutes = Math.floor(diffSeconds / 60)
+    if (diffMinutes < 60) return t('customConfigs.relativeMinutesAgo', { count: diffMinutes })
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours < 24) return t('customConfigs.relativeHoursAgo', { count: diffHours })
+    const diffDays = Math.floor(diffHours / 24)
+    return t('customConfigs.relativeDaysAgo', { count: diffDays })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -199,6 +226,7 @@ export function CustomConfigs() {
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
+              <TableHead>{t('customConfigs.updatedAt')}</TableHead>
               <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
@@ -206,14 +234,18 @@ export function CustomConfigs() {
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="mt-2 h-4 w-44" />
+                  </TableCell>
+                  <TableCell><Skeleton className="h-5 w-36" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-36" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                 </TableRow>
               ))
             ) : configs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
@@ -228,9 +260,23 @@ export function CustomConfigs() {
                       {config.name}
                       <ExternalLink className="h-3 w-3" />
                     </button>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('customConfigs.statsSummary', {
+                        proxies: config.proxies.length,
+                        groups: config.proxy_groups.length,
+                        rules: config.rules.length,
+                        ruleSets: config.rule_provider_ids.length,
+                      })}
+                    </p>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(config.created_at).toLocaleDateString()}
+                    {formatDateTime(config.created_at)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <div>{formatDateTime(config.updated_at)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatRelativeTime(config.updated_at)}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
