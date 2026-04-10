@@ -92,6 +92,19 @@ const zh = {
     emailInvalid: '邮箱格式不正确',
   },
 
+  contextSaveBar: {
+    unsaved: '有未保存的更改',
+    discard: '放弃',
+    leaveTitle: '离开此页？',
+    leaveDescription: '当前有未保存的更改，离开后修改将丢失。',
+    stay: '留在页面',
+    leave: '离开',
+    viewDiff: '差异',
+    diffTitle: '变更预览',
+    diffDescription: '将已保存与当前草稿渲染为 YAML，并以词级 inline 高亮展示增删（绿色为新增，红色删除线为移除）。',
+    diffNoChanges: '与已保存内容一致，无差异。',
+  },
+
   // 仪表盘
   dashboard: {
     title: '仪表盘',

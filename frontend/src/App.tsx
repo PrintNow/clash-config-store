@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
@@ -15,29 +15,28 @@ import { SubscriptionDetail } from '@/pages/SubscriptionDetail'
 import { AccessLogs } from '@/pages/AccessLogs'
 import { Settings } from '@/pages/Settings'
 
-export function App() {
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-
-      <Route path="/" element={<AppLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="providers" element={<Providers />} />
-        <Route path="user-agents" element={<UserAgents />} />
-        <Route path="custom-configs" element={<CustomConfigs />} />
-        <Route path="custom-configs/:id" element={<CustomConfigDetail />} />
-        <Route path="config-templates" element={<ConfigTemplates />} />
-        <Route path="config-templates/:id" element={<ConfigTemplateDetail />} />
-        <Route path="rule-providers" element={<RuleProviders />} />
-        <Route path="subscriptions" element={<Subscriptions />} />
-        <Route path="subscriptions/:id" element={<SubscriptionDetail />} />
-        <Route path="subscriptions/:id/logs" element={<AccessLogs />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  )
-}
+/** 数据路由（支持 useBlocker 等 API） */
+export const router = createBrowserRouter([
+  { path: '/login', element: <Login /> },
+  { path: '/register', element: <Register /> },
+  {
+    path: '/',
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: 'dashboard', element: <Dashboard /> },
+      { path: 'providers', element: <Providers /> },
+      { path: 'user-agents', element: <UserAgents /> },
+      { path: 'custom-configs', element: <CustomConfigs /> },
+      { path: 'custom-configs/:id', element: <CustomConfigDetail /> },
+      { path: 'config-templates', element: <ConfigTemplates /> },
+      { path: 'config-templates/:id', element: <ConfigTemplateDetail /> },
+      { path: 'rule-providers', element: <RuleProviders /> },
+      { path: 'subscriptions', element: <Subscriptions /> },
+      { path: 'subscriptions/:id', element: <SubscriptionDetail /> },
+      { path: 'subscriptions/:id/logs', element: <AccessLogs /> },
+      { path: 'settings', element: <Settings /> },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+])

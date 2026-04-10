@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useParams, useNavigate, useSearchParams, useBlocker } from 'react-router-dom'
+import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -9,7 +10,6 @@ import {
   Trash2,
   Edit,
   Eye,
-  Save,
   Pencil,
   Check,
   X,
@@ -65,13 +65,16 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { YamlEditor } from '@/components/YamlEditor'
+import { ConfigPayloadDiffDialog } from '@/components/ConfigPayloadDiffDialog'
 import { cn } from '@/lib/utils'
+import { useRegisterContextSaveBar } from '@/store/context-save-bar'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
 import {
   buildRuleAnalysis,
@@ -1558,6 +1561,40 @@ function parseConfigDetailTab(raw: string | null): ConfigDetailTab {
   return 'proxies'
 }
 
+/** 未保存时离开路由的确认弹窗（配合 useBlocker） */
+function CustomConfigLeaveDialog({ blocker }: { blocker: Blocker }) {
+  const { t } = useTranslation()
+  const open = blocker.state === 'blocked'
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) blocker.reset?.()
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('contextSaveBar.leaveTitle')}</DialogTitle>
+          <DialogDescription>{t('contextSaveBar.leaveDescription')}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => blocker.reset?.()}>
+            {t('contextSaveBar.stay')}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => blocker.proceed?.()}
+          >
+            {t('contextSaveBar.leave')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─────────────────────────────────────────────
 // 主页面组件
 // ─────────────────────────────────────────────
@@ -1622,6 +1659,7 @@ export function CustomConfigDetail() {
 
   // YAML 预览面板
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [diffPreviewOpen, setDiffPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
 
@@ -1672,6 +1710,7 @@ export function CustomConfigDetail() {
       toast.success(t('customConfigs.saveSuccess'))
       setEditingName(false)
       setLastValidationState('idle')
+      setDiffPreviewOpen(false)
     },
     onError: () => toast.error(t('common.error')),
   })
@@ -1698,24 +1737,34 @@ export function CustomConfigDetail() {
     rulesText,
   ])
 
-  const handleSave = () => {
-    if (!isDirty) return
-    const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
-    const issues = buildRuleSaveChecklist(finalRules, currentRuleStrings, ruleListItems)
-    if (issues === 'error') {
-      setLastValidationState('error')
-      toast.error(t('customConfigs.saveBlockedByErrors'))
-      return
-    }
-    setLastValidationState(issues)
-    updateMutation.mutate({
+  const handleDiscard = useCallback(() => {
+    if (!config) return
+    setName(config.name)
+    setProxies(config.proxies || [])
+    setProxyGroups(config.proxy_groups || [])
+    setRules(config.rules || [])
+    setRulesText((config.rules || []).join('\n'))
+    setRuleProviderIds(config.rule_provider_ids || [])
+    setEditingName(false)
+    setLastValidationState('idle')
+    setDiffPreviewOpen(false)
+  }, [config])
+
+  const openDiffPreview = useCallback(() => {
+    setDiffPreviewOpen(true)
+  }, [])
+
+  /** 与 isDirty 一致的草稿快照，供 diff 弹窗使用 */
+  const draftPayload = useMemo(
+    (): CustomConfigDraftPayload => ({
       name,
       proxies,
       proxy_groups: proxyGroups,
-      rules: finalRules,
+      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
       rule_provider_ids: ruleProviderIds,
-    })
-  }
+    }),
+    [name, proxies, proxyGroups, rules, ruleProviderIds, rulesTextMode, rulesText]
+  )
 
   // ── YAML 预览 ──
   const handleOpenPreview = async () => {
@@ -2125,22 +2174,106 @@ export function CustomConfigDetail() {
     }
   }, [activeRuleIndex, activeRuleItem])
 
+  const handleSave = useCallback(() => {
+    if (!isDirty) return
+    const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
+    const issues = buildRuleSaveChecklist(finalRules, currentRuleStrings, ruleListItems)
+    if (issues === 'error') {
+      setLastValidationState('error')
+      toast.error(t('customConfigs.saveBlockedByErrors'))
+      return
+    }
+    setLastValidationState(issues)
+    updateMutation.mutate({
+      name,
+      proxies,
+      proxy_groups: proxyGroups,
+      rules: finalRules,
+      rule_provider_ids: ruleProviderIds,
+    })
+  }, [
+    isDirty,
+    rulesTextMode,
+    rulesText,
+    rules,
+    currentRuleStrings,
+    ruleListItems,
+    t,
+    updateMutation,
+    name,
+    proxies,
+    proxyGroups,
+    ruleProviderIds,
+  ])
+
+  const saveBarExtraActions = useMemo(
+    () =>
+      config
+        ? [
+            {
+              id: 'draft-diff',
+              label: t('contextSaveBar.viewDiff'),
+              icon: 'git-compare' as const,
+              onClick: openDiffPreview,
+              disabled: !isDirty,
+            },
+          ]
+        : [],
+    [config, t, isDirty, openDiffPreview]
+  )
+
+  useRegisterContextSaveBar({
+    enabled: !!config && !isLoading,
+    dirty: isDirty,
+    saving: updateMutation.isPending,
+    saveDisabled: !isDirty || updateMutation.isPending || !config,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+    extraActions: saveBarExtraActions,
+  })
+
+  const shouldBlockNavigation = useCallback(
+    ({
+      currentLocation,
+      nextLocation,
+    }: {
+      currentLocation: { pathname: string }
+      nextLocation: { pathname: string }
+    }) =>
+      isDirty &&
+      !!config &&
+      !isLoading &&
+      currentLocation.pathname !== nextLocation.pathname,
+    [isDirty, config, isLoading]
+  )
+
+  const blocker = useBlocker(shouldBlockNavigation)
+
   // ── 加载/错误状态 ──
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-96 w-full" />
-      </div>
+      <>
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+        <CustomConfigLeaveDialog blocker={blocker} />
+      </>
     )
   }
 
   if (!config) {
-    return <div className="text-center py-16 text-muted-foreground">配置不存在</div>
+    return (
+      <>
+        <div className="text-center py-16 text-muted-foreground">配置不存在</div>
+        <CustomConfigLeaveDialog blocker={blocker} />
+      </>
+    )
   }
 
   return (
+    <>
     <div className="space-y-6">
       {/* ── 顶部操作栏 ── */}
       <div className="rounded-2xl border bg-background/95 p-4 shadow-sm">
@@ -2198,9 +2331,6 @@ export function CustomConfigDetail() {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={isDirty ? 'secondary' : 'outline'}>
-                  {isDirty ? t('customConfigs.unsavedChanges') : t('customConfigs.allChangesSaved')}
-                </Badge>
                 {activeTab === 'rules' && (
                   <Badge
                     variant="outline"
@@ -2239,18 +2369,6 @@ export function CustomConfigDetail() {
             <Button variant="outline" onClick={handleOpenPreview}>
               <Eye className="mr-2 h-4 w-4" />
               {t('customConfigs.previewYaml')}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!isDirty || updateMutation.isPending || !config}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {updateMutation.isPending ? t('common.saving') : t('common.save')}
-              {activeTab === 'rules' && (ruleStats.errors > 0 || ruleStats.warnings > 0) && (
-                <span className="ml-2 rounded-full bg-background/20 px-1.5 py-0.5 text-xs">
-                  {ruleStats.errors > 0 ? `${ruleStats.errors}E` : `${ruleStats.warnings}W`}
-                </span>
-              )}
             </Button>
           </div>
         </div>
@@ -2940,6 +3058,13 @@ export function CustomConfigDetail() {
       />
 
       {/* ── YAML 预览 Sheet ── */}
+      <ConfigPayloadDiffDialog
+        open={diffPreviewOpen}
+        onOpenChange={setDiffPreviewOpen}
+        saved={savedPayloadFromConfig(config)}
+        draft={draftPayload}
+      />
+
       <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
         <SheetContent
           resizable
@@ -3003,6 +3128,8 @@ export function CustomConfigDetail() {
         </SheetContent>
       </Sheet>
     </div>
+    <CustomConfigLeaveDialog blocker={blocker} />
+    </>
   )
 }
 

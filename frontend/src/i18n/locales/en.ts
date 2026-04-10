@@ -89,6 +89,19 @@ const en = {
     emailInvalid: 'Invalid email format',
   },
 
+  contextSaveBar: {
+    unsaved: 'Unsaved changes',
+    discard: 'Discard',
+    leaveTitle: 'Leave this page?',
+    leaveDescription: 'You have unsaved changes. If you leave now, they will be lost.',
+    stay: 'Stay',
+    leave: 'Leave',
+    viewDiff: 'Diff',
+    diffTitle: 'Change preview',
+    diffDescription: 'Renders both snapshots as YAML, then shows an inline word-level diff (green = added, red strikethrough = removed).',
+    diffNoChanges: 'No differences from the last saved version.',
+  },
+
   dashboard: {
     title: 'Dashboard',
     totalProviders: 'Providers',
