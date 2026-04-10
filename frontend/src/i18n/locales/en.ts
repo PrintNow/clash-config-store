@@ -292,7 +292,6 @@ const en = {
     previewGroupsCount: 'Groups {{count}}',
     previewRuleSetsCount: 'Rule Sets {{count}}',
     unsavedChanges: 'Unsaved changes',
-    allChangesSaved: 'Synced with current config',
     validationErrorsBadge: '{{count}} errors to fix',
     validationWarningsBadge: '{{count}} warnings to review',
     validationReady: 'Rules look good',

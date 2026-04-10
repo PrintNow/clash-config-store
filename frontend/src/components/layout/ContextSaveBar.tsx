@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { CircleAlert, CircleCheck, GitCompare, Loader2 } from 'lucide-react'
+import { CircleAlert, GitCompare, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useContextSaveBarStore, type ContextSaveBarExtraActionIcon } from '@/store/context-save-bar'
@@ -33,17 +33,10 @@ export function ContextSaveBar() {
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground sm:text-base">
-        {dirty ? (
+        {dirty && (
           <>
             <CircleAlert className="h-4 w-4 shrink-0 text-muted-foreground sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
             <span className="truncate font-medium">{t('contextSaveBar.unsaved')}</span>
-          </>
-        ) : (
-          <>
-            <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-500 sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
-            <span className="truncate font-medium text-muted-foreground">
-              {t('customConfigs.allChangesSaved')}
-            </span>
           </>
         )}
       </div>

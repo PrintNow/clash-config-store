@@ -299,7 +299,6 @@ const zh = {
     previewGroupsCount: '代理组 {{count}}',
     previewRuleSetsCount: '规则集 {{count}}',
     unsavedChanges: '有未保存改动',
-    allChangesSaved: '已与当前配置同步',
     validationErrorsBadge: '{{count}} 个错误待处理',
     validationWarningsBadge: '{{count}} 个警告待确认',
     validationReady: '规则检查通过',
