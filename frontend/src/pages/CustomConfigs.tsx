@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, MoreHorizontal, Copy, Download, Upload, FolderUp } from 'lucide-react'
 import { customConfigsApi } from '@/api/custom-configs'
-import type { CustomConfig } from '@/types'
+import type { CustomConfig, CustomConfigTransferPayload } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -32,10 +39,15 @@ export function CustomConfigs() {
   const queryClient = useQueryClient()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingConfig, setDeletingConfig] = useState<CustomConfig | null>(null)
   const [newName, setNewName] = useState('')
   const [nameError, setNameError] = useState('')
+  const [importText, setImportText] = useState('')
+  const [importFileName, setImportFileName] = useState('')
+  const [importError, setImportError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { data: configs = [], isLoading } = useQuery({
     queryKey: ['custom-configs'],
@@ -62,6 +74,27 @@ export function CustomConfigs() {
     },
   })
 
+  const cloneMutation = useMutation({
+    mutationFn: customConfigsApi.clone,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      toast.success(t('customConfigs.cloneSuccess'))
+    },
+  })
+
+  const importMutation = useMutation({
+    mutationFn: customConfigsApi.import,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      toast.success(t('customConfigs.importSuccess'))
+      setImportDialogOpen(false)
+      setImportText('')
+      setImportFileName('')
+      setImportError('')
+      navigate(`/custom-configs/${data.id}`)
+    },
+  })
+
   const handleCreate = () => {
     if (!newName.trim()) {
       setNameError(t('common.required'))
@@ -75,14 +108,89 @@ export function CustomConfigs() {
     setDeleteDialogOpen(true)
   }
 
+  const parseImportPayload = (raw: string): CustomConfigTransferPayload | null => {
+    try {
+      const parsed = JSON.parse(raw) as Partial<CustomConfigTransferPayload>
+      if (!parsed || typeof parsed !== 'object') {
+        setImportError(t('customConfigs.importInvalidFormat'))
+        return null
+      }
+      if (typeof parsed.name !== 'string') {
+        setImportError(t('customConfigs.importInvalidFormat'))
+        return null
+      }
+      if (!Array.isArray(parsed.proxies) || !Array.isArray(parsed.proxy_groups) || !Array.isArray(parsed.rules) || !Array.isArray(parsed.rule_provider_ids)) {
+        setImportError(t('customConfigs.importInvalidFormat'))
+        return null
+      }
+      setImportError('')
+      return {
+        name: parsed.name,
+        proxies: parsed.proxies,
+        proxy_groups: parsed.proxy_groups,
+        rules: parsed.rules,
+        rule_provider_ids: parsed.rule_provider_ids,
+      }
+    } catch {
+      setImportError(t('customConfigs.importInvalidJson'))
+      return null
+    }
+  }
+
+  const handleImportSubmit = () => {
+    const payload = parseImportPayload(importText)
+    if (!payload) return
+    importMutation.mutate(payload)
+  }
+
+  const handleImportFileChange = async (file?: File) => {
+    if (!file) return
+    const text = await file.text()
+    setImportText(text)
+    setImportFileName(file.name)
+    parseImportPayload(text)
+  }
+
+  const handleExport = async (config: CustomConfig) => {
+    try {
+      const blob = await customConfigsApi.export(config.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const safeName = config.name.trim().replace(/[^\w-]+/g, '-')
+      link.href = url
+      link.download = `custom-config-${safeName || 'config'}-${config.id}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      toast.success(t('customConfigs.exportSuccess'))
+    } catch {
+      // axios interceptor 已处理 toast
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{t('customConfigs.title')}</h1>
-        <Button onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('customConfigs.addConfig')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setImportDialogOpen(true)
+              setImportText('')
+              setImportFileName('')
+              setImportError('')
+            }}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {t('customConfigs.importConfig')}
+          </Button>
+          <Button onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('customConfigs.addConfig')}
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border">
@@ -122,17 +230,38 @@ export function CustomConfigs() {
                     </button>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(config.id).toLocaleDateString()}
+                    {new Date(config.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openDeleteDialog(config)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/custom-configs/${config.id}`)}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          {t('common.detail')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => cloneMutation.mutate(config.id)}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          {t('customConfigs.cloneConfig')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExport(config)}>
+                          <Download className="mr-2 h-4 w-4" />
+                          {t('customConfigs.exportConfig')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openDeleteDialog(config)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {t('common.delete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))
@@ -164,6 +293,51 @@ export function CustomConfigs() {
             </Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending ? t('common.submitting') : t('common.create')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('customConfigs.importConfig')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>{t('customConfigs.importUploadFile')}</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => handleImportFileChange(e.target.files?.[0])}
+              />
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <FolderUp className="mr-2 h-4 w-4" />
+                {importFileName || t('customConfigs.importChooseFile')}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('customConfigs.importPasteJson')}</Label>
+              <textarea
+                className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={importText}
+                onChange={(e) => {
+                  setImportText(e.target.value)
+                  if (importError) setImportError('')
+                }}
+                placeholder={`{\n  "name": "example",\n  "proxies": [],\n  "proxy_groups": [],\n  "rules": [],\n  "rule_provider_ids": []\n}`}
+              />
+            </div>
+            {importError && <p className="text-sm text-destructive">{importError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleImportSubmit} disabled={importMutation.isPending}>
+              {importMutation.isPending ? t('common.submitting') : t('customConfigs.importConfig')}
             </Button>
           </DialogFooter>
         </DialogContent>

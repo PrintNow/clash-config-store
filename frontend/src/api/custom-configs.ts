@@ -1,5 +1,5 @@
 import client from './client'
-import type { CustomConfig, ProxyNode, ProxyGroup } from '@/types'
+import type { CustomConfig, CustomConfigTransferPayload, ProxyNode, ProxyGroup } from '@/types'
 
 export const customConfigsApi = {
   list: async (): Promise<CustomConfig[]> => {
@@ -39,6 +39,23 @@ export const customConfigsApi = {
 
   delete: async (id: number): Promise<void> => {
     await client.delete(`/custom-configs/${id}`)
+  },
+
+  clone: async (id: number): Promise<CustomConfig> => {
+    const res = await client.post<{ code: number; data: CustomConfig }>(`/custom-configs/${id}/clone`)
+    return res.data.data
+  },
+
+  export: async (id: number): Promise<Blob> => {
+    const res = await client.get<Blob>(`/custom-configs/${id}/export`, {
+      responseType: 'blob',
+    })
+    return res.data
+  },
+
+  import: async (data: CustomConfigTransferPayload): Promise<CustomConfig> => {
+    const res = await client.post<{ code: number; data: CustomConfig }>('/custom-configs/import', data)
+    return res.data.data
   },
 
   // 获取当前配置的 YAML 预览
