@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -28,6 +29,14 @@ func ListCustomConfigs(c *gin.Context) {
 // customConfigRequest 创建/更新自定义配置的请求体
 type customConfigRequest struct {
 	Name            string                   `json:"name" binding:"required"`
+	Proxies         []map[string]interface{} `json:"proxies"`
+	ProxyGroups     []map[string]interface{} `json:"proxy_groups"`
+	Rules           []string                 `json:"rules"`
+	RuleProviderIDs []uint                   `json:"rule_provider_ids"`
+}
+
+type customConfigTransferPayload struct {
+	Name            string                   `json:"name"`
 	Proxies         []map[string]interface{} `json:"proxies"`
 	ProxyGroups     []map[string]interface{} `json:"proxy_groups"`
 	Rules           []string                 `json:"rules"`
@@ -62,6 +71,37 @@ func CreateCustomConfig(c *gin.Context) {
 		return
 	}
 	OK(c, cfg)
+}
+
+// CloneCustomConfig 克隆现有自定义配置
+func CloneCustomConfig(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+
+	var cfg model.CustomConfig
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
+		Fail(c, http.StatusNotFound, "配置不存在或无权限")
+		return
+	}
+
+	clone := &model.CustomConfig{
+		UserID:          userID,
+		Name:            uniqueCustomConfigName(userID, cfg.Name+" - 副本"),
+		Proxies:         cloneSliceMaps(cfg.Proxies),
+		ProxyGroups:     cloneSliceMaps(cfg.ProxyGroups),
+		Rules:           cloneSliceStrings(cfg.Rules),
+		RuleProviderIDs: cloneSliceUints(cfg.RuleProviderIDs),
+	}
+
+	if err := repository.DB.Create(clone).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "克隆失败")
+		return
+	}
+	OK(c, clone)
 }
 
 // GetCustomConfig 获取自定义配置详情
@@ -140,6 +180,82 @@ func DeleteCustomConfig(c *gin.Context) {
 		return
 	}
 	OKMsg(c, "删除成功", nil)
+}
+
+// ExportCustomConfig 导出可回灌的 JSON 快照
+func ExportCustomConfig(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+
+	var cfg model.CustomConfig
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&cfg).Error; err != nil {
+		Fail(c, http.StatusNotFound, "配置不存在或无权限")
+		return
+	}
+
+	payload := customConfigTransferPayload{
+		Name:            cfg.Name,
+		Proxies:         nullSliceMaps(cfg.Proxies),
+		ProxyGroups:     nullSliceMaps(cfg.ProxyGroups),
+		Rules:           nullSliceStrings(cfg.Rules),
+		RuleProviderIDs: nullSliceUints(cfg.RuleProviderIDs),
+	}
+
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, "导出失败")
+		return
+	}
+
+	filename := sanitizeExportFilename(cfg.Name, uint(id))
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/json; charset=utf-8", data)
+}
+
+// ImportCustomConfig 导入自定义配置 JSON 快照
+func ImportCustomConfig(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	var req customConfigTransferPayload
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BindFail(c, err)
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		req.Name = "导入配置"
+	}
+
+	createReq := customConfigRequest{
+		Name:            uniqueCustomConfigName(userID, req.Name),
+		Proxies:         nullSliceMaps(req.Proxies),
+		ProxyGroups:     nullSliceMaps(req.ProxyGroups),
+		Rules:           nullSliceStrings(req.Rules),
+		RuleProviderIDs: nullSliceUints(req.RuleProviderIDs),
+	}
+	if err := validateCustomConfigRequest(&createReq); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	cfg := &model.CustomConfig{
+		UserID:          userID,
+		Name:            createReq.Name,
+		Proxies:         createReq.Proxies,
+		ProxyGroups:     createReq.ProxyGroups,
+		Rules:           createReq.Rules,
+		RuleProviderIDs: createReq.RuleProviderIDs,
+	}
+
+	if err := repository.DB.Create(cfg).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "导入失败")
+		return
+	}
+	OK(c, cfg)
 }
 
 // PreviewCustomConfig 生成当前配置的 YAML 预览（不依赖订阅，仅用于编辑器实时预览）
@@ -243,4 +359,61 @@ func nullSliceUints(s []uint) []uint {
 		return []uint{}
 	}
 	return s
+}
+
+func cloneSliceMaps(s []map[string]interface{}) []map[string]interface{} {
+	if len(s) == 0 {
+		return []map[string]interface{}{}
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		return []map[string]interface{}{}
+	}
+	var out []map[string]interface{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return []map[string]interface{}{}
+	}
+	return out
+}
+
+func cloneSliceStrings(s []string) []string {
+	if len(s) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), s...)
+}
+
+func cloneSliceUints(s []uint) []uint {
+	if len(s) == 0 {
+		return []uint{}
+	}
+	return append([]uint(nil), s...)
+}
+
+func uniqueCustomConfigName(userID uint, baseName string) string {
+	baseName = strings.TrimSpace(baseName)
+	if baseName == "" {
+		baseName = "未命名配置"
+	}
+
+	name := baseName
+	for i := 2; ; i++ {
+		var count int64
+		repository.DB.Model(&model.CustomConfig{}).
+			Where("user_id = ? AND name = ?", userID, name).
+			Count(&count)
+		if count == 0 {
+			return name
+		}
+		name = fmt.Sprintf("%s %d", baseName, i)
+	}
+}
+
+func sanitizeExportFilename(name string, id uint) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "config"
+	}
+	replacer := strings.NewReplacer("/", "-", "\\", "-", " ", "-", "\"", "", "'", "")
+	return fmt.Sprintf("custom-config-%s-%d.json", replacer.Replace(name), id)
 }
