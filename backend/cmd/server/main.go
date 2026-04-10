@@ -93,9 +93,12 @@ func main() {
 			cc := protected.Group("/custom-configs")
 			cc.GET("", handler.ListCustomConfigs)
 			cc.POST("", handler.CreateCustomConfig)
+			cc.POST("/import", handler.ImportCustomConfig)
 			cc.GET("/:id", handler.GetCustomConfig)
 			cc.PUT("/:id", handler.UpdateCustomConfig)
 			cc.DELETE("/:id", handler.DeleteCustomConfig)
+			cc.POST("/:id/clone", handler.CloneCustomConfig)
+			cc.GET("/:id/export", handler.ExportCustomConfig)
 			cc.GET("/:id/preview", handler.PreviewCustomConfig)
 
 			// 订阅管理
