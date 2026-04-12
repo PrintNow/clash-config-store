@@ -43,6 +43,8 @@ const zh = {
     remove: '删除',
     update: '更新',
     description: '描述',
+    showPassword: '显示密码',
+    hidePassword: '隐藏密码',
   },
 
   // 导航菜单
@@ -205,6 +207,7 @@ const zh = {
     namePlaceholder: '请输入配置名称',
     saveSuccess: '配置已保存',
     detail: '自定义配置详情',
+    clickToEditTitle: '点击编辑配置名称',
     tabProxies: '代理节点',
     tabProxyGroups: '代理组',
     tabRules: '规则',

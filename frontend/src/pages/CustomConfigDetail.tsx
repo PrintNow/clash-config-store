@@ -44,6 +44,7 @@ import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
 import { providersApi } from '@/api/providers'
 import type { CustomConfig, ProxyNode, ProxyGroup, RuleProvider } from '@/types'
+import { ProxyPasswordInput } from '@/components/ProxyPasswordInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -404,9 +405,10 @@ function SortableRuleRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group rounded-xl border bg-background transition-colors',
+        'group cursor-pointer rounded-xl border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
-        isActive && 'border-primary/30 bg-accent/20 shadow-sm',
+        isActive &&
+          'border-primary/40 bg-primary/[0.09] shadow-sm dark:border-primary/35 dark:bg-primary/[0.14]',
         analysis.status === 'error' && 'border-destructive/40',
         analysis.status === 'warning' && 'border-amber-500/40',
         isDragging && 'relative z-10 shadow-md'
@@ -558,19 +560,32 @@ function SortableRuleRow({
                 >
                   <SelectValue placeholder="DIRECT / PROXY" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent viewportClassName="p-0.5">
                   {currentTarget && (
                     <>
-                      <SelectItem value={currentTarget}>{currentTarget}</SelectItem>
+                      <SelectItem
+                        value={currentTarget}
+                        className="py-1 pl-9 pr-1.5"
+                      >
+                        {currentTarget}
+                      </SelectItem>
                       <SelectSeparator />
                     </>
                   )}
                   {targetOptionGroups.map((group) => (
                     group.values.length > 0 && (
                       <SelectGroup key={group.key}>
-                        <SelectLabel>{group.label}</SelectLabel>
+                        <SelectLabel className="py-0.5 pl-2 pr-2 text-sm font-semibold text-muted-foreground">
+                          {group.label}
+                        </SelectLabel>
                         {group.values.map((value) => (
-                          <SelectItem key={`${group.key}-${value}`} value={value}>{value}</SelectItem>
+                          <SelectItem
+                            key={`${group.key}-${value}`}
+                            value={value}
+                            className="py-1 pl-9 pr-1.5"
+                          >
+                            {value}
+                          </SelectItem>
                         ))}
                       </SelectGroup>
                     )
@@ -672,9 +687,13 @@ function SortableProxyGroupRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={cn('border-t hover:bg-muted/30', isDragging && 'relative z-10')}
+      className={cn(
+        'border-t hover:bg-muted/30 cursor-pointer',
+        isDragging && 'relative z-10'
+      )}
+      onClick={() => onEdit(group, idx)}
     >
-      <td className="px-1 py-2 w-[28px]">
+      <td className="px-1 py-2 w-[28px]" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
@@ -692,7 +711,7 @@ function SortableProxyGroupRow({
         {(group.proxies || []).slice(0, 3).join(', ')}
         {(group.proxies || []).length > 3 && ` +${(group.proxies || []).length - 3}`}
       </td>
-      <td className="px-4 py-2">
+      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">
           <Button
             variant="ghost"
@@ -735,6 +754,22 @@ function rulesFromDraft(
   return rulesTextMode
     ? parseRulesText(rulesText).rules
     : rules
+}
+
+/** 规则列表 arrayMove 后，将当前展开行的下标映射到新数组索引 */
+function remapRuleIndexAfterMove(
+  active: number | null,
+  oldIdx: number,
+  newIdx: number
+): number | null {
+  if (active === null) return null
+  if (active === oldIdx) return newIdx
+  if (oldIdx < newIdx) {
+    if (active > oldIdx && active <= newIdx) return active - 1
+  } else if (oldIdx > newIdx) {
+    if (active >= newIdx && active < oldIdx) return active + 1
+  }
+  return active
 }
 
 /** 用于脏检查与提交的 payload 形状 */
@@ -1061,7 +1096,12 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           </div>
           <div className="space-y-1">
             <Label>Password</Label>
-            <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            <ProxyPasswordInput
+              key="ss"
+              inputName="proxy-ss-password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Checkbox id="ss-udp" checked={form.udp} onCheckedChange={(v) => set('udp', !!v)} />
@@ -1156,7 +1196,12 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           {commonFields}
           <div className="space-y-1">
             <Label>Password</Label>
-            <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            <ProxyPasswordInput
+              key="trojan"
+              inputName="proxy-trojan-password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+            />
           </div>
           <div className="space-y-1">
             <Label>SNI <span className="text-xs text-muted-foreground">({t('common.optional')})</span></Label>
@@ -1176,7 +1221,12 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           {commonFields}
           <div className="space-y-1">
             <Label>Password</Label>
-            <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            <ProxyPasswordInput
+              key="hysteria2"
+              inputName="proxy-hysteria2-password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+            />
           </div>
           <div className="space-y-1">
             <Label>SNI <span className="text-xs text-muted-foreground">({t('common.optional')})</span></Label>
@@ -1200,7 +1250,12 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           </div>
           <div className="space-y-1">
             <Label>Password</Label>
-            <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            <ProxyPasswordInput
+              key="tuic"
+              inputName="proxy-tuic-password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -1261,7 +1316,12 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
             </div>
             <div className="space-y-1">
               <Label>Password <span className="text-xs text-muted-foreground">({t('common.optional')})</span></Label>
-              <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+              <ProxyPasswordInput
+                key="http-socks"
+                inputName="proxy-http-socks-password"
+                value={form.password}
+                onChange={(e) => set('password', e.target.value)}
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2087,12 +2147,16 @@ export function CustomConfigDetail() {
   const handleRulesDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
+    let oldIndex = -1
+    let newIndex = -1
     setRules((prev) => {
-      const oldIndex = prev.findIndex((_, j) => `rule-${j}` === active.id)
-      const newIndex = prev.findIndex((_, j) => `rule-${j}` === over.id)
+      oldIndex = prev.findIndex((_, j) => `rule-${j}` === active.id)
+      newIndex = prev.findIndex((_, j) => `rule-${j}` === over.id)
       if (oldIndex < 0 || newIndex < 0) return prev
       return arrayMove(prev, oldIndex, newIndex)
     })
+    if (oldIndex < 0 || newIndex < 0) return
+    setActiveRuleIndex((a) => remapRuleIndexAfterMove(a, oldIndex, newIndex))
   }
 
   const handleProxyGroupsDragEnd = (event: DragEndEvent) => {
@@ -2309,13 +2373,14 @@ export function CustomConfigDetail() {
     })
     return [...values]
   }, [ruleListItems])
-  const activeRuleItem = useMemo(() => (
-    filteredRuleListItems.find((item) => item.sourceIndex === activeRuleIndex)
-      ?? ruleListItems.find((item) => item.sourceIndex === activeRuleIndex)
-      ?? filteredRuleListItems[0]
-      ?? ruleListItems[0]
-      ?? null
-  ), [activeRuleIndex, filteredRuleListItems, ruleListItems])
+  const activeRuleItem = useMemo(() => {
+    if (activeRuleIndex === null) return null
+    return (
+      filteredRuleListItems.find((item) => item.sourceIndex === activeRuleIndex)
+        ?? ruleListItems.find((item) => item.sourceIndex === activeRuleIndex)
+        ?? null
+    )
+  }, [activeRuleIndex, filteredRuleListItems, ruleListItems])
   const targetOptionGroups = useMemo<RuleTargetOptionGroup[]>(() => ([
     { key: 'builtin', label: t('customConfigs.targetBuiltin'), values: BUILTIN_PROXIES },
     { key: 'groups', label: t('customConfigs.targetProxyGroups'), values: proxyGroups.map((g) => g.name) },
@@ -2343,11 +2408,12 @@ export function CustomConfigDetail() {
     },
   ]
 
+  // 规则条数减少后避免展开下标悬空
   useEffect(() => {
-    if (activeRuleItem && activeRuleIndex !== activeRuleItem.sourceIndex) {
-      setActiveRuleIndex(activeRuleItem.sourceIndex)
+    if (activeRuleIndex !== null && activeRuleIndex >= rules.length) {
+      setActiveRuleIndex(null)
     }
-  }, [activeRuleIndex, activeRuleItem])
+  }, [activeRuleIndex, rules.length])
 
   const handleSave = useCallback(() => {
     if (!isDirty) return
@@ -2495,12 +2561,19 @@ export function CustomConfigDetail() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold">{name}</h1>
+                  <h1
+                    className="text-2xl font-bold cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
+                    title={t('customConfigs.clickToEditTitle')}
+                    onClick={() => setEditingName(true)}
+                  >
+                    {name}
+                  </h1>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
                     onClick={() => setEditingName(true)}
+                    aria-label={t('customConfigs.clickToEditTitle')}
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
@@ -2606,12 +2679,16 @@ export function CustomConfigDetail() {
                 </thead>
                 <tbody>
                   {proxies.map((proxy, idx) => (
-                    <tr key={idx} className="border-t hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={idx}
+                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => openEditProxy(proxy, idx)}
+                    >
                       <td className="px-4 py-2 font-medium whitespace-nowrap">{proxy.name}</td>
                       <td className="px-4 py-2">
                         <Badge variant="secondary">{proxy.type}</Badge>
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"

@@ -42,6 +42,8 @@ const en = {
     remove: 'Remove',
     update: 'Update',
     description: 'Description',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
   },
 
   nav: {
@@ -198,6 +200,7 @@ const en = {
     namePlaceholder: 'Enter config name',
     saveSuccess: 'Config saved',
     detail: 'Custom Config Detail',
+    clickToEditTitle: 'Click to edit config name',
     tabProxies: 'Proxies',
     tabProxyGroups: 'Proxy Groups',
     tabRules: 'Rules',

@@ -251,15 +251,16 @@ export function CustomConfigs() {
               </TableRow>
             ) : (
               configs.map((config) => (
-                <TableRow key={config.id}>
+                <TableRow
+                  key={config.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/custom-configs/${config.id}`)}
+                >
                   <TableCell>
-                    <button
-                      className="font-medium text-primary hover:underline flex items-center gap-1"
-                      onClick={() => navigate(`/custom-configs/${config.id}`)}
-                    >
+                    <div className="font-medium text-primary flex items-center gap-1">
                       {config.name}
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
+                      <ExternalLink className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+                    </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t('customConfigs.statsSummary', {
                         proxies: config.proxies.length,
@@ -278,7 +279,7 @@ export function CustomConfigs() {
                       {formatRelativeTime(config.updated_at)}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
