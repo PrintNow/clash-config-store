@@ -64,7 +64,8 @@ export interface ConfigTemplate {
 // 规则集库条目
 export interface RuleProvider {
   id: number
-  user_id: number
+  /** 系统预设为 null */
+  user_id: number | null
   name: string
   type: 'http' | 'file'
   url: string

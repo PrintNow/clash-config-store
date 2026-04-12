@@ -89,7 +89,7 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		// 加载关联的规则集
 		if len(sub.CustomConfig.RuleProviderIDs) > 0 {
 			var rps []model.RuleProvider
-			// user_id=0 为系统预设，同样可被引用
+			// 含系统预设（is_preset、user_id 可为 NULL），按 id 加载即可
 			repository.DB.Where("id IN ?", sub.CustomConfig.RuleProviderIDs).Find(&rps)
 			for _, rp := range rps {
 				ruleProviderInputs = append(ruleProviderInputs, util.RuleProviderInput{

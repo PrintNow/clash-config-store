@@ -67,12 +67,12 @@ func MigrateAll(db *gorm.DB) error {
 }
 
 // SeedRuleProviders 初始化 Loyalsoldier 内置预设规则集（仅首次，幂等）
-// 系统预设使用 user_id=0，is_preset=true
+// 系统预设 is_preset=true 且 user_id=NULL（避免 MySQL 外键引用不存在的 users.id=0）
 func SeedRuleProviders(db *gorm.DB) error {
 	presets := loyalsoldierPresets()
 	for _, p := range presets {
 		var existing model.RuleProvider
-		err := db.Where("name = ? AND is_preset = ? AND user_id = 0", p.Name, true).First(&existing).Error
+		err := db.Where("name = ? AND is_preset = ?", p.Name, true).First(&existing).Error
 		if err == nil {
 			continue // 已存在，跳过
 		}
@@ -87,7 +87,7 @@ func loyalsoldierPresets() []*model.RuleProvider {
 	cdnBase := "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/"
 	mkRP := func(name, behavior string) *model.RuleProvider {
 		return &model.RuleProvider{
-			UserID:    0,
+			UserID:    nil,
 			Name:      name,
 			Type:      "http",
 			URL:       cdnBase + name + ".txt",

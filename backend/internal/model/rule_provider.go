@@ -1,11 +1,11 @@
 package model
 
 // RuleProvider 规则集库条目，可被多个 CustomConfig 引用
-// is_preset=true 且 user_id=0 为系统内置预设，不可删除
+// is_preset=true 为系统内置预设（user_id 为 NULL，不引用 users），不可删除
 type RuleProvider struct {
 	Base
-	// UserID=0 表示系统内置预设
-	UserID   uint   `gorm:"not null;index" json:"user_id"`
+	// UserID 仅自定义规则集有值；系统预设为 nil，以满足 MySQL 外键（无 id=0 用户）
+	UserID   *uint  `gorm:"index" json:"user_id"`
 	Name     string `gorm:"not null" json:"name"`
 	Type     string `gorm:"not null;default:'http'" json:"type"`      // http | file
 	URL      string `gorm:"default:''" json:"url"`                   // http 类型远程地址

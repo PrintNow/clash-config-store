@@ -22,12 +22,12 @@ type ruleProviderRequest struct {
 	Interval int    `json:"interval"`
 }
 
-// ListRuleProviders 列出当前用户的规则集 + 系统内置预设（user_id=0）
+// ListRuleProviders 列出当前用户的规则集 + 系统内置预设（is_preset=true）
 func ListRuleProviders(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	var providers []model.RuleProvider
-	// 返回自己的 + 系统预设
-	if err := repository.DB.Where("user_id = ? OR user_id = 0", userID).
+	// 返回自己的 + 系统预设（预设 user_id 为 NULL，用 is_preset 识别）
+	if err := repository.DB.Where("user_id = ? OR is_preset = ?", userID, true).
 		Order("is_preset DESC, id ASC").
 		Find(&providers).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "查询失败")
@@ -59,8 +59,9 @@ func CreateRuleProvider(c *gin.Context) {
 		format = "yaml"
 	}
 
+	uid := userID
 	rp := &model.RuleProvider{
-		UserID:    userID,
+		UserID:    &uid,
 		Name:      req.Name,
 		Type:      req.Type,
 		URL:       req.URL,
@@ -87,7 +88,7 @@ func GetRuleProvider(c *gin.Context) {
 	}
 
 	var rp model.RuleProvider
-	if err := repository.DB.Where("(user_id = ? OR user_id = 0) AND id = ?", userID, id).First(&rp).Error; err != nil {
+	if err := repository.DB.Where("(user_id = ? OR is_preset = ?) AND id = ?", userID, true, id).First(&rp).Error; err != nil {
 		Fail(c, http.StatusNotFound, "规则集不存在或无权限")
 		return
 	}
