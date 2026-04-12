@@ -128,6 +128,19 @@ function proxyToYaml(proxy: Record<string, unknown>): string {
   return lines.join('\n')
 }
 
+/** 与 proxyToYaml 一致的标量引号规则，用于补丁替换 YAML 中的 name 行 */
+function yamlScalarForProxyName(val: string): string {
+  if (/[:#{}[\]|>&*!,?]/.test(val) || val.includes('\n')) {
+    return `"${val.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  }
+  return val
+}
+
+/** 自定义节点：替换首处 name 行（支持 `- name:` / `name:`） */
+function replaceProxyYamlNameLine(rawYaml: string, newName: string): string {
+  return rawYaml.replace(/^(\s*(?:-\s+)?name:\s*)(.+)$/m, (_, p1: string) => `${p1}${yamlScalarForProxyName(newName)}`)
+}
+
 /** 将简单 YAML 字符串解析为对象（仅支持扁平结构和一级数组） */
 function yamlToProxy(yaml: string): Record<string, unknown> {
   const result: Record<string, unknown> = {}
@@ -893,6 +906,33 @@ function formToProxyNode(form: ProxyFormState): ProxyNode {
     if (form.tls) base.tls = true
   }
   return base as ProxyNode
+}
+
+/** 生成不冲突的副本名称：`原名 副本`、`原名 副本 2` … */
+function makeUniqueDuplicateProxyName(
+  baseName: string,
+  copySuffix: string,
+  proxies: ProxyNode[],
+  proxyGroups: ProxyGroup[]
+): string {
+  const base = baseName.trim() || 'proxy'
+  let candidate = `${base} ${copySuffix}`
+  let n = 2
+  while (hasProxyOrGroupNameConflict(candidate, proxies, proxyGroups)) {
+    candidate = `${base} ${copySuffix} ${n}`
+    n++
+  }
+  return candidate
+}
+
+/** 列表快速复制：表单态重建节点并同步自定义 YAML 内名称 */
+function buildDuplicatedProxyNode(proxy: ProxyNode, newName: string): ProxyNode {
+  const form = proxyNodeToForm(proxy)
+  form.name = newName
+  if (form.type === 'custom' && form.rawYaml.trim()) {
+    form.rawYaml = replaceProxyYamlNameLine(form.rawYaml, newName)
+  }
+  return formToProxyNode(form)
 }
 
 // ─────────────────────────────────────────────
@@ -1973,6 +2013,16 @@ export function CustomConfigDetail() {
     setProxies((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  const handleDuplicateProxy = (idx: number) => {
+    const proxy = proxies[idx]
+    if (!proxy) return
+    const suffix = t('customConfigs.proxyCopySuffix')
+    const newName = makeUniqueDuplicateProxyName(proxy.name, suffix, proxies, proxyGroups)
+    const node = buildDuplicatedProxyNode(proxy, newName)
+    setProxies((prev) => [...prev.slice(0, idx + 1), node, ...prev.slice(idx + 1)])
+    toast.success(t('customConfigs.proxyDuplicated'))
+  }
+
   // ── 代理组操作 ──
   const openAddGroup = () => {
     setEditingGroup(null)
@@ -2340,16 +2390,16 @@ export function CustomConfigDetail() {
               label: t('contextSaveBar.viewDiff'),
               icon: 'git-compare' as const,
               onClick: openDiffPreview,
-              disabled: !isDirty,
             },
           ]
         : [],
     // 用 id 而非整个 config，避免 refetch 换新对象时反复触发注册 effect
-    [config?.id, t, isDirty, openDiffPreview]
+    [config?.id, t, openDiffPreview]
   )
 
   useRegisterContextSaveBar({
-    enabled: !!config && !isLoading,
+    // 无未保存改动时不注册顶栏，避免单独露出无效的「差异」按钮
+    enabled: !!config && !isLoading && isDirty,
     dirty: isDirty,
     saving: updateMutation.isPending,
     saveDisabled: !isDirty || updateMutation.isPending || !config,
@@ -2551,7 +2601,7 @@ export function CustomConfigDetail() {
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyName')}</th>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyType')}</th>
-                    <th className="w-[100px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
+                    <th className="w-[132px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2568,14 +2618,25 @@ export function CustomConfigDetail() {
                             size="icon"
                             className="h-7 w-7"
                             onClick={() => openEditProxy(proxy, idx)}
+                            aria-label={t('customConfigs.editProxy')}
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleDuplicateProxy(idx)}
+                            aria-label={t('customConfigs.duplicateProxy')}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-7 w-7 text-destructive hover:text-destructive"
                             onClick={() => handleDeleteProxy(idx)}
+                            aria-label={t('customConfigs.deleteProxy')}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
