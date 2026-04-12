@@ -319,73 +319,89 @@ export function CustomConfigs() {
       {/* 创建规则集 Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('customConfigs.addConfig')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('customConfigs.configName')}</Label>
-              <Input
-                placeholder={t('customConfigs.namePlaceholder')}
-                value={newName}
-                onChange={(e) => { setNewName(e.target.value); setNameError('') }}
-              />
-              {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleCreate()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('customConfigs.addConfig')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('customConfigs.configName')}</Label>
+                <Input
+                  placeholder={t('customConfigs.namePlaceholder')}
+                  value={newName}
+                  onChange={(e) => { setNewName(e.target.value); setNameError('') }}
+                />
+                {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? t('common.submitting') : t('common.create')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? t('common.submitting') : t('common.create')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('customConfigs.importConfig')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('customConfigs.importUploadFile')}</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={(e) => handleImportFileChange(e.target.files?.[0])}
-              />
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <FolderUp className="mr-2 h-4 w-4" />
-                {importFileName || t('customConfigs.importChooseFile')}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleImportSubmit()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('customConfigs.importConfig')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('customConfigs.importUploadFile')}</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => handleImportFileChange(e.target.files?.[0])}
+                />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <FolderUp className="mr-2 h-4 w-4" />
+                  {importFileName || t('customConfigs.importChooseFile')}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('customConfigs.importPasteJson')}</Label>
+                <textarea
+                  className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={importText}
+                  onChange={(e) => {
+                    setImportText(e.target.value)
+                    if (importError) setImportError('')
+                  }}
+                  placeholder={`{\n  "name": "example",\n  "proxies": [],\n  "proxy_groups": [],\n  "rules": [],\n  "rule_provider_ids": []\n}`}
+                />
+              </div>
+              {importError && <p className="text-sm text-destructive">{importError}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)}>
+                {t('common.cancel')}
               </Button>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('customConfigs.importPasteJson')}</Label>
-              <textarea
-                className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={importText}
-                onChange={(e) => {
-                  setImportText(e.target.value)
-                  if (importError) setImportError('')
-                }}
-                placeholder={`{\n  "name": "example",\n  "proxies": [],\n  "proxy_groups": [],\n  "rules": [],\n  "rule_provider_ids": []\n}`}
-              />
-            </div>
-            {importError && <p className="text-sm text-destructive">{importError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleImportSubmit} disabled={importMutation.isPending}>
-              {importMutation.isPending ? t('common.submitting') : t('customConfigs.importConfig')}
-            </Button>
-          </DialogFooter>
+              <Button type="submit" disabled={importMutation.isPending}>
+                {importMutation.isPending ? t('common.submitting') : t('customConfigs.importConfig')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -324,13 +324,20 @@ export function RuleProviders() {
       {/* 创建/编辑 Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingProvider ? t('ruleProviders.editProvider') : t('ruleProviders.addProvider')}
-            </DialogTitle>
-          </DialogHeader>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (isFormValid && !saveMutation.isPending) saveMutation.mutate()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {editingProvider ? t('ruleProviders.editProvider') : t('ruleProviders.addProvider')}
+              </DialogTitle>
+            </DialogHeader>
 
-          <div className="space-y-4 py-2">
+            <div className="space-y-4 py-2">
             {/* 名称 */}
             <div className="space-y-1.5">
               <Label htmlFor="rp-name">{t('ruleProviders.providerName')}</Label>
@@ -351,7 +358,7 @@ export function RuleProviders() {
                   setForm((f) => ({ ...f, type: v as 'http' | 'file', url: '' }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger type="button">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,7 +393,7 @@ export function RuleProviders() {
                   setForm((f) => ({ ...f, behavior: v as 'domain' | 'ipcidr' | 'classical' }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger type="button">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -406,7 +413,7 @@ export function RuleProviders() {
                   setForm((f) => ({ ...f, format: v as 'yaml' | 'text' | 'mrs' }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger type="button">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -430,19 +437,17 @@ export function RuleProviders() {
                 }
               />
             </div>
-          </div>
+            </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={!isFormValid || saveMutation.isPending}
-            >
-              {saveMutation.isPending ? t('common.saving') : t('common.save')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={!isFormValid || saveMutation.isPending}>
+                {saveMutation.isPending ? t('common.saving') : t('common.save')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

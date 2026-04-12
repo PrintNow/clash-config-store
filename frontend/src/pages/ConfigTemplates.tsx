@@ -172,42 +172,50 @@ export function ConfigTemplates() {
       {/* 新建模板 Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('configTemplates.addTemplate')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('configTemplates.templateName')}</Label>
-              <Input
-                placeholder={t('configTemplates.namePlaceholder')}
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value)
-                  setNameError('')
-                }}
-              />
-              {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleCreate()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('configTemplates.addTemplate')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('configTemplates.templateName')}</Label>
+                <Input
+                  placeholder={t('configTemplates.namePlaceholder')}
+                  value={newName}
+                  onChange={(e) => {
+                    setNewName(e.target.value)
+                    setNameError('')
+                  }}
+                />
+                {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  {t('configTemplates.templateDescription')}
+                  <span className="ml-1 text-xs text-muted-foreground">({t('common.optional')})</span>
+                </Label>
+                <Input
+                  placeholder={t('configTemplates.descriptionPlaceholder')}
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>
-                {t('configTemplates.templateDescription')}
-                <span className="ml-1 text-xs text-muted-foreground">({t('common.optional')})</span>
-              </Label>
-              <Input
-                placeholder={t('configTemplates.descriptionPlaceholder')}
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? t('common.submitting') : t('common.create')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? t('common.submitting') : t('common.create')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

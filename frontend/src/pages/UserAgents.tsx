@@ -204,62 +204,71 @@ export function UserAgents() {
       {/* 创建/编辑 Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingUA ? t('userAgents.editUA') : t('userAgents.addUA')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('userAgents.uaName')}</Label>
-              <Input
-                placeholder={t('userAgents.namePlaceholder')}
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              />
-              {formErrors.name && (
-                <p className="text-sm text-destructive">{formErrors.name}</p>
-              )}
-            </div>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSubmit()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {editingUA ? t('userAgents.editUA') : t('userAgents.addUA')}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('userAgents.uaName')}</Label>
+                <Input
+                  placeholder={t('userAgents.namePlaceholder')}
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                />
+                {formErrors.name && (
+                  <p className="text-sm text-destructive">{formErrors.name}</p>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <Label>{t('userAgents.uaValue')}</Label>
-              <Input
-                placeholder={t('userAgents.valuePlaceholder')}
-                value={formData.value}
-                onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
-              />
-              {formErrors.value && (
-                <p className="text-sm text-destructive">{formErrors.value}</p>
-              )}
-              {/* 预设快选 */}
-              <div className="flex flex-wrap gap-2">
-                <span className="text-xs text-muted-foreground self-center">
-                  {t('userAgents.presets')}:
-                </span>
-                {UA_PRESETS.map((preset) => (
-                  <Button
-                    key={preset.name}
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setFormData((prev) => ({ ...prev, value: preset.value }))
-                    }
-                  >
-                    {preset.name}
-                  </Button>
-                ))}
+              <div className="space-y-2">
+                <Label>{t('userAgents.uaValue')}</Label>
+                <Input
+                  placeholder={t('userAgents.valuePlaceholder')}
+                  value={formData.value}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
+                />
+                {formErrors.value && (
+                  <p className="text-sm text-destructive">{formErrors.value}</p>
+                )}
+                {/* 预设快选 */}
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-muted-foreground self-center">
+                    {t('userAgents.presets')}:
+                  </span>
+                  {UA_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.name}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setFormData((prev) => ({ ...prev, value: preset.value }))
+                      }
+                    >
+                      {preset.name}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? t('common.saving') : t('common.save')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? t('common.saving') : t('common.save')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

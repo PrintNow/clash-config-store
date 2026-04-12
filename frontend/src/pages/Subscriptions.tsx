@@ -174,31 +174,39 @@ export function Subscriptions() {
       {/* 创建订阅 Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('subscriptions.addSubscription')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('subscriptions.subscriptionName')}</Label>
-              <Input
-                placeholder={t('subscriptions.namePlaceholder')}
-                value={newName}
-                onChange={(e) => { setNewName(e.target.value); setNameError('') }}
-              />
-              {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleCreate()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('subscriptions.addSubscription')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('subscriptions.subscriptionName')}</Label>
+                <Input
+                  placeholder={t('subscriptions.namePlaceholder')}
+                  value={newName}
+                  onChange={(e) => { setNewName(e.target.value); setNameError('') }}
+                />
+                {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                创建后可在详情页配置代理源、规则集等。
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              创建后可在详情页配置代理源、规则集等。
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? t('common.submitting') : t('common.create')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? t('common.submitting') : t('common.create')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

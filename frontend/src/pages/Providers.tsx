@@ -287,41 +287,48 @@ export function Providers() {
       {/* 创建/编辑 Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingProvider ? t('providers.editProvider') : t('providers.addProvider')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('providers.providerName')}</Label>
-              <Input
-                placeholder={t('providers.namePlaceholder')}
-                value={formData.name}
-                onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-              />
-              {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
-            </div>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSubmit()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {editingProvider ? t('providers.editProvider') : t('providers.addProvider')}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>{t('providers.providerName')}</Label>
+                <Input
+                  placeholder={t('providers.namePlaceholder')}
+                  value={formData.name}
+                  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                />
+                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <Label>{t('providers.providerUrl')}</Label>
-              <Input
-                placeholder={t('providers.urlPlaceholder')}
-                value={formData.url}
-                onChange={(e) => setFormData((p) => ({ ...p, url: e.target.value }))}
-              />
-              {formErrors.url && <p className="text-sm text-destructive">{formErrors.url}</p>}
-            </div>
+              <div className="space-y-2">
+                <Label>{t('providers.providerUrl')}</Label>
+                <Input
+                  placeholder={t('providers.urlPlaceholder')}
+                  value={formData.url}
+                  onChange={(e) => setFormData((p) => ({ ...p, url: e.target.value }))}
+                />
+                {formErrors.url && <p className="text-sm text-destructive">{formErrors.url}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <Label>{t('providers.userAgent')}</Label>
-              <Select
-                value={formData.user_agent_id || '__none__'}
-                onValueChange={(v) => setFormData((p) => ({ ...p, user_agent_id: v === '__none__' ? '' : v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('providers.selectUA')} />
-                </SelectTrigger>
+              <div className="space-y-2">
+                <Label>{t('providers.userAgent')}</Label>
+                <Select
+                  value={formData.user_agent_id || '__none__'}
+                  onValueChange={(v) => setFormData((p) => ({ ...p, user_agent_id: v === '__none__' ? '' : v }))}
+                >
+                  <SelectTrigger type="button">
+                    <SelectValue placeholder={t('providers.selectUA')} />
+                  </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">{t('providers.noUA')}</SelectItem>
                   {userAgents.map((ua) => (
@@ -330,27 +337,28 @@ export function Providers() {
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
-            </div>
+                </Select>
+              </div>
 
-            <div className="space-y-2">
-              <Label>{t('providers.cacheTTL')}</Label>
-              <Input
-                type="number"
-                placeholder={t('providers.cacheTTLPlaceholder')}
-                value={formData.cache_ttl}
-                onChange={(e) => setFormData((p) => ({ ...p, cache_ttl: e.target.value }))}
-              />
+              <div className="space-y-2">
+                <Label>{t('providers.cacheTTL')}</Label>
+                <Input
+                  type="number"
+                  placeholder={t('providers.cacheTTLPlaceholder')}
+                  value={formData.cache_ttl}
+                  onChange={(e) => setFormData((p) => ({ ...p, cache_ttl: e.target.value }))}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? t('common.saving') : t('common.save')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? t('common.saving') : t('common.save')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

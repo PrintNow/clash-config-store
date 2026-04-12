@@ -671,22 +671,31 @@ export function SubscriptionDetail() {
       {/* ───── 添加访问限制 Dialog ───── */}
       <Dialog open={restrictionDialogOpen} onOpenChange={setRestrictionDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('subscriptions.addRestriction')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* 限制类型 */}
-            <div className="space-y-2">
-              <Label>{t('subscriptions.restrictionType')}</Label>
-              <Select
-                value={restrictionForm.type}
-                onValueChange={(v) =>
-                  setRestrictionForm((prev) => ({ ...prev, type: v as RestrictionForm['type'] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!addRestrictionMutation.isPending && restrictionForm.value.trim()) {
+                addRestrictionMutation.mutate(restrictionForm)
+              }
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('subscriptions.addRestriction')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* 限制类型 */}
+              <div className="space-y-2">
+                <Label>{t('subscriptions.restrictionType')}</Label>
+                <Select
+                  value={restrictionForm.type}
+                  onValueChange={(v) =>
+                    setRestrictionForm((prev) => ({ ...prev, type: v as RestrictionForm['type'] }))
+                  }
+                >
+                  <SelectTrigger type="button">
+                    <SelectValue />
+                  </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ip">{t('subscriptions.typeIP')}</SelectItem>
                   <SelectItem value="cidr">{t('subscriptions.typeCIDR')}</SelectItem>
@@ -722,7 +731,7 @@ export function SubscriptionDetail() {
                   setRestrictionForm((prev) => ({ ...prev, mode: v as RestrictionForm['mode'] }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger type="button">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -731,19 +740,20 @@ export function SubscriptionDetail() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
+            </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRestrictionDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => addRestrictionMutation.mutate(restrictionForm)}
-              disabled={addRestrictionMutation.isPending || !restrictionForm.value.trim()}
-            >
-              {addRestrictionMutation.isPending ? t('common.submitting') : t('common.add')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRestrictionDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={addRestrictionMutation.isPending || !restrictionForm.value.trim()}
+              >
+                {addRestrictionMutation.isPending ? t('common.submitting') : t('common.add')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
