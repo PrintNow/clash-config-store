@@ -8,7 +8,7 @@ type ConfigTemplate struct {
 	Name        string `gorm:"not null" json:"name"`
 	Description string `gorm:"default:''" json:"description"`
 	// Content 存储完整的顶层 YAML 配置片段（除 proxies/proxy-groups/rules 之外的部分）
-	Content string `gorm:"type:text" json:"content"`
+	Content string `gorm:"type:longtext" json:"content"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
