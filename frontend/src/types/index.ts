@@ -9,9 +9,11 @@ export interface User {
 // User-Agent 配置
 export interface UserAgent {
   id: number
-  user_id: number
+  /** 系统预设为 null */
+  user_id: number | null
   name: string
   value: string
+  is_preset?: boolean
   created_at: string
 }
 

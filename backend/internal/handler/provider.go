@@ -12,6 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// userAgentSelectableByUser 校验 UA 可被当前用户用于 Provider（本人或全局预设）
+func userAgentSelectableByUser(userID uint, uaID uint) bool {
+	var ua model.UserAgent
+	if err := repository.DB.First(&ua, uaID).Error; err != nil {
+		return false
+	}
+	if ua.IsPreset {
+		return true
+	}
+	return ua.UserID != nil && *ua.UserID == userID
+}
+
 // ListProviders 列出当前用户的所有 Provider（含 UserAgent 信息）
 func ListProviders(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
@@ -42,6 +54,11 @@ func CreateProvider(c *gin.Context) {
 	cacheTTL := 60
 	if req.CacheTTL != nil {
 		cacheTTL = *req.CacheTTL
+	}
+
+	if req.UserAgentID != nil && !userAgentSelectableByUser(userID, *req.UserAgentID) {
+		Fail(c, http.StatusBadRequest, "无效的 user_agent_id")
+		return
 	}
 
 	p := &model.Provider{
@@ -78,6 +95,11 @@ func UpdateProvider(c *gin.Context) {
 	var req providerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BindFail(c, err)
+		return
+	}
+
+	if req.UserAgentID != nil && !userAgentSelectableByUser(userID, *req.UserAgentID) {
+		Fail(c, http.StatusBadRequest, "无效的 user_agent_id")
 		return
 	}
 

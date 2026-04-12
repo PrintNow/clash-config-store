@@ -44,6 +44,10 @@ func Init(cfg *config.Config) error {
 		log.Printf("[db] 规则集预设种子初始化警告: %v", err)
 	}
 
+	if err := SeedUserAgentPresets(DB); err != nil {
+		log.Printf("[db] UA 内置预设种子初始化警告: %v", err)
+	}
+
 	log.Printf("[db] 数据库初始化成功 (type=%s)", cfg.DBType)
 	return nil
 }
@@ -112,5 +116,28 @@ func loyalsoldierPresets() []*model.RuleProvider {
 		mkRP("cncidr", "ipcidr"),
 		mkRP("lancidr", "ipcidr"),
 		mkRP("applications", "classical"),
+	}
+}
+
+// SeedUserAgentPresets 写入常用客户端 UA 预设（幂等）
+func SeedUserAgentPresets(db *gorm.DB) error {
+	for _, p := range defaultUserAgentPresets() {
+		var existing model.UserAgent
+		err := db.Where("name = ? AND is_preset = ?", p.Name, true).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if err := db.Create(&p).Error; err != nil {
+			return fmt.Errorf("创建 UA 预设 %s 失败: %w", p.Name, err)
+		}
+	}
+	return nil
+}
+
+func defaultUserAgentPresets() []*model.UserAgent {
+	return []*model.UserAgent{
+		{UserID: nil, Name: "Mihomo", Value: "Mihomo/1.18.0", IsPreset: true},
+		{UserID: nil, Name: "ClashX", Value: "ClashX/1.96.2.4", IsPreset: true},
+		{UserID: nil, Name: "Clash", Value: "Clash/0.20.0", IsPreset: true},
 	}
 }

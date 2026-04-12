@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -9,13 +10,16 @@ import (
 	"clash-config-store/internal/repository"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-// ListUserAgents 列出当前用户的所有 User-Agent
+// ListUserAgents 列出当前用户的 UA + 系统内置预设
 func ListUserAgents(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	var agents []model.UserAgent
-	if err := repository.DB.Where("user_id = ?", userID).Find(&agents).Error; err != nil {
+	if err := repository.DB.Where("user_id = ? OR is_preset = ?", userID, true).
+		Order("is_preset DESC, id ASC").
+		Find(&agents).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
@@ -36,10 +40,12 @@ func CreateUserAgent(c *gin.Context) {
 		return
 	}
 
+	uid := userID
 	agent := &model.UserAgent{
-		UserID: userID,
-		Name:   req.Name,
-		Value:  req.Value,
+		UserID:   &uid,
+		Name:     req.Name,
+		Value:    req.Value,
+		IsPreset: false,
 	}
 
 	if err := repository.DB.Create(agent).Error; err != nil {
@@ -50,7 +56,7 @@ func CreateUserAgent(c *gin.Context) {
 	OK(c, agent)
 }
 
-// UpdateUserAgent 更新指定 User-Agent（仅限自己的数据）
+// UpdateUserAgent 更新自定义 UA（内置预设不可修改）
 func UpdateUserAgent(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -60,7 +66,19 @@ func UpdateUserAgent(c *gin.Context) {
 	}
 
 	var agent model.UserAgent
-	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&agent).Error; err != nil {
+	if err := repository.DB.First(&agent, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			Fail(c, http.StatusNotFound, "User-Agent 不存在或无权限")
+			return
+		}
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	if agent.IsPreset {
+		Fail(c, http.StatusForbidden, "内置预设不可修改")
+		return
+	}
+	if agent.UserID == nil || *agent.UserID != userID {
 		Fail(c, http.StatusNotFound, "User-Agent 不存在或无权限")
 		return
 	}
@@ -82,7 +100,7 @@ func UpdateUserAgent(c *gin.Context) {
 	OK(c, agent)
 }
 
-// DeleteUserAgent 删除指定 User-Agent（仅限自己的数据）
+// DeleteUserAgent 删除自定义 UA（内置预设不可删除）
 func DeleteUserAgent(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -92,7 +110,19 @@ func DeleteUserAgent(c *gin.Context) {
 	}
 
 	var agent model.UserAgent
-	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&agent).Error; err != nil {
+	if err := repository.DB.First(&agent, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			Fail(c, http.StatusNotFound, "User-Agent 不存在或无权限")
+			return
+		}
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	if agent.IsPreset {
+		Fail(c, http.StatusForbidden, "内置预设不可删除")
+		return
+	}
+	if agent.UserID == nil || *agent.UserID != userID {
 		Fail(c, http.StatusNotFound, "User-Agent 不存在或无权限")
 		return
 	}
