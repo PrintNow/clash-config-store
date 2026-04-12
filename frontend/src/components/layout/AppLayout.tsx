@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Menu, X, Sun, Moon, Monitor, Languages, LogOut, User } from 'lucide-react'
 import { toast } from 'sonner'
@@ -55,9 +55,12 @@ export function AppLayout() {
       {/* 桌面端固定侧边栏 */}
       <aside className="hidden md:flex w-60 flex-col border-r bg-sidebar">
         <div className="flex h-16 items-center px-4 border-b border-sidebar-border">
-          <span className="text-lg font-bold text-sidebar-foreground">
+          <Link
+            to="/dashboard"
+            className="text-lg font-bold text-sidebar-foreground hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm transition-colors"
+          >
             Clash Config Store
-          </span>
+          </Link>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           <Sidebar />
@@ -79,7 +82,13 @@ export function AppLayout() {
         }`}
       >
         <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
-          <span className="text-lg font-bold text-sidebar-foreground">Clash Config</span>
+          <Link
+            to="/dashboard"
+            onClick={() => setSidebarOpen(false)}
+            className="text-lg font-bold text-sidebar-foreground hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm transition-colors truncate pr-2"
+          >
+            Clash Config Store
+          </Link>
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
             <X className="h-4 w-4" />
           </Button>

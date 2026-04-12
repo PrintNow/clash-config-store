@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -27,7 +27,7 @@ var App *Config
 func Load() *Config {
 	// 尝试加载 .env 文件，不存在则忽略
 	if err := godotenv.Load(); err != nil {
-		log.Println("[config] 未找到 .env 文件，使用环境变量")
+		slog.Info("未找到 .env 文件，使用环境变量", slog.String("component", "config"))
 	}
 
 	App = &Config{

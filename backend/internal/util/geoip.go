@@ -1,7 +1,7 @@
 package util
 
 import (
-	"log"
+	"log/slog"
 	"net"
 
 	"github.com/oschwald/geoip2-golang"
@@ -19,7 +19,7 @@ type GeoInfo struct {
 // InitGeoIP 加载 MaxMind GeoLite2 数据库
 func InitGeoIP(path string) error {
 	if path == "" {
-		log.Println("[geoip] 未配置 GEOIP_PATH，IP 地理限制功能将不可用")
+		slog.Info("未配置 GEOIP_PATH，IP 地理限制功能将不可用", slog.String("component", "geoip"))
 		return nil
 	}
 	var err error
@@ -27,7 +27,7 @@ func InitGeoIP(path string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[geoip] GeoIP 数据库加载成功: %s", path)
+	slog.Info("GeoIP 数据库加载成功", slog.String("component", "geoip"), slog.String("path", path))
 	return nil
 }
 

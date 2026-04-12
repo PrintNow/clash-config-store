@@ -2,15 +2,15 @@ package repository
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
+	"clash-config-store/internal/applog"
 	"clash-config-store/internal/config"
 	"clash-config-store/internal/model"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -30,7 +30,7 @@ func Init(cfg *config.Config) error {
 
 	var err error
 	DB, err = gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: applog.GormLogger(),
 	})
 	if err != nil {
 		return fmt.Errorf("数据库连接失败: %w", err)
@@ -41,14 +41,14 @@ func Init(cfg *config.Config) error {
 	}
 
 	if err := SeedRuleProviders(DB); err != nil {
-		log.Printf("[db] 规则集预设种子初始化警告: %v", err)
+		slog.Warn("规则集预设种子初始化警告", slog.String("component", "db"), slog.Any("err", err))
 	}
 
 	if err := SeedUserAgentPresets(DB); err != nil {
-		log.Printf("[db] UA 内置预设种子初始化警告: %v", err)
+		slog.Warn("UA 内置预设种子初始化警告", slog.String("component", "db"), slog.Any("err", err))
 	}
 
-	log.Printf("[db] 数据库初始化成功 (type=%s)", cfg.DBType)
+	slog.Info("数据库初始化成功", slog.String("component", "db"), slog.String("db_type", cfg.DBType))
 	return nil
 }
 

@@ -1,9 +1,11 @@
 package main
 
 import (
-	"log"
+	"log/slog"
+	"os"
 	"time"
 
+	"clash-config-store/internal/applog"
 	"clash-config-store/internal/config"
 	"clash-config-store/internal/handler"
 	"clash-config-store/internal/middleware"
@@ -15,15 +17,17 @@ import (
 )
 
 func main() {
+	applog.Init()
 	cfg := config.Load()
 
 	if err := util.InitGeoIP(cfg.GeoIPPath); err != nil {
-		log.Printf("[main] GeoIP 初始化失败: %v", err)
+		slog.Warn("GeoIP 初始化失败", slog.String("component", "main"), slog.Any("err", err))
 	}
 	defer util.CloseGeoIP()
 
 	if err := repository.Init(cfg); err != nil {
-		log.Fatalf("[main] 数据库初始化失败: %v", err)
+		slog.Error("数据库初始化失败", slog.String("component", "main"), slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	r := gin.Default()
@@ -116,8 +120,9 @@ func main() {
 		}
 	}
 
-	log.Printf("[main] 服务启动，监听端口 %s", cfg.Port)
+	slog.Info("服务启动", slog.String("component", "main"), slog.String("addr", ":"+cfg.Port))
 	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("[main] 服务启动失败: %v", err)
+		slog.Error("服务启动失败", slog.String("component", "main"), slog.Any("err", err))
+		os.Exit(1)
 	}
 }
