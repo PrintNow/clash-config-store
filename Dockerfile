@@ -32,6 +32,6 @@ WORKDIR /app
 COPY --from=backend-builder /build/clash-config-store ./app/
 COPY --from=frontend-builder /tmp/assets.zip ./static/assets.zip
 
-EXPOSE 8080
+EXPOSE 26406
 
 CMD ["./app/clash-config-store"]

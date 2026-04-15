@@ -8,15 +8,15 @@ services:
     container_name: clash-config-store-backend
     restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-26406}:26406"
     environment:
-      PORT: "8080"
+      APP_PORT: "26406"
       DB_TYPE: sqlite
       DB_DSN: /data/clash-config-store.db
       JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-in-production}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
       GEOIP_PATH: /data/clash-config-store.d/GeoLite2-City.mmdb
-      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      BASE_URL: ${BASE_URL:-http://localhost:26406}
       TZ: ${TZ:-UTC}
     volumes:
       - backend_data:/data

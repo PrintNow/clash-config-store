@@ -31,13 +31,13 @@ func Load() *Config {
 	}
 
 	App = &Config{
-		Port:      getEnv("PORT", "8080"),
+		Port:      getEnv("APP_PORT", "26406"),
 		DBType:    getEnv("DB_TYPE", "sqlite"),
 		DBDsn:     getEnv("DB_DSN", "clash-config-store.db"),
 		JWTSecret: getEnv("JWT_SECRET", "please-change-this-secret-in-production"),
 		JWTExpiry: getEnvInt("JWT_EXPIRY_HOURS", 24),
 		GeoIPPath: getEnv("GEOIP_PATH", ""),
-		BaseURL:   getEnv("BASE_URL", "http://localhost:8080"),
+		BaseURL:   getEnv("BASE_URL", "http://localhost:26406"),
 	}
 	return App
 }

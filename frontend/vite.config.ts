@@ -14,9 +14,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': 'http://localhost:26406',
       // 必须用 /sub/ 前缀：/sub 会误匹配 /subscriptions
-      '/sub/': 'http://localhost:8080',
+      '/sub/': 'http://localhost:26406',
     },
   },
 })
