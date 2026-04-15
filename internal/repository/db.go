@@ -8,8 +8,8 @@ import (
 	"clash-config-store/internal/config"
 	"clash-config-store/internal/model"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
