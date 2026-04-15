@@ -22,15 +22,26 @@ COPY . ./
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o clash-config-store ./cmd/server
 
-# Stage 3: Final image
+# Stage 3: Download GeoIP database
+FROM alpine:latest AS geoip-downloader
+
+ARG GEOIP_MMDB_URL=https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb
+
+RUN apk --no-cache add ca-certificates curl \
+ && mkdir -p /geoip \
+ && curl -fL "${GEOIP_MMDB_URL}" -o /geoip/GeoLite2-City.mmdb
+
+# Stage 4: Final image
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata \
+ && mkdir -p /data/clash-config-store.d
 
 WORKDIR /app
 
 COPY --from=backend-builder /build/clash-config-store ./app/
 COPY --from=frontend-builder /tmp/assets.zip ./static/assets.zip
+COPY --from=geoip-downloader /geoip/GeoLite2-City.mmdb /data/clash-config-store.d/GeoLite2-City.mmdb
 
 EXPOSE 26406
 

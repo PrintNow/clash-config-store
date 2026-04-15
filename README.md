@@ -84,11 +84,12 @@ npm run dev
 
 ## GeoIP 配置（可选，用于 IP 地理限制）
 
-1. 注册 MaxMind 免费账号：https://www.maxmind.com/en/geolite2/signup
-2. 下载 `GeoLite2-City.mmdb`
-3. 将文件放到指定路径，在 `.env` 中配置 `GEOIP_PATH`
+1. 从 [P3TERX/GeoLite.mmdb Tags](https://github.com/P3TERX/GeoLite.mmdb/tags) 对应 release 下载 `GeoLite2-City.mmdb`
+2. 将文件放到指定路径，在 `.env` 中配置 `GEOIP_PATH`
 
-Docker 部署时，可将 `.mmdb` 放到数据卷目录 **`/data/clash-config-store.d/GeoLite2-City.mmdb`**（与 compose 中 `GEOIP_PATH` 一致）。根目录一体化镜像构建时会从 [P3TERX/GeoLite.mmdb](https://github.com/P3TERX/GeoLite.mmdb/releases) 下载该文件至上述路径；若自行挂载空目录覆盖 `/data`，需自行放入该文件或调整 `GEOIP_PATH`。
+`make geoip` 会下载到 `.docker/geoip/GeoLite2-City.mmdb`。`make docker-build` 会自动先下载再构建镜像。
+
+Docker 一体化镜像构建时，也会在构建阶段自动下载该文件并打包到镜像内的 **`/data/clash-config-store.d/GeoLite2-City.mmdb`**（与 compose 中 `GEOIP_PATH` 一致）。若运行时挂载空目录覆盖 `/data`，需自行放入该文件或调整 `GEOIP_PATH`。
 
 ## 环境变量
 
@@ -99,7 +100,7 @@ Docker 部署时，可将 `.mmdb` 放到数据卷目录 **`/data/clash-config-st
 | `DB_DSN` | `clash-config-store.db` | SQLite 文件路径或 MySQL DSN |
 | `JWT_SECRET` | *(需修改)* | JWT 签名密钥，请使用随机字符串 |
 | `JWT_EXPIRY_HOURS` | `24` | JWT 有效期（小时） |
-| `GEOIP_PATH` | *(空)* | MaxMind GeoLite2 `.mmdb` 文件路径 |
+| `GEOIP_PATH` | 自动探测 `/data/clash-config-store.d/GeoLite2-City.mmdb` | MaxMind GeoLite2 `.mmdb` 文件路径；未设置时仅在该默认文件存在时自动启用 |
 | `BASE_URL` | `http://localhost:8080` | 服务对外访问 URL，用于生成订阅链接 |
 
 Docker Compose 额外常用变量（写在根目录 `.env` 或启动命令中）：

@@ -36,10 +36,22 @@ func Load() *Config {
 		DBDsn:     getEnv("DB_DSN", "clash-config-store.db"),
 		JWTSecret: getEnv("JWT_SECRET", "please-change-this-secret-in-production"),
 		JWTExpiry: getEnvInt("JWT_EXPIRY_HOURS", 24),
-		GeoIPPath: getEnv("GEOIP_PATH", ""),
+		GeoIPPath: resolveGeoIPPath(),
 		BaseURL:   getEnv("BASE_URL", "http://localhost:26406"),
 	}
 	return App
+}
+
+func resolveGeoIPPath() string {
+	if v := os.Getenv("GEOIP_PATH"); v != "" {
+		return v
+	}
+	defaultPath := "/data/clash-config-store.d/GeoLite2-City.mmdb"
+	if _, err := os.Stat(defaultPath); err == nil {
+		return defaultPath
+	}
+	// 本地开发通常不存在该文件，回退为空表示禁用 GeoIP。
+	return ""
 }
 
 func getEnv(key, fallback string) string {
