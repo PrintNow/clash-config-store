@@ -414,6 +414,8 @@ const zh = {
     typeCountry: '国家/地区',
     accessLogs: '访问日志',
     viewLogs: '查看日志',
+    accessLogCount: '访问次数',
+    copySubscriptionUrl: '复制订阅链接',
     tabProviders: '订阅源',
     tabConfig: '自定义配置',
     tabTemplate: '配置模板',

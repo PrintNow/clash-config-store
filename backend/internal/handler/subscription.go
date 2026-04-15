@@ -29,6 +29,32 @@ func ListSubscriptions(c *gin.Context) {
 	for i := range subs {
 		fillSubscriptionURL(&subs[i])
 	}
+	if len(subs) > 0 {
+		ids := make([]uint, len(subs))
+		for i := range subs {
+			ids[i] = subs[i].ID
+		}
+		type cntRow struct {
+			SubscriptionID uint  `gorm:"column:subscription_id"`
+			Cnt            int64 `gorm:"column:cnt"`
+		}
+		var rows []cntRow
+		if err := repository.DB.Model(&model.AccessLog{}).
+			Select("subscription_id, COUNT(*) AS cnt").
+			Where("subscription_id IN ?", ids).
+			Group("subscription_id").
+			Scan(&rows).Error; err != nil {
+			Fail(c, http.StatusInternalServerError, "查询失败")
+			return
+		}
+		bySub := make(map[uint]int64, len(rows))
+		for _, r := range rows {
+			bySub[r.SubscriptionID] = r.Cnt
+		}
+		for i := range subs {
+			subs[i].AccessLogCount = bySub[subs[i].ID]
+		}
+	}
 	OK(c, subs)
 }
 

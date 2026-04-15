@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, Settings, Trash2 } from 'lucide-react'
+import { Copy, Plus, Settings, Trash2 } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
 import type { Subscription } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,15 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 
+/** 与 SubscriptionDetail 一致：开发环境用同源 /sub/{token}，生产优先用后端 subscription_url */
+function subscriptionPublicUrl(sub: Pick<Subscription, 'token' | 'subscription_url'>): string {
+  if (import.meta.env.DEV) {
+    return `${window.location.origin}/sub/${sub.token}`
+  }
+
+  return sub.subscription_url ?? `${window.location.origin}/sub/${sub.token}`
+}
+
 export function Subscriptions() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -38,9 +47,11 @@ export function Subscriptions() {
   const [newName, setNewName] = useState('')
   const [nameError, setNameError] = useState('')
 
+  // 访问次数随 /sub 拉取变化；全局 staleTime 30s 会导致与仪表盘「最近访问」不一致，此处单独置 0
   const { data: subscriptions = [], isLoading } = useQuery({
     queryKey: ['subscriptions'],
     queryFn: subscriptionsApi.list,
+    staleTime: 0,
   })
 
   const createMutation = useMutation({
@@ -80,6 +91,15 @@ export function Subscriptions() {
     setDeleteDialogOpen(true)
   }
 
+  const copySubscriptionLink = async (sub: Subscription) => {
+    try {
+      await navigator.clipboard.writeText(subscriptionPublicUrl(sub))
+      toast.success(t('subscriptions.copySuccess'))
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
+
   // Token 显示：仅显示前 8 位
   const maskToken = (token: string) => `${token.slice(0, 8)}...`
 
@@ -101,23 +121,24 @@ export function Subscriptions() {
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('subscriptions.token')}</TableHead>
+              <TableHead className="text-right tabular-nums">{t('subscriptions.accessLogCount')}</TableHead>
               <TableHead>{t('subscriptions.tokenExpiredAt')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[140px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 6 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : subscriptions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
@@ -129,6 +150,16 @@ export function Subscriptions() {
                     <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
                       {maskToken(sub.token)}
                     </code>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <button
+                      type="button"
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                      onClick={() => navigate(`/subscriptions/${sub.id}/logs`)}
+                      title={t('subscriptions.viewLogs')}
+                    >
+                      {sub.access_log_count ?? 0}
+                    </button>
                   </TableCell>
                   <TableCell>
                     {sub.token_expired_at ? (
@@ -149,8 +180,18 @@ export function Subscriptions() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => copySubscriptionLink(sub)}
+                        title={t('subscriptions.copySubscriptionUrl')}
+                        aria-label={t('subscriptions.copySubscriptionUrl')}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => navigate(`/subscriptions/${sub.id}`)}
                         title={t('common.detail')}
+                        aria-label={t('common.detail')}
                       >
                         <Settings className="h-4 w-4" />
                       </Button>
@@ -159,6 +200,7 @@ export function Subscriptions() {
                         size="icon"
                         onClick={() => openDeleteDialog(sub)}
                         className="text-destructive hover:text-destructive"
+                        aria-label={t('common.delete')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

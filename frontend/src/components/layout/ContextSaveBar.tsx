@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CircleAlert, GitCompare, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,22 @@ function ExtraActionIcon({ icon }: { icon?: ContextSaveBarExtraActionIcon }) {
 export function ContextSaveBar() {
   const { t } = useTranslation()
   const registration = useContextSaveBarStore((s) => s.registration)
+
+  // Mac：⌘S；其它平台：Ctrl+S。有注册页时拦截默认「保存网页」并走顶栏保存逻辑
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 's' && e.key !== 'S') return
+      if (!(e.metaKey || e.ctrlKey)) return
+      const r = useContextSaveBarStore.getState().registration
+      if (!r) return
+      e.preventDefault()
+      if (!r.saveDisabled) {
+        r.onSave()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // 无注册方时不占位（例如非详情页）
   if (!registration) {

@@ -109,6 +109,8 @@ export interface Subscription {
   token: string
   /** 后端根据 BASE_URL 拼好的对外订阅链接 */
   subscription_url?: string
+  /** 列表接口聚合的访问日志条数 */
+  access_log_count?: number
   token_expired_at?: string
   enabled_provider_ids: number[]
   custom_config_id?: number

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -38,6 +38,13 @@ export function Dashboard() {
     queryKey: ['dashboard'],
     queryFn: dashboardApi.getStats,
   })
+
+  // 仪表盘展示最新访问日志后，使订阅列表上的 access_log_count 缓存失效，避免长期显示 0
+  useEffect(() => {
+    if (stats) {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+    }
+  }, [stats, queryClient])
 
   // 一键刷新所有订阅源
   const refreshAllMutation = useMutation({

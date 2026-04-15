@@ -404,6 +404,8 @@ const en = {
     typeCountry: 'Country',
     accessLogs: 'Access Logs',
     viewLogs: 'View Logs',
+    accessLogCount: 'Access count',
+    copySubscriptionUrl: 'Copy subscription URL',
     tabProviders: 'Providers',
     tabConfig: 'Custom Config',
     tabTemplate: 'Config Template',
