@@ -1,39 +1,56 @@
+# Clash Config Store — MariaDB + 后端（单体架构）
+# 根目录可放置 .env，Compose 会自动读取其中的变量用于替换 ${VAR}
+# 常用：JWT_SECRET、MYSQL_PASSWORD、MYSQL_ROOT_PASSWORD、BASE_URL、BACKEND_PORT
+
 services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: clash-config-store-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-clash_config_store}
+      MYSQL_USER: ${MYSQL_USER:-clash}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-clashpassword}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: clash-config-store-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
-      - PORT=8080
-      - DB_TYPE=sqlite
-      - DB_DSN=/data/clash-config-store.db
-      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret}
-      - JWT_EXPIRY_HOURS=24
-      - GEOIP_PATH=/data/GeoLite2-City.mmdb
-      - BASE_URL=${BASE_URL:-http://localhost:8080}
+      PORT: "8080"
+      DB_TYPE: mysql
+      DB_DSN: "${MYSQL_USER:-clash}:${MYSQL_PASSWORD:-clashpassword}@tcp(mariadb:3306)/${MYSQL_DATABASE:-clash_config_store}?charset=utf8mb4&parseTime=True&loc=Local"
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-in-production}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      GEOIP_PATH: /data/clash-config-store.d/GeoLite2-City.mmdb
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      TZ: ${TZ:-UTC}
     volumes:
       - backend_data:/data
-    networks:
-      - app_network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: clash-config-store-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
     depends_on:
-      - backend
+      mariadb:
+        condition: service_healthy
     networks:
       - app_network
 
 volumes:
+  mariadb_data:
   backend_data:
 
 networks:

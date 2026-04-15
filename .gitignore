@@ -1,17 +1,19 @@
 # Go
-backend/clash-config-store
-backend/clash-config-store.db
-backend/*.db
-backend/GeoLite2-*.mmdb
+clash-config-store
+clash-config-store.db
+*.db
+GeoLite2-*.mmdb
 *.mmdb
 
 # Environment
 .env
-backend/.env
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Static assets (embedded in binary)
+static/assets.zip
 
 # Docker
 .docker/
@@ -21,3 +23,4 @@ frontend/dist/
 .vscode/
 *.swp
 *.swo
+bin/

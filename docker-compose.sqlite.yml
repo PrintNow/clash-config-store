@@ -1,0 +1,44 @@
+# SQLite 版：无数据库容器，数据在 Docker volume 中持久化
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clash-config-store-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      DB_TYPE: sqlite
+      DB_DSN: /data/clash-config-store.db
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-in-production}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      GEOIP_PATH: /data/clash-config-store.d/GeoLite2-City.mmdb
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - backend_data:/data
+    networks:
+      - app_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: clash-config-store-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+volumes:
+  backend_data:
+
+networks:
+  app_network:
+    driver: bridge

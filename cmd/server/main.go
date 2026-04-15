@@ -1,8 +1,12 @@
 package main
 
 import (
+	"io"
 	"log/slog"
+	"mime"
+	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"clash-config-store/internal/applog"
@@ -11,6 +15,7 @@ import (
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/repository"
 	"clash-config-store/internal/util"
+	"clash-config-store/static"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -118,6 +123,42 @@ func main() {
 			sub.POST("/:id/restrictions", handler.CreateRestriction)
 			sub.DELETE("/:id/restrictions/:rid", handler.DeleteRestriction)
 		}
+	}
+
+	staticFS, err := static.GetFS()
+	if err != nil {
+		slog.Warn("静态文件初始化失败", slog.String("component", "main"), slog.Any("err", err))
+	} else {
+		r.NoRoute(func(c *gin.Context) {
+			p := c.Request.URL.Path
+			if len(p) > 0 && p[0] == '/' {
+				p = p[1:]
+			}
+			if p == "" {
+				p = "index.html"
+			}
+			f, err := staticFS.Open(p)
+			if err != nil {
+				p = "index.html"
+				f, err = staticFS.Open(p)
+				if err != nil {
+					c.Status(http.StatusNotFound)
+					return
+				}
+			}
+			defer f.Close()
+			content, err := io.ReadAll(f)
+			if err != nil {
+				c.Status(http.StatusInternalServerError)
+				return
+			}
+			ext := filepath.Ext(p)
+			contentType := mime.TypeByExtension(ext)
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			c.Data(http.StatusOK, contentType, content)
+		})
 	}
 
 	slog.Info("服务启动", slog.String("component", "main"), slog.String("addr", ":"+cfg.Port))

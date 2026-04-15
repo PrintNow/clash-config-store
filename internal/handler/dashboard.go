@@ -35,14 +35,14 @@ type SubscriptionHealth struct {
 
 // DashboardStats 仪表板统计数据（含详细状态）
 type DashboardStats struct {
-	TotalProviders      int64                `json:"total_providers"`
-	TotalSubscriptions  int64                `json:"total_subscriptions"`
-	TotalCustomConfigs  int64                `json:"total_custom_configs"`
-	TotalConfigTemplates int64               `json:"total_config_templates"`
-	TotalRuleProviders  int64                `json:"total_rule_providers"`
-	Providers           []ProviderStatus     `json:"providers"`
-	Subscriptions       []SubscriptionHealth `json:"subscriptions"`
-	RecentAccessLogs    []model.AccessLog    `json:"recent_access_logs"`
+	TotalProviders       int64                `json:"total_providers"`
+	TotalSubscriptions   int64                `json:"total_subscriptions"`
+	TotalCustomConfigs   int64                `json:"total_custom_configs"`
+	TotalConfigTemplates int64                `json:"total_config_templates"`
+	TotalRuleProviders   int64                `json:"total_rule_providers"`
+	Providers            []ProviderStatus     `json:"providers"`
+	Subscriptions        []SubscriptionHealth `json:"subscriptions"`
+	RecentAccessLogs     []model.AccessLog    `json:"recent_access_logs"`
 }
 
 // GetDashboardStats 获取当前用户的仪表板统计数据

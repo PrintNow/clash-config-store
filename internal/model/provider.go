@@ -8,7 +8,7 @@ type Provider struct {
 	UserID        uint       `gorm:"not null;index" json:"user_id"`
 	Name          string     `gorm:"not null" json:"name"`
 	URL           string     `gorm:"not null" json:"url"`
-	UserAgentID   *uint      `json:"user_agent_id"`      // 为空则用默认 UA
+	UserAgentID   *uint      `json:"user_agent_id"`          // 为空则用默认 UA
 	CacheContent  string     `gorm:"type:longtext" json:"-"` // 缓存的原始响应内容
 	LastFetchedAt *time.Time `json:"last_fetched_at"`
 	CacheTTL      int        `gorm:"default:60" json:"cache_ttl"` // 缓存有效期（分钟）

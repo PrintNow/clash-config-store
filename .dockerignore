@@ -1,0 +1,9 @@
+.git
+.github
+**/.DS_Store
+**/node_modules
+**/dist
+backend/clash-config-store
+*.db
+.env
+.env.*
