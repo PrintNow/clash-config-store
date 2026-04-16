@@ -1,58 +1,30 @@
-# Clash Config Store — MariaDB + 后端（单体架构）
-# 根目录可放置 .env，Compose 会自动读取其中的变量用于替换 ${VAR}
-# 常用：JWT_SECRET、MYSQL_PASSWORD、MYSQL_ROOT_PASSWORD、BASE_URL、BACKEND_PORT
+# Clash Config Store（单体后端）
+# 默认：SQLite（推荐新用户，开箱即用，无需额外数据库）
+# 可选：外部 MySQL/MariaDB（设置 DB_TYPE=mysql 与 DB_DSN）
 
 services:
-  mariadb:
-    image: mariadb:11.4
-    container_name: clash-config-store-mariadb
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-clash_config_store}
-      MYSQL_USER: ${MYSQL_USER:-clash}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-clashpassword}
-      TZ: ${TZ:-UTC}
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: clash-config-store-backend
+    container_name: clash-config-store
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-26406}:26406"
     environment:
       APP_PORT: "26406"
-      DB_TYPE: mysql
-      DB_DSN: "${MYSQL_USER:-clash}:${MYSQL_PASSWORD:-clashpassword}@tcp(mariadb:3306)/${MYSQL_DATABASE:-clash_config_store}?charset=utf8mb4&parseTime=True&loc=Local"
-      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-in-production}
-      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      # 默认 SQLite：数据文件保存在 /data/clash-config-store.db
+      DB_TYPE: ${DB_TYPE:-sqlite}
+      DB_DSN: ${DB_DSN:-/data/clash-config-store.db}
+      # 外部 MySQL/MariaDB 示例（写入 .env）：
+      # DB_TYPE=mysql
+      # DB_DSN=clash:clashpassword@tcp(127.0.0.1:3306)/clash_config_store?charset=utf8mb4&parseTime=True&loc=Local
+      # 必填：请在 .env 中设置高强度随机值；默认值仅用于本地快速体验
+      JWT_SECRET: ${JWT_SECRET:-please-set-a-strong-random-secret}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-720}
       GEOIP_PATH: /data/clash-config-store.d/GeoLite2-City.mmdb
       BASE_URL: ${BASE_URL:-http://localhost:26406}
       TZ: ${TZ:-UTC}
     volumes:
-      - backend_data:/data
-    depends_on:
-      mariadb:
-        condition: service_healthy
-    networks:
-      - app_network
-
-volumes:
-  mariadb_data:
-  backend_data:
-
-networks:
-  app_network:
-    driver: bridge
+      # SQLite 数据文件直接映射到宿主机（首次可先执行：touch ./clash-config-store.db）
+      - ./clash-config-store.db:/data/clash-config-store.db
