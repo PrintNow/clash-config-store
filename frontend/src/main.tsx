@@ -24,7 +24,7 @@ useAuthStore.getState().initFromStorage()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <RouterProvider router={router} future={{ v7_startTransition: true }} />
       {/* 全局 Toast 通知 */}
       <Toaster
         position="top-right"
