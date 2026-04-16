@@ -54,6 +54,7 @@ const en = {
     subscriptions: 'Subscriptions',
     configTemplates: 'Config Templates',
     ruleProviders: 'Rule Set Library',
+    hostedRuleSets: 'Hosted Rule Sets',
     settings: 'Settings',
     logout: 'Logout',
     profile: 'Profile',
@@ -89,6 +90,18 @@ const en = {
     passwordRequired: 'Password is required',
     nameRequired: 'Username is required',
     emailInvalid: 'Invalid email format',
+  },
+
+  hostedRuleSets: {
+    title: 'Hosted Rule Sets',
+    add: 'Add Hosted Rule Set',
+    edit: 'Edit Hosted Rule Set',
+    delete: 'Delete Hosted Rule Set',
+    deleteConfirm: 'Delete this hosted rule set? This action cannot be undone.',
+    share: 'Share',
+    shareUrl: 'Share URL',
+    content: 'Content',
+    resetToken: 'Reset Token',
   },
 
   contextSaveBar: {
@@ -339,6 +352,11 @@ const en = {
     deleteConfirm: 'Are you sure you want to delete this rule set?',
     providerName: 'Rule Set Name',
     providerType: 'Type',
+    providerSource: 'Source',
+    sourceExternal: 'External URL',
+    sourceHosted: 'Hosted Rule Set',
+    hostedRuleSet: 'Hosted Rule Set',
+    selectHostedRuleSet: 'Select a hosted rule set',
     providerUrl: 'URL',
     providerBehavior: 'Behavior',
     providerFormat: 'Format',

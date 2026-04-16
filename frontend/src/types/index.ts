@@ -63,11 +63,26 @@ export interface ConfigTemplate {
   updated_at: string
 }
 
+export interface HostedRuleSet {
+  id: number
+  user_id: number
+  name: string
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text'
+  content?: string
+  share_enabled: boolean
+  share_token?: string
+  share_url?: string
+  created_at: string
+  updated_at: string
+}
+
 // 规则集库条目
 export interface RuleProvider {
   id: number
   /** 系统预设为 null */
   user_id: number | null
+  hosted_rule_set_id?: number | null
   name: string
   type: 'http' | 'file'
   url: string

@@ -14,12 +14,13 @@ import (
 )
 
 type ruleProviderRequest struct {
-	Name     string `json:"name" binding:"required"`
-	Type     string `json:"type" binding:"required"`
-	URL      string `json:"url"`
-	Behavior string `json:"behavior" binding:"required"`
-	Format   string `json:"format"`
-	Interval int    `json:"interval"`
+	Name            string `json:"name" binding:"required"`
+	Type            string `json:"type"`
+	URL             string `json:"url"`
+	Behavior        string `json:"behavior"`
+	Format          string `json:"format"`
+	Interval        int    `json:"interval"`
+	HostedRuleSetID *uint  `json:"hosted_rule_set_id"`
 }
 
 // ListRuleProviders 列出当前用户的规则集 + 系统内置预设（is_preset=true）
@@ -60,16 +61,33 @@ func CreateRuleProvider(c *gin.Context) {
 	}
 
 	uid := userID
+	var hostedRuleSetID *uint
+	behavior := req.Behavior
+	if req.HostedRuleSetID != nil {
+		var hrs model.HostedRuleSet
+		if err := repository.DB.Where("id = ? AND user_id = ?", *req.HostedRuleSetID, userID).First(&hrs).Error; err != nil {
+			Fail(c, http.StatusBadRequest, "托管规则集不存在或无权限")
+			return
+		}
+		hostedRuleSetID = &hrs.ID
+		behavior = hrs.Behavior
+		format = hrs.Format
+	}
 	rp := &model.RuleProvider{
-		UserID:    &uid,
-		Name:      req.Name,
-		Type:      req.Type,
-		URL:       req.URL,
-		Behavior:  req.Behavior,
-		Format:    format,
-		Interval:  interval,
-		IsPreset:  false,
-		PresetTag: "",
+		UserID:          &uid,
+		HostedRuleSetID: hostedRuleSetID,
+		Name:            req.Name,
+		Type:            req.Type,
+		URL:             req.URL,
+		Behavior:        behavior,
+		Format:          format,
+		Interval:        interval,
+		IsPreset:        false,
+		PresetTag:       "",
+	}
+	if rp.HostedRuleSetID != nil {
+		rp.Type = "http"
+		rp.URL = ""
 	}
 	if err := repository.DB.Create(rp).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "创建失败")
@@ -139,6 +157,19 @@ func UpdateRuleProvider(c *gin.Context) {
 	rp.Behavior = req.Behavior
 	rp.Format = format
 	rp.Interval = interval
+	rp.HostedRuleSetID = req.HostedRuleSetID
+
+	if rp.HostedRuleSetID != nil {
+		var hrs model.HostedRuleSet
+		if err := repository.DB.Where("id = ? AND user_id = ?", *rp.HostedRuleSetID, userID).First(&hrs).Error; err != nil {
+			Fail(c, http.StatusBadRequest, "托管规则集不存在或无权限")
+			return
+		}
+		rp.Type = "http"
+		rp.URL = ""
+		rp.Behavior = hrs.Behavior
+		rp.Format = hrs.Format
+	}
 
 	if err := repository.DB.Save(&rp).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "更新失败")
@@ -175,6 +206,12 @@ func DeleteRuleProvider(c *gin.Context) {
 
 func validateRuleProviderRequest(req *ruleProviderRequest) error {
 	req.Type = strings.TrimSpace(req.Type)
+	if req.HostedRuleSetID != nil {
+		if req.Type != "" && req.Type != "http" {
+			return fmt.Errorf("托管规则集仅支持 http 类型")
+		}
+		return nil
+	}
 	switch req.Type {
 	case "http", "file":
 	default:

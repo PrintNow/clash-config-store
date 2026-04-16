@@ -56,6 +56,7 @@ const zh = {
     subscriptions: '订阅管理',
     configTemplates: '配置模板',
     ruleProviders: '规则集库',
+    hostedRuleSets: '托管规则集',
     settings: '设置',
     logout: '退出登录',
     profile: '个人资料',
@@ -92,6 +93,18 @@ const zh = {
     passwordRequired: '请输入密码',
     nameRequired: '请输入用户名',
     emailInvalid: '邮箱格式不正确',
+  },
+
+  hostedRuleSets: {
+    title: '托管规则集',
+    add: '添加托管规则集',
+    edit: '编辑托管规则集',
+    delete: '删除托管规则集',
+    deleteConfirm: '确认删除该托管规则集？此操作不可恢复。',
+    share: '分享',
+    shareUrl: '分享链接',
+    content: '内容',
+    resetToken: '重置 Token',
   },
 
   contextSaveBar: {
@@ -348,6 +361,11 @@ const zh = {
     deleteConfirm: '确定要删除该规则集吗？',
     providerName: '规则集名称',
     providerType: '类型',
+    providerSource: '来源',
+    sourceExternal: '外部 URL',
+    sourceHosted: '托管规则集',
+    hostedRuleSet: '托管规则集',
+    selectHostedRuleSet: '请选择托管规则集',
     providerUrl: 'URL',
     providerBehavior: 'Behavior',
     providerFormat: '格式',

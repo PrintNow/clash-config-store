@@ -19,6 +19,7 @@ export const ruleProvidersApi = {
     behavior: 'domain' | 'ipcidr' | 'classical'
     format?: 'yaml' | 'text' | 'mrs'
     interval?: number
+    hosted_rule_set_id?: number | null
   }): Promise<RuleProvider> => {
     const res = await client.post<{ code: number; data: RuleProvider }>('/rule-providers', data)
     return res.data.data
@@ -33,6 +34,7 @@ export const ruleProvidersApi = {
       behavior: 'domain' | 'ipcidr' | 'classical'
       format?: 'yaml' | 'text' | 'mrs'
       interval?: number
+      hosted_rule_set_id?: number | null
     }
   ): Promise<RuleProvider> => {
     const res = await client.put<{ code: number; data: RuleProvider }>(`/rule-providers/${id}`, data)

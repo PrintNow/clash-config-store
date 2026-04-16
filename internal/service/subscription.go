@@ -91,13 +91,41 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 			var rps []model.RuleProvider
 			// 含系统预设（is_preset、user_id 可为 NULL），按 id 加载即可
 			repository.DB.Where("id IN ?", sub.CustomConfig.RuleProviderIDs).Find(&rps)
+
+			hostedIDs := make([]uint, 0)
 			for _, rp := range rps {
+				if rp.HostedRuleSetID != nil {
+					hostedIDs = append(hostedIDs, *rp.HostedRuleSetID)
+				}
+			}
+			hostedMap := make(map[uint]model.HostedRuleSet)
+			if len(hostedIDs) > 0 {
+				var hosted []model.HostedRuleSet
+				repository.DB.Where("id IN ?", hostedIDs).Find(&hosted)
+				for _, h := range hosted {
+					hostedMap[h.ID] = h
+				}
+			}
+
+			for _, rp := range rps {
+				url := rp.URL
+				behavior := rp.Behavior
+				format := rp.Format
+				if rp.HostedRuleSetID != nil {
+					if hrs, ok := hostedMap[*rp.HostedRuleSetID]; ok {
+						if hrs.ShareToken != nil {
+							url = util.RuleSetPublicURL(*hrs.ShareToken)
+						}
+						behavior = hrs.Behavior
+						format = hrs.Format
+					}
+				}
 				ruleProviderInputs = append(ruleProviderInputs, util.RuleProviderInput{
 					Name:     rp.Name,
 					Type:     rp.Type,
-					URL:      rp.URL,
-					Behavior: rp.Behavior,
-					Format:   rp.Format,
+					URL:      url,
+					Behavior: behavior,
+					Format:   format,
 					Interval: rp.Interval,
 				})
 			}

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Globe, Bot, Settings2, Link, Settings, FileCode2, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Globe, Bot, Settings2, Link, Settings, FileCode2, BookOpen, Cloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { path: '/custom-configs', icon: Settings2, labelKey: 'nav.customConfigs' },
   { path: '/config-templates', icon: FileCode2, labelKey: 'nav.configTemplates' },
   { path: '/rule-providers', icon: BookOpen, labelKey: 'nav.ruleProviders' },
+  { path: '/hosted-rule-sets', icon: Cloud, labelKey: 'nav.hostedRuleSets' },
   { path: '/subscriptions', icon: Link, labelKey: 'nav.subscriptions' },
   { path: '/user-agents', icon: Bot, labelKey: 'nav.userAgents' },
   { path: '/settings', icon: Settings, labelKey: 'nav.settings' },

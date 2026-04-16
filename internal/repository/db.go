@@ -7,6 +7,7 @@ import (
 	"clash-config-store/internal/applog"
 	"clash-config-store/internal/config"
 	"clash-config-store/internal/model"
+	"clash-config-store/internal/repository/migrations"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
@@ -36,7 +37,24 @@ func Init(cfg *config.Config) error {
 		return fmt.Errorf("数据库连接失败: %w", err)
 	}
 
-	if err := MigrateAll(DB); err != nil {
+	if err := migrations.Ensure(DB); err != nil {
+		return fmt.Errorf("数据库迁移失败: %w", err)
+	}
+	applied, err := migrations.AppliedVersions(DB)
+	if err != nil {
+		return fmt.Errorf("数据库迁移失败: %w", err)
+	}
+	if len(applied) == 0 {
+		if !DB.Migrator().HasTable(&model.User{}) {
+			if err := MigrateAll(DB); err != nil {
+				return fmt.Errorf("数据库迁移失败: %w", err)
+			}
+		}
+		if err := migrations.MarkApplied(DB, migrations.BaselineVersion); err != nil {
+			return fmt.Errorf("数据库迁移失败: %w", err)
+		}
+	}
+	if err := migrations.Up(DB); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 

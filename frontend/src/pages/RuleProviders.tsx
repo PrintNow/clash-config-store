@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Plus, Trash2, Edit, Shield, ExternalLink } from 'lucide-react'
 import { ruleProvidersApi } from '@/api/rule-providers'
+import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
 import type { RuleProvider } from '@/types'
+import type { HostedRuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,7 +41,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 const emptyForm = {
   name: '',
   type: 'http' as 'http' | 'file',
+  source: 'external' as 'external' | 'hosted',
   url: '',
+  hosted_rule_set_id: null as number | null,
   behavior: 'domain' as 'domain' | 'ipcidr' | 'classical',
   format: 'yaml' as 'yaml' | 'text' | 'mrs',
   interval: 86400,
@@ -85,6 +89,11 @@ export function RuleProviders() {
     queryFn: ruleProvidersApi.list,
   })
 
+  const { data: hostedRuleSets = [] } = useQuery({
+    queryKey: ['hosted-rule-sets'],
+    queryFn: hostedRuleSetsApi.list,
+  })
+
   // 区分内置预设和自定义
   const presetProviders = providers.filter((p) => p.is_preset)
   const customProviders = providers.filter((p) => !p.is_preset)
@@ -95,7 +104,8 @@ export function RuleProviders() {
       const payload = {
         name: form.name,
         type: form.type,
-        url: form.type === 'http' ? form.url : undefined,
+        url: form.type === 'http' && form.source === 'external' ? form.url : undefined,
+        hosted_rule_set_id: form.type === 'http' && form.source === 'hosted' ? form.hosted_rule_set_id : null,
         behavior: form.behavior,
         format: form.format,
         interval: form.interval,
@@ -142,7 +152,9 @@ export function RuleProviders() {
     setForm({
       name: provider.name,
       type: provider.type,
-      url: provider.url ?? '',
+      source: provider.hosted_rule_set_id ? 'hosted' : 'external',
+      url: provider.hosted_rule_set_id ? '' : (provider.url ?? ''),
+      hosted_rule_set_id: provider.hosted_rule_set_id ?? null,
       behavior: provider.behavior,
       format: provider.format,
       interval: provider.interval,
@@ -159,7 +171,9 @@ export function RuleProviders() {
 
   // 表单合法性校验
   const isFormValid =
-    form.name.trim() !== '' && (form.type === 'file' || form.url.trim() !== '')
+    form.name.trim() !== '' &&
+    (form.type === 'file' ||
+      (form.source === 'external' ? form.url.trim() !== '' : form.hosted_rule_set_id !== null))
 
   // 加载骨架屏
   const renderSkeleton = () => (
@@ -355,7 +369,13 @@ export function RuleProviders() {
               <Select
                 value={form.type}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, type: v as 'http' | 'file', url: '' }))
+                  setForm((f) => ({
+                    ...f,
+                    type: v as 'http' | 'file',
+                    source: 'external',
+                    url: '',
+                    hosted_rule_set_id: null,
+                  }))
                 }
               >
                 <SelectTrigger type="button">
@@ -368,8 +388,33 @@ export function RuleProviders() {
               </Select>
             </div>
 
-            {/* URL（仅 http 类型） */}
             {form.type === 'http' && (
+              <div className="space-y-1.5">
+                <Label>{t('ruleProviders.providerSource')}</Label>
+                <Select
+                  value={form.source}
+                  onValueChange={(v) =>
+                    setForm((f) => ({
+                      ...f,
+                      source: v as 'external' | 'hosted',
+                      url: '',
+                      hosted_rule_set_id: null,
+                    }))
+                  }
+                >
+                  <SelectTrigger type="button">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="external">{t('ruleProviders.sourceExternal')}</SelectItem>
+                    <SelectItem value="hosted">{t('ruleProviders.sourceHosted')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* URL（仅 http + 外部 URL） */}
+            {form.type === 'http' && form.source === 'external' && (
               <div className="space-y-1.5">
                 <Label htmlFor="rp-url">
                   {t('ruleProviders.providerUrl')}
@@ -381,6 +426,43 @@ export function RuleProviders() {
                   onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                   placeholder={t('ruleProviders.urlPlaceholder')}
                 />
+              </div>
+            )}
+
+            {/* 托管规则集（仅 http + 托管） */}
+            {form.type === 'http' && form.source === 'hosted' && (
+              <div className="space-y-1.5">
+                <Label>{t('ruleProviders.hostedRuleSet')}</Label>
+                <Select
+                  value={form.hosted_rule_set_id ? String(form.hosted_rule_set_id) : ''}
+                  onValueChange={(v) => {
+                    const id = Number(v)
+                    const selected = hostedRuleSets.find((x: HostedRuleSet) => x.id === id)
+                    setForm((f) => ({
+                      ...f,
+                      hosted_rule_set_id: id,
+                      behavior: selected?.behavior ?? f.behavior,
+                      format: selected?.format ?? f.format,
+                    }))
+                  }}
+                >
+                  <SelectTrigger type="button">
+                    <SelectValue placeholder={t('ruleProviders.selectHostedRuleSet')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hostedRuleSets.length === 0 ? (
+                      <SelectItem value="0" disabled>
+                        {t('common.noData')}
+                      </SelectItem>
+                    ) : (
+                      hostedRuleSets.map((x: HostedRuleSet) => (
+                        <SelectItem key={x.id} value={String(x.id)}>
+                          {x.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
