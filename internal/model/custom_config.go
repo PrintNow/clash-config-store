@@ -21,5 +21,8 @@ type CustomConfig struct {
 	// RuleProviderIDs 引用的规则集 ID 列表（JSON 序列化的 []uint）
 	RuleProviderIDs []uint `gorm:"serializer:json;type:longtext" json:"rule_provider_ids"`
 
+	// HostedRuleSetIDs 引用的托管规则集 ID 列表（JSON 序列化的 []uint）
+	HostedRuleSetIDs []uint `gorm:"serializer:json;type:longtext" json:"hosted_rule_set_ids"`
+
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }

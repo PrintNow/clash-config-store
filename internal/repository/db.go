@@ -81,6 +81,7 @@ func MigrateAll(db *gorm.DB) error {
 		&model.Provider{},
 		&model.ConfigTemplate{},
 		&model.RuleProvider{},
+		&model.HostedRuleSet{},
 		&model.CustomConfig{},
 		&model.Subscription{},
 		&model.AccessRestriction{},

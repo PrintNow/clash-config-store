@@ -42,8 +42,9 @@ import { CSS } from '@dnd-kit/utilities'
 import equal from 'fast-deep-equal'
 import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
+import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
 import { providersApi } from '@/api/providers'
-import type { CustomConfig, ProxyNode, ProxyGroup, RuleProvider } from '@/types'
+import type { CustomConfig, ProxyNode, ProxyGroup } from '@/types'
 import { ProxyPasswordInput } from '@/components/ProxyPasswordInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -362,7 +363,7 @@ function buildRuleSaveChecklist(
 interface SortableRuleRowProps {
   id: string
   item: RuleListItem
-  allRuleProviders: RuleProvider[]
+  allRuleSets: RuleSetReferenceItem[]
   targetOptionGroups: RuleTargetOptionGroup[]
   onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
   onDelete: (sourceIndex: number) => void
@@ -373,7 +374,7 @@ interface SortableRuleRowProps {
 }
 
 function SortableRuleRow({
-  id, item, allRuleProviders, targetOptionGroups, onUpdate, onDelete, isActive, onFocus, onQuickFix, t,
+  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onFocus, onQuickFix, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -387,7 +388,7 @@ function SortableRuleRow({
   const { analysis, sourceIndex, lineNumber } = item
   const parsed = analysis.parsed
   const meta = getRuleTypeMeta(parsed.type)
-  const ruleProviderExists = allRuleProviders.some((rp) => rp.name === parsed.payload)
+  const ruleProviderExists = allRuleSets.some((rp) => rp.name === parsed.payload)
   const targetOptions = targetOptionGroups.flatMap((group) => group.values)
   const targetExists = parsed.target === '' || targetOptions.includes(parsed.target)
   const currentRuleProvider = parsed.payload && !ruleProviderExists ? parsed.payload : null
@@ -519,19 +520,27 @@ function SortableRuleRow({
                         <SelectSeparator />
                       </>
                     )}
-                    {allRuleProviders.some((rp) => rp.is_preset) && (
+                    {allRuleSets.some((rp) => rp.source === 'preset') && (
                       <SelectGroup>
                         <SelectLabel>{t('ruleProviders.loyalsoldierSection')}</SelectLabel>
-                        {allRuleProviders.filter((rp) => rp.is_preset).map((rp) => (
+                        {allRuleSets.filter((rp) => rp.source === 'preset').map((rp) => (
                           <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
                         ))}
                       </SelectGroup>
                     )}
-                    {allRuleProviders.some((rp) => !rp.is_preset) && (
+                    {allRuleSets.some((rp) => rp.source === 'external') && (
                       <SelectGroup>
                         <SelectLabel>{t('ruleProviders.customSection')}</SelectLabel>
-                        {allRuleProviders.filter((rp) => !rp.is_preset).map((rp) => (
+                        {allRuleSets.filter((rp) => rp.source === 'external').map((rp) => (
                           <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {allRuleSets.some((rp) => rp.source === 'hosted') && (
+                      <SelectGroup>
+                        <SelectLabel>{t('hostedRuleSets.customSection')}</SelectLabel>
+                        {allRuleSets.filter((rp) => rp.source === 'hosted').map((rp) => (
+                          <SelectItem key={`hosted-${rp.id}`} value={rp.name}>{rp.name}</SelectItem>
                         ))}
                       </SelectGroup>
                     )}
@@ -775,7 +784,7 @@ function remapRuleIndexAfterMove(
 /** 用于脏检查与提交的 payload 形状 */
 type CustomConfigDraftPayload = Pick<
   CustomConfig,
-  'name' | 'proxies' | 'proxy_groups' | 'rules' | 'rule_provider_ids'
+  'name' | 'proxies' | 'proxy_groups' | 'rules' | 'rule_provider_ids' | 'hosted_rule_set_ids'
 >
 
 function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
@@ -785,7 +794,16 @@ function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
     proxy_groups: c.proxy_groups || [],
     rules: c.rules || [],
     rule_provider_ids: c.rule_provider_ids || [],
+    hosted_rule_set_ids: c.hosted_rule_set_ids || [],
   }
+}
+
+type RuleSetReferenceItem = {
+  id: number
+  name: string
+  behavior: string
+  url?: string
+  source: 'preset' | 'external' | 'hosted'
 }
 
 // ─────────────────────────────────────────────
@@ -1861,6 +1879,7 @@ export function CustomConfigDetail() {
   const [rules, setRules] = useState<string[]>([])
   // 已选规则集 ID
   const [ruleProviderIds, setRuleProviderIds] = useState<number[]>([])
+  const [hostedRuleSetIds, setHostedRuleSetIds] = useState<number[]>([])
 
   // 代理节点弹窗状态
   const [proxyDialogOpen, setProxyDialogOpen] = useState(false)
@@ -1899,6 +1918,10 @@ export function CustomConfigDetail() {
     queryKey: ['rule-providers'],
     queryFn: ruleProvidersApi.list,
   })
+  const { data: allHostedRuleSets = [] } = useQuery({
+    queryKey: ['hosted-rule-sets'],
+    queryFn: hostedRuleSetsApi.list,
+  })
 
   // 加载所有订阅源，供代理组"引用订阅源"选择
   const { data: allProviders = [] } = useQuery({
@@ -1917,6 +1940,7 @@ export function CustomConfigDetail() {
     setRules(config.rules || [])
     setRulesText((config.rules || []).join('\n'))
     setRuleProviderIds(config.rule_provider_ids || [])
+    setHostedRuleSetIds(config.hosted_rule_set_ids || [])
   }, [config?.id, config?.updated_at])
 
   useEffect(() => {
@@ -1949,6 +1973,7 @@ export function CustomConfigDetail() {
       proxy_groups: proxyGroups,
       rules: rulesFromDraft(rulesTextMode, rulesText, rules),
       rule_provider_ids: ruleProviderIds,
+      hosted_rule_set_ids: hostedRuleSetIds,
     }
     return !equal(draft, saved)
   }, [
@@ -1958,6 +1983,7 @@ export function CustomConfigDetail() {
     proxyGroups,
     rules,
     ruleProviderIds,
+    hostedRuleSetIds,
     rulesTextMode,
     rulesText,
   ])
@@ -1970,6 +1996,7 @@ export function CustomConfigDetail() {
     setRules(config.rules || [])
     setRulesText((config.rules || []).join('\n'))
     setRuleProviderIds(config.rule_provider_ids || [])
+    setHostedRuleSetIds(config.hosted_rule_set_ids || [])
     setEditingName(false)
     setLastValidationState('idle')
     setDiffPreviewOpen(false)
@@ -1987,8 +2014,9 @@ export function CustomConfigDetail() {
       proxy_groups: proxyGroups,
       rules: rulesFromDraft(rulesTextMode, rulesText, rules),
       rule_provider_ids: ruleProviderIds,
+      hosted_rule_set_ids: hostedRuleSetIds,
     }),
-    [name, proxies, proxyGroups, rules, ruleProviderIds, rulesTextMode, rulesText]
+    [name, proxies, proxyGroups, rules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
   )
 
   // ── YAML 预览 ──
@@ -2267,26 +2295,62 @@ export function CustomConfigDetail() {
     }
   }
 
+  const allRuleSets = useMemo<RuleSetReferenceItem[]>(
+    () => [
+      ...allRuleProviders.map((rp) => ({
+        id: rp.id,
+        name: rp.name,
+        behavior: rp.behavior,
+        url: rp.url,
+        source: (rp.is_preset ? 'preset' : 'external') as 'preset' | 'external',
+      })),
+      ...allHostedRuleSets.map((rs) => ({
+        id: rs.id,
+        name: rs.name,
+        behavior: rs.behavior,
+        url: rs.url,
+        source: 'hosted' as const,
+      })),
+    ],
+    [allHostedRuleSets, allRuleProviders]
+  )
+
   // ── 规则集操作 ──
-  const toggleRuleProvider = (rpId: number) => {
-    setRuleProviderIds((prev) =>
-      prev.includes(rpId) ? prev.filter((id) => id !== rpId) : [...prev, rpId]
-    )
+  const toggleRuleSet = (item: RuleSetReferenceItem) => {
+    const selectedNames = new Set<string>([
+      ...allRuleProviders.filter((rp) => ruleProviderIds.includes(rp.id)).map((rp) => rp.name),
+      ...allHostedRuleSets.filter((rs) => hostedRuleSetIds.includes(rs.id)).map((rs) => rs.name),
+    ])
+    const isSelected = item.source === 'hosted'
+      ? hostedRuleSetIds.includes(item.id)
+      : ruleProviderIds.includes(item.id)
+
+    if (!isSelected && selectedNames.has(item.name)) {
+      toast.error(t('customConfigs.ruleSetDuplicateName'))
+      return
+    }
+
+    if (item.source === 'hosted') {
+      setHostedRuleSetIds((prev) => (
+        prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+      ))
+      return
+    }
+
+    setRuleProviderIds((prev) => (
+      prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+    ))
   }
 
   // 所有代理节点名称（供代理组选择使用）
   const proxyNames = proxies.map((p) => p.name)
-  const selectedRuleProviderNames = useMemo(
-    () => new Set(
-      allRuleProviders
-        .filter((rp) => ruleProviderIds.includes(rp.id))
-        .map((rp) => rp.name)
-    ),
-    [allRuleProviders, ruleProviderIds]
-  )
+  const selectedRuleProviderNames = useMemo(() => new Set<string>([
+    ...allRuleProviders.filter((rp) => ruleProviderIds.includes(rp.id)).map((rp) => rp.name),
+    ...allHostedRuleSets.filter((rs) => hostedRuleSetIds.includes(rs.id)).map((rs) => rs.name),
+  ]), [allHostedRuleSets, allRuleProviders, hostedRuleSetIds, ruleProviderIds])
   const availableRuleProviderNames = useMemo(
-    () => new Set(allRuleProviders.map((rp) => rp.name)),
-    [allRuleProviders]
+    () => new Set(allRuleSets.map((rp) => rp.name)),
+    [allRuleSets]
   )
   const availableTargets = useMemo(
     () => new Set([
@@ -2431,6 +2495,7 @@ export function CustomConfigDetail() {
       proxy_groups: proxyGroups,
       rules: finalRules,
       rule_provider_ids: ruleProviderIds,
+      hosted_rule_set_ids: hostedRuleSetIds,
     })
   }, [
     isDirty,
@@ -2445,6 +2510,7 @@ export function CustomConfigDetail() {
     proxies,
     proxyGroups,
     ruleProviderIds,
+    hostedRuleSetIds,
   ])
 
   const saveBarExtraActions = useMemo(
@@ -2647,8 +2713,10 @@ export function CustomConfigDetail() {
             </TabsTrigger>
             <TabsTrigger value="ruleSets">
               {t('customConfigs.tabRuleSets')}
-              {ruleProviderIds.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{ruleProviderIds.length}</Badge>
+              {ruleProviderIds.length + hostedRuleSetIds.length > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                  {ruleProviderIds.length + hostedRuleSetIds.length}
+                </Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -3058,7 +3126,7 @@ export function CustomConfigDetail() {
                               key={`rule-${item.sourceIndex}`}
                               id={`rule-${item.sourceIndex}`}
                               item={item}
-                              allRuleProviders={allRuleProviders}
+                              allRuleSets={allRuleSets}
                               targetOptionGroups={targetOptionGroups}
                               onUpdate={updateParsedRule}
                               onDelete={deleteRule}
@@ -3144,8 +3212,12 @@ export function CustomConfigDetail() {
                           <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
                         ) : (
                           referencedRuleSets.map((name) => {
-                            const provider = allRuleProviders.find((item) => item.name === name)
-                            const selected = provider ? ruleProviderIds.includes(provider.id) : false
+                            const provider = allRuleSets.find((item) => item.name === name)
+                            const selected = provider
+                              ? provider.source === 'hosted'
+                                ? hostedRuleSetIds.includes(provider.id)
+                                : ruleProviderIds.includes(provider.id)
+                              : false
                             return (
                               <button
                                 key={name}
@@ -3160,7 +3232,13 @@ export function CustomConfigDetail() {
                               >
                                 {name}
                                 {provider
-                                  ? ` · ${provider.is_preset ? t('ruleProviders.presetBadge') : t('ruleProviders.customSection')}`
+                                  ? ` · ${
+                                    provider.source === 'preset'
+                                      ? t('ruleProviders.presetBadge')
+                                      : provider.source === 'hosted'
+                                        ? t('hostedRuleSets.customSection')
+                                        : t('ruleProviders.customSection')
+                                  }`
                                   : ` · ${t('customConfigs.ruleSetMissing')}`}
                               </button>
                             )
@@ -3245,53 +3323,75 @@ export function CustomConfigDetail() {
         <TabsContent value="ruleSets" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">{t('customConfigs.ruleSetHint')}</p>
-            {allRuleProviders.length > 0 && (
+            {allRuleSets.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const allIds = allRuleProviders.map((rp) => rp.id)
-                  const allSelected = allIds.every((id) => ruleProviderIds.includes(id))
-                  setRuleProviderIds(allSelected ? [] : allIds)
+                  const allProviderIds = allRuleProviders.map((rp) => rp.id)
+                  const allHostedIds = allHostedRuleSets.map((rs) => rs.id)
+                  const allSelected =
+                    allProviderIds.every((id) => ruleProviderIds.includes(id)) &&
+                    allHostedIds.every((id) => hostedRuleSetIds.includes(id))
+                  setRuleProviderIds(allSelected ? [] : allProviderIds)
+                  setHostedRuleSetIds(allSelected ? [] : allHostedIds)
                 }}
               >
-                {allRuleProviders.every((rp) => ruleProviderIds.includes(rp.id))
+                {allRuleSets.every((rp) => (
+                  rp.source === 'hosted' ? hostedRuleSetIds.includes(rp.id) : ruleProviderIds.includes(rp.id)
+                ))
                   ? t('common.deselectAll')
                   : t('common.selectAll')}
               </Button>
             )}
           </div>
 
-          {allRuleProviders.length === 0 ? (
+          {allRuleSets.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
               {t('common.noData')}
             </div>
           ) : (
             <>
               {/* 内置预设分组 */}
-              {allRuleProviders.some((rp) => rp.is_preset) && (
+              {allRuleSets.some((rp) => rp.source === 'preset') && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     {t('ruleProviders.loyalsoldierSection')}
                   </h3>
                   <RuleProviderGroup
-                    providers={allRuleProviders.filter((rp) => rp.is_preset)}
-                    selectedIds={ruleProviderIds}
-                    onToggle={toggleRuleProvider}
+                    providers={allRuleSets.filter((rp) => rp.source === 'preset')}
+                    ruleProviderIds={ruleProviderIds}
+                    hostedRuleSetIds={hostedRuleSetIds}
+                    onToggle={toggleRuleSet}
                   />
                 </div>
               )}
 
               {/* 自定义规则集分组 */}
-              {allRuleProviders.some((rp) => !rp.is_preset) && (
+              {allRuleSets.some((rp) => rp.source === 'external') && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     {t('ruleProviders.customSection')}
                   </h3>
                   <RuleProviderGroup
-                    providers={allRuleProviders.filter((rp) => !rp.is_preset)}
-                    selectedIds={ruleProviderIds}
-                    onToggle={toggleRuleProvider}
+                    providers={allRuleSets.filter((rp) => rp.source === 'external')}
+                    ruleProviderIds={ruleProviderIds}
+                    hostedRuleSetIds={hostedRuleSetIds}
+                    onToggle={toggleRuleSet}
+                  />
+                </div>
+              )}
+
+              {allRuleSets.some((rp) => rp.source === 'hosted') && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    {t('hostedRuleSets.customSection')}
+                  </h3>
+                  <RuleProviderGroup
+                    providers={allRuleSets.filter((rp) => rp.source === 'hosted')}
+                    ruleProviderIds={ruleProviderIds}
+                    hostedRuleSetIds={hostedRuleSetIds}
+                    onToggle={toggleRuleSet}
                   />
                 </div>
               )}
@@ -3345,7 +3445,9 @@ export function CustomConfigDetail() {
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{t('customConfigs.previewRulesCount', { count: ruleStats.total })}</Badge>
                   <Badge variant="outline">{t('customConfigs.previewGroupsCount', { count: proxyGroups.length })}</Badge>
-                  <Badge variant="outline">{t('customConfigs.previewRuleSetsCount', { count: ruleProviderIds.length })}</Badge>
+                  <Badge variant="outline">
+                    {t('customConfigs.previewRuleSetsCount', { count: ruleProviderIds.length + hostedRuleSetIds.length })}
+                  </Badge>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -3402,12 +3504,13 @@ export function CustomConfigDetail() {
 // ─────────────────────────────────────────────
 
 interface RuleProviderGroupProps {
-  providers: RuleProvider[]
-  selectedIds: number[]
-  onToggle: (id: number) => void
+  providers: RuleSetReferenceItem[]
+  ruleProviderIds: number[]
+  hostedRuleSetIds: number[]
+  onToggle: (item: RuleSetReferenceItem) => void
 }
 
-function RuleProviderGroup({ providers, selectedIds, onToggle }: RuleProviderGroupProps) {
+function RuleProviderGroup({ providers, ruleProviderIds, hostedRuleSetIds, onToggle }: RuleProviderGroupProps) {
   const { t } = useTranslation()
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -3415,19 +3518,24 @@ function RuleProviderGroup({ providers, selectedIds, onToggle }: RuleProviderGro
         <div
           key={rp.id}
           className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${idx !== 0 ? 'border-t' : ''}`}
-          onClick={() => onToggle(rp.id)}
+          onClick={() => onToggle(rp)}
         >
           <Checkbox
-            checked={selectedIds.includes(rp.id)}
-            onCheckedChange={() => onToggle(rp.id)}
+            checked={rp.source === 'hosted' ? hostedRuleSetIds.includes(rp.id) : ruleProviderIds.includes(rp.id)}
+            onCheckedChange={() => onToggle(rp)}
             onClick={(e) => e.stopPropagation()}
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm">{rp.name}</span>
-              {rp.is_preset && (
+              {rp.source === 'preset' && (
                 <Badge variant="secondary" className="text-xs px-1.5 py-0">
                   {t('ruleProviders.presetBadge')}
+                </Badge>
+              )}
+              {rp.source === 'hosted' && (
+                <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                  {t('hostedRuleSets.customSection')}
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs px-1.5 py-0">{rp.behavior}</Badge>
@@ -3436,9 +3544,6 @@ function RuleProviderGroup({ providers, selectedIds, onToggle }: RuleProviderGro
               <p className="text-xs text-muted-foreground mt-0.5 truncate">{rp.url}</p>
             )}
           </div>
-          {rp.interval > 0 && (
-            <span className="text-xs text-muted-foreground shrink-0">{rp.interval}s</span>
-          )}
         </div>
       ))}
     </div>

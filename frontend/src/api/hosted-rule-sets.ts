@@ -17,7 +17,6 @@ export const hostedRuleSetsApi = {
     behavior: 'domain' | 'ipcidr' | 'classical'
     format: 'yaml' | 'text'
     content: string
-    share_enabled: boolean
   }): Promise<HostedRuleSet> => {
     const res = await client.post<{ code: number; data: HostedRuleSet }>('/hosted-rule-sets', data)
     return res.data.data
@@ -30,7 +29,6 @@ export const hostedRuleSetsApi = {
       behavior: 'domain' | 'ipcidr' | 'classical'
       format: 'yaml' | 'text'
       content: string
-      share_enabled: boolean
     }
   ): Promise<HostedRuleSet> => {
     const res = await client.put<{ code: number; data: HostedRuleSet }>(`/hosted-rule-sets/${id}`, data)
@@ -41,25 +39,7 @@ export const hostedRuleSetsApi = {
     await client.delete(`/hosted-rule-sets/${id}`)
   },
 
-  shareEnable: async (id: number): Promise<HostedRuleSet> => {
-    const res = await client.post<{ code: number; data: HostedRuleSet }>(
-      `/hosted-rule-sets/${id}/share/enable`
-    )
-    return res.data.data
-  },
-
-  shareDisable: async (id: number): Promise<HostedRuleSet> => {
-    const res = await client.post<{ code: number; data: HostedRuleSet }>(
-      `/hosted-rule-sets/${id}/share/disable`
-    )
-    return res.data.data
-  },
-
-  resetToken: async (id: number): Promise<HostedRuleSet> => {
-    const res = await client.post<{ code: number; data: HostedRuleSet }>(
-      `/hosted-rule-sets/${id}/share/reset-token`
-    )
-    return res.data.data
+  resetTokens: async (): Promise<void> => {
+    await client.post('/hosted-rule-sets/reset-tokens')
   },
 }
-

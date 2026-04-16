@@ -18,6 +18,7 @@ export const customConfigsApi = {
     proxy_groups?: ProxyGroup[]
     rules?: string[]
     rule_provider_ids?: number[]
+    hosted_rule_set_ids?: number[]
   }): Promise<CustomConfig> => {
     const res = await client.post<{ code: number; data: CustomConfig }>('/custom-configs', data)
     return res.data.data
@@ -31,6 +32,7 @@ export const customConfigsApi = {
       proxy_groups?: ProxyGroup[]
       rules?: string[]
       rule_provider_ids?: number[]
+      hosted_rule_set_ids?: number[]
     }
   ): Promise<CustomConfig> => {
     const res = await client.put<{ code: number; data: CustomConfig }>(`/custom-configs/${id}`, data)

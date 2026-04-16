@@ -12,18 +12,23 @@ import (
 
 func HandleRuleSet(c *gin.Context) {
 	token := strings.TrimSpace(c.Param("token"))
+	name := strings.TrimSpace(c.Param("name"))
 	if token == "" {
 		Fail(c, http.StatusBadRequest, "无效的 token")
 		return
 	}
+	if name == "" {
+		Fail(c, http.StatusBadRequest, "无效的名称")
+		return
+	}
 
 	var rs model.HostedRuleSet
-	if err := repository.DB.Where("share_token = ?", token).First(&rs).Error; err != nil {
+	if err := repository.DB.Where("token = ?", token).First(&rs).Error; err != nil {
 		Fail(c, http.StatusNotFound, "规则集不存在")
 		return
 	}
-	if !rs.ShareEnabled {
-		Fail(c, http.StatusForbidden, "规则集未开启分享")
+	if rs.Name != name {
+		Fail(c, http.StatusNotFound, "规则集不存在")
 		return
 	}
 
@@ -36,8 +41,7 @@ func HandleRuleSet(c *gin.Context) {
 
 	contentType := "text/plain; charset=utf-8"
 	if rs.Format == "yaml" {
-		contentType = "application/x-yaml; charset=utf-8"
+		contentType = "text/yaml; charset=utf-8"
 	}
 	c.Data(http.StatusOK, contentType, []byte(rs.Content))
 }
-

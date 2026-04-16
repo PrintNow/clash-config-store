@@ -80,55 +80,20 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	var customGroups []map[string]interface{}
 	var customRules []string
 	var ruleProviderInputs []util.RuleProviderInput
+	var err error
 
 	if sub.CustomConfig != nil {
 		customProxies = sub.CustomConfig.Proxies
 		customGroups = sub.CustomConfig.ProxyGroups
 		customRules = sub.CustomConfig.Rules
 
-		// 加载关联的规则集
-		if len(sub.CustomConfig.RuleProviderIDs) > 0 {
-			var rps []model.RuleProvider
-			// 含系统预设（is_preset、user_id 可为 NULL），按 id 加载即可
-			repository.DB.Where("id IN ?", sub.CustomConfig.RuleProviderIDs).Find(&rps)
-
-			hostedIDs := make([]uint, 0)
-			for _, rp := range rps {
-				if rp.HostedRuleSetID != nil {
-					hostedIDs = append(hostedIDs, *rp.HostedRuleSetID)
-				}
-			}
-			hostedMap := make(map[uint]model.HostedRuleSet)
-			if len(hostedIDs) > 0 {
-				var hosted []model.HostedRuleSet
-				repository.DB.Where("id IN ?", hostedIDs).Find(&hosted)
-				for _, h := range hosted {
-					hostedMap[h.ID] = h
-				}
-			}
-
-			for _, rp := range rps {
-				url := rp.URL
-				behavior := rp.Behavior
-				format := rp.Format
-				if rp.HostedRuleSetID != nil {
-					if hrs, ok := hostedMap[*rp.HostedRuleSetID]; ok {
-						if hrs.ShareToken != nil {
-							url = util.RuleSetPublicURL(*hrs.ShareToken)
-						}
-						behavior = hrs.Behavior
-						format = hrs.Format
-					}
-				}
-				ruleProviderInputs = append(ruleProviderInputs, util.RuleProviderInput{
-					Name:     rp.Name,
-					Type:     rp.Type,
-					URL:      url,
-					Behavior: behavior,
-					Format:   format,
-					Interval: rp.Interval,
-				})
-			}
+		ruleProviderInputs, err = loadSubscriptionRuleProviderInputs(
+			sub.UserID,
+			sub.CustomConfig.RuleProviderIDs,
+			sub.CustomConfig.HostedRuleSetIDs,
+		)
+		if err != nil {
+			return nil, sub.ID, true, "", err
 		}
 	}
 
@@ -153,6 +118,72 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	}
 
 	return yamlBytes, sub.ID, true, "", nil
+}
+
+func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hostedRuleSetIDs []uint) ([]util.RuleProviderInput, error) {
+	inputs := make([]util.RuleProviderInput, 0, len(ruleProviderIDs)+len(hostedRuleSetIDs))
+	names := make(map[string]struct{}, len(ruleProviderIDs)+len(hostedRuleSetIDs))
+	hostedSeen := make(map[uint]struct{}, len(hostedRuleSetIDs))
+
+	for _, id := range hostedRuleSetIDs {
+		hostedSeen[id] = struct{}{}
+	}
+
+	if len(ruleProviderIDs) > 0 {
+		var rps []model.RuleProvider
+		if err := repository.DB.
+			Where("id IN ?", ruleProviderIDs).
+			Where("user_id = ? OR is_preset = ?", userID, true).
+			Find(&rps).Error; err != nil {
+			return nil, err
+		}
+		for _, rp := range rps {
+			if rp.LegacyHostedRuleSetID != nil {
+				hostedSeen[*rp.LegacyHostedRuleSetID] = struct{}{}
+				continue
+			}
+			if _, exists := names[rp.Name]; exists {
+				return nil, fmt.Errorf("规则集名称 %q 重复", rp.Name)
+			}
+			names[rp.Name] = struct{}{}
+			inputs = append(inputs, util.RuleProviderInput{
+				Name:     rp.Name,
+				Type:     rp.Type,
+				URL:      rp.URL,
+				Behavior: rp.Behavior,
+				Format:   rp.Format,
+				Interval: rp.Interval,
+			})
+		}
+	}
+
+	if len(hostedSeen) > 0 {
+		ids := make([]uint, 0, len(hostedSeen))
+		for id := range hostedSeen {
+			ids = append(ids, id)
+		}
+
+		var hosted []model.HostedRuleSet
+		if err := repository.DB.Where("id IN ? AND user_id = ?", ids, userID).Find(&hosted).Error; err != nil {
+			return nil, err
+		}
+		for _, hrs := range hosted {
+			if _, exists := names[hrs.Name]; exists {
+				return nil, fmt.Errorf("规则集名称 %q 重复", hrs.Name)
+			}
+			names[hrs.Name] = struct{}{}
+			inputs = append(inputs, util.RuleProviderInput{
+				Name:     hrs.Name,
+				Type:     "http",
+				URL:      util.RuleSetPublicURL(hrs.Token, hrs.Name),
+				Behavior: hrs.Behavior,
+				Format:   hrs.Format,
+				Interval: 86400,
+			})
+		}
+	}
+
+	return inputs, nil
 }
 
 // checkAccess 根据访问限制规则判断客户端 IP 是否允许访问

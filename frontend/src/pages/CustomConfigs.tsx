@@ -100,7 +100,14 @@ export function CustomConfigs() {
       setNameError(t('common.required'))
       return
     }
-    createMutation.mutate({ name: newName, proxies: [], proxy_groups: [], rules: [], rule_provider_ids: [] })
+    createMutation.mutate({
+      name: newName,
+      proxies: [],
+      proxy_groups: [],
+      rules: [],
+      rule_provider_ids: [],
+      hosted_rule_set_ids: [],
+    })
   }
 
   const openDeleteDialog = (config: CustomConfig) => {
@@ -119,7 +126,13 @@ export function CustomConfigs() {
         setImportError(t('customConfigs.importInvalidFormat'))
         return null
       }
-      if (!Array.isArray(parsed.proxies) || !Array.isArray(parsed.proxy_groups) || !Array.isArray(parsed.rules) || !Array.isArray(parsed.rule_provider_ids)) {
+      if (
+        !Array.isArray(parsed.proxies) ||
+        !Array.isArray(parsed.proxy_groups) ||
+        !Array.isArray(parsed.rules) ||
+        !Array.isArray(parsed.rule_provider_ids) ||
+        !Array.isArray(parsed.hosted_rule_set_ids)
+      ) {
         setImportError(t('customConfigs.importInvalidFormat'))
         return null
       }
@@ -130,6 +143,7 @@ export function CustomConfigs() {
         proxy_groups: parsed.proxy_groups,
         rules: parsed.rules,
         rule_provider_ids: parsed.rule_provider_ids,
+        hosted_rule_set_ids: parsed.hosted_rule_set_ids,
       }
     } catch {
       setImportError(t('customConfigs.importInvalidJson'))
@@ -266,7 +280,7 @@ export function CustomConfigs() {
                         proxies: config.proxies.length,
                         groups: config.proxy_groups.length,
                         rules: config.rules.length,
-                        ruleSets: config.rule_provider_ids.length,
+                        ruleSets: config.rule_provider_ids.length + config.hosted_rule_set_ids.length,
                       })}
                     </p>
                   </TableCell>
@@ -389,7 +403,7 @@ export function CustomConfigs() {
                     setImportText(e.target.value)
                     if (importError) setImportError('')
                   }}
-                  placeholder={`{\n  "name": "example",\n  "proxies": [],\n  "proxy_groups": [],\n  "rules": [],\n  "rule_provider_ids": []\n}`}
+                  placeholder={`{\n  "name": "example",\n  "proxies": [],\n  "proxy_groups": [],\n  "rules": [],\n  "rule_provider_ids": [],\n  "hosted_rule_set_ids": []\n}`}
                 />
               </div>
               {importError && <p className="text-sm text-destructive">{importError}</p>}

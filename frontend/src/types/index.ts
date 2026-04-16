@@ -70,9 +70,8 @@ export interface HostedRuleSet {
   behavior: 'domain' | 'ipcidr' | 'classical'
   format: 'yaml' | 'text'
   content?: string
-  share_enabled: boolean
-  share_token?: string
-  share_url?: string
+  token?: string
+  url?: string
   created_at: string
   updated_at: string
 }
@@ -82,7 +81,6 @@ export interface RuleProvider {
   id: number
   /** 系统预设为 null */
   user_id: number | null
-  hosted_rule_set_id?: number | null
   name: string
   type: 'http' | 'file'
   url: string
@@ -104,6 +102,7 @@ export interface CustomConfig {
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]
+  hosted_rule_set_ids: number[]
   created_at: string
   updated_at: string
 }
@@ -114,6 +113,7 @@ export interface CustomConfigTransferPayload {
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]
+  hosted_rule_set_ids: number[]
 }
 
 // 输出订阅配置

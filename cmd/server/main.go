@@ -48,7 +48,7 @@ func main() {
 
 	// 公开路由：订阅下发，无需认证
 	r.GET("/sub/:token", handler.HandleSub)
-	r.GET("/ruleset/:token", handler.HandleRuleSet)
+	r.GET("/ruleset/:token/:name", handler.HandleRuleSet)
 
 	api := r.Group("/api")
 	{
@@ -105,9 +105,7 @@ func main() {
 			hrs.GET("/:id", handler.GetHostedRuleSet)
 			hrs.PUT("/:id", handler.UpdateHostedRuleSet)
 			hrs.DELETE("/:id", handler.DeleteHostedRuleSet)
-			hrs.POST("/:id/share/enable", handler.EnableHostedRuleSetShare)
-			hrs.POST("/:id/share/disable", handler.DisableHostedRuleSetShare)
-			hrs.POST("/:id/share/reset-token", handler.ResetHostedRuleSetToken)
+			hrs.POST("/reset-tokens", handler.ResetHostedRuleSetTokens)
 
 			// 自定义配置管理
 			cc := protected.Group("/custom-configs")

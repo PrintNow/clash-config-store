@@ -28,19 +28,21 @@ func ListCustomConfigs(c *gin.Context) {
 
 // customConfigRequest 创建/更新自定义配置的请求体
 type customConfigRequest struct {
-	Name            string                   `json:"name" binding:"required"`
-	Proxies         []map[string]interface{} `json:"proxies"`
-	ProxyGroups     []map[string]interface{} `json:"proxy_groups"`
-	Rules           []string                 `json:"rules"`
-	RuleProviderIDs []uint                   `json:"rule_provider_ids"`
+	Name             string                   `json:"name" binding:"required"`
+	Proxies          []map[string]interface{} `json:"proxies"`
+	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
+	Rules            []string                 `json:"rules"`
+	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
+	HostedRuleSetIDs []uint                   `json:"hosted_rule_set_ids"`
 }
 
 type customConfigTransferPayload struct {
-	Name            string                   `json:"name"`
-	Proxies         []map[string]interface{} `json:"proxies"`
-	ProxyGroups     []map[string]interface{} `json:"proxy_groups"`
-	Rules           []string                 `json:"rules"`
-	RuleProviderIDs []uint                   `json:"rule_provider_ids"`
+	Name             string                   `json:"name"`
+	Proxies          []map[string]interface{} `json:"proxies"`
+	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
+	Rules            []string                 `json:"rules"`
+	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
+	HostedRuleSetIDs []uint                   `json:"hosted_rule_set_ids"`
 }
 
 // CreateCustomConfig 创建自定义配置
@@ -52,18 +54,20 @@ func CreateCustomConfig(c *gin.Context) {
 		return
 	}
 
-	if err := validateCustomConfigRequest(&req); err != nil {
+	if err := validateCustomConfigRequest(userID, &req); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	req.RuleProviderIDs, req.HostedRuleSetIDs, _ = normalizeCustomConfigRuleSetRefs(userID, req.RuleProviderIDs, req.HostedRuleSetIDs)
 
 	cfg := &model.CustomConfig{
-		UserID:          userID,
-		Name:            req.Name,
-		Proxies:         nullSliceMaps(req.Proxies),
-		ProxyGroups:     nullSliceMaps(req.ProxyGroups),
-		Rules:           nullSliceStrings(req.Rules),
-		RuleProviderIDs: nullSliceUints(req.RuleProviderIDs),
+		UserID:           userID,
+		Name:             req.Name,
+		Proxies:          nullSliceMaps(req.Proxies),
+		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
+		Rules:            nullSliceStrings(req.Rules),
+		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
+		HostedRuleSetIDs: nullSliceUints(req.HostedRuleSetIDs),
 	}
 
 	if err := repository.DB.Create(cfg).Error; err != nil {
@@ -89,12 +93,13 @@ func CloneCustomConfig(c *gin.Context) {
 	}
 
 	clone := &model.CustomConfig{
-		UserID:          userID,
-		Name:            uniqueCustomConfigName(userID, cfg.Name+" - 副本"),
-		Proxies:         cloneSliceMaps(cfg.Proxies),
-		ProxyGroups:     cloneSliceMaps(cfg.ProxyGroups),
-		Rules:           cloneSliceStrings(cfg.Rules),
-		RuleProviderIDs: cloneSliceUints(cfg.RuleProviderIDs),
+		UserID:           userID,
+		Name:             uniqueCustomConfigName(userID, cfg.Name+" - 副本"),
+		Proxies:          cloneSliceMaps(cfg.Proxies),
+		ProxyGroups:      cloneSliceMaps(cfg.ProxyGroups),
+		Rules:            cloneSliceStrings(cfg.Rules),
+		RuleProviderIDs:  cloneSliceUints(cfg.RuleProviderIDs),
+		HostedRuleSetIDs: cloneSliceUints(cfg.HostedRuleSetIDs),
 	}
 
 	if err := repository.DB.Create(clone).Error; err != nil {
@@ -142,16 +147,18 @@ func UpdateCustomConfig(c *gin.Context) {
 		return
 	}
 
-	if err := validateCustomConfigRequest(&req); err != nil {
+	if err := validateCustomConfigRequest(userID, &req); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	req.RuleProviderIDs, req.HostedRuleSetIDs, _ = normalizeCustomConfigRuleSetRefs(userID, req.RuleProviderIDs, req.HostedRuleSetIDs)
 
 	cfg.Name = req.Name
 	cfg.Proxies = nullSliceMaps(req.Proxies)
 	cfg.ProxyGroups = nullSliceMaps(req.ProxyGroups)
 	cfg.Rules = nullSliceStrings(req.Rules)
 	cfg.RuleProviderIDs = nullSliceUints(req.RuleProviderIDs)
+	cfg.HostedRuleSetIDs = nullSliceUints(req.HostedRuleSetIDs)
 
 	if err := repository.DB.Save(&cfg).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "更新失败")
@@ -198,11 +205,12 @@ func ExportCustomConfig(c *gin.Context) {
 	}
 
 	payload := customConfigTransferPayload{
-		Name:            cfg.Name,
-		Proxies:         nullSliceMaps(cfg.Proxies),
-		ProxyGroups:     nullSliceMaps(cfg.ProxyGroups),
-		Rules:           nullSliceStrings(cfg.Rules),
-		RuleProviderIDs: nullSliceUints(cfg.RuleProviderIDs),
+		Name:             cfg.Name,
+		Proxies:          nullSliceMaps(cfg.Proxies),
+		ProxyGroups:      nullSliceMaps(cfg.ProxyGroups),
+		Rules:            nullSliceStrings(cfg.Rules),
+		RuleProviderIDs:  nullSliceUints(cfg.RuleProviderIDs),
+		HostedRuleSetIDs: nullSliceUints(cfg.HostedRuleSetIDs),
 	}
 
 	data, err := json.MarshalIndent(payload, "", "  ")
@@ -231,24 +239,27 @@ func ImportCustomConfig(c *gin.Context) {
 	}
 
 	createReq := customConfigRequest{
-		Name:            uniqueCustomConfigName(userID, req.Name),
-		Proxies:         nullSliceMaps(req.Proxies),
-		ProxyGroups:     nullSliceMaps(req.ProxyGroups),
-		Rules:           nullSliceStrings(req.Rules),
-		RuleProviderIDs: nullSliceUints(req.RuleProviderIDs),
+		Name:             uniqueCustomConfigName(userID, req.Name),
+		Proxies:          nullSliceMaps(req.Proxies),
+		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
+		Rules:            nullSliceStrings(req.Rules),
+		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
+		HostedRuleSetIDs: nullSliceUints(req.HostedRuleSetIDs),
 	}
-	if err := validateCustomConfigRequest(&createReq); err != nil {
+	if err := validateCustomConfigRequest(userID, &createReq); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	createReq.RuleProviderIDs, createReq.HostedRuleSetIDs, _ = normalizeCustomConfigRuleSetRefs(userID, createReq.RuleProviderIDs, createReq.HostedRuleSetIDs)
 
 	cfg := &model.CustomConfig{
-		UserID:          userID,
-		Name:            createReq.Name,
-		Proxies:         createReq.Proxies,
-		ProxyGroups:     createReq.ProxyGroups,
-		Rules:           createReq.Rules,
-		RuleProviderIDs: createReq.RuleProviderIDs,
+		UserID:           userID,
+		Name:             createReq.Name,
+		Proxies:          createReq.Proxies,
+		ProxyGroups:      createReq.ProxyGroups,
+		Rules:            createReq.Rules,
+		RuleProviderIDs:  createReq.RuleProviderIDs,
+		HostedRuleSetIDs: createReq.HostedRuleSetIDs,
 	}
 
 	if err := repository.DB.Create(cfg).Error; err != nil {
@@ -274,20 +285,10 @@ func PreviewCustomConfig(c *gin.Context) {
 	}
 
 	// 加载关联规则集
-	var ruleProviderInputs []util.RuleProviderInput
-	if len(cfg.RuleProviderIDs) > 0 {
-		var rps []model.RuleProvider
-		repository.DB.Where("id IN ?", cfg.RuleProviderIDs).Find(&rps)
-		for _, rp := range rps {
-			ruleProviderInputs = append(ruleProviderInputs, util.RuleProviderInput{
-				Name:     rp.Name,
-				Type:     rp.Type,
-				URL:      rp.URL,
-				Behavior: rp.Behavior,
-				Format:   rp.Format,
-				Interval: rp.Interval,
-			})
-		}
+	ruleProviderInputs, err := loadCustomConfigRuleProviderInputs(userID, cfg.RuleProviderIDs, cfg.HostedRuleSetIDs)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// preview 没有真实订阅源数据，use: 展开留空（生成订阅时才会注入）
@@ -310,7 +311,7 @@ func PreviewCustomConfig(c *gin.Context) {
 }
 
 // validateCustomConfigRequest 校验自定义配置请求
-func validateCustomConfigRequest(req *customConfigRequest) error {
+func validateCustomConfigRequest(userID uint, req *customConfigRequest) error {
 	for i, p := range req.Proxies {
 		name, _ := p["name"].(string)
 		if strings.TrimSpace(name) == "" {
@@ -335,6 +336,9 @@ func validateCustomConfigRequest(req *customConfigRequest) error {
 		if err := util.ValidateMihomoRuleLine(rule); err != nil {
 			return fmt.Errorf("rules[%d]: %w", i, err)
 		}
+	}
+	if _, _, err := normalizeCustomConfigRuleSetRefs(userID, req.RuleProviderIDs, req.HostedRuleSetIDs); err != nil {
+		return err
 	}
 	return nil
 }
@@ -388,6 +392,113 @@ func cloneSliceUints(s []uint) []uint {
 		return []uint{}
 	}
 	return append([]uint(nil), s...)
+}
+
+func loadCustomConfigRuleProviderInputs(userID uint, ruleProviderIDs []uint, hostedRuleSetIDs []uint) ([]util.RuleProviderInput, error) {
+	ruleProviderIDs, hostedRuleSetIDs, err := normalizeCustomConfigRuleSetRefs(userID, ruleProviderIDs, hostedRuleSetIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	inputs := make([]util.RuleProviderInput, 0, len(ruleProviderIDs)+len(hostedRuleSetIDs))
+
+	if len(ruleProviderIDs) > 0 {
+		var rps []model.RuleProvider
+		if err := repository.DB.
+			Where("id IN ?", ruleProviderIDs).
+			Where("user_id = ? OR is_preset = ?", userID, true).
+			Find(&rps).Error; err != nil {
+			return nil, err
+		}
+		for _, rp := range rps {
+			inputs = append(inputs, util.RuleProviderInput{
+				Name:     rp.Name,
+				Type:     rp.Type,
+				URL:      rp.URL,
+				Behavior: rp.Behavior,
+				Format:   rp.Format,
+				Interval: rp.Interval,
+			})
+		}
+	}
+
+	if len(hostedRuleSetIDs) > 0 {
+		var hosted []model.HostedRuleSet
+		if err := repository.DB.
+			Where("id IN ? AND user_id = ?", hostedRuleSetIDs, userID).
+			Find(&hosted).Error; err != nil {
+			return nil, err
+		}
+		for _, hrs := range hosted {
+			inputs = append(inputs, util.RuleProviderInput{
+				Name:     hrs.Name,
+				Type:     "http",
+				URL:      util.RuleSetPublicURL(hrs.Token, hrs.Name),
+				Behavior: hrs.Behavior,
+				Format:   hrs.Format,
+				Interval: 86400,
+			})
+		}
+	}
+
+	return inputs, nil
+}
+
+func normalizeCustomConfigRuleSetRefs(userID uint, ruleProviderIDs []uint, hostedRuleSetIDs []uint) ([]uint, []uint, error) {
+	normalizedRuleProviderIDs := make([]uint, 0, len(ruleProviderIDs))
+	normalizedHostedRuleSetIDs := append([]uint(nil), hostedRuleSetIDs...)
+	hostedSeen := make(map[uint]struct{}, len(normalizedHostedRuleSetIDs))
+	names := make(map[string]struct{})
+
+	for _, id := range normalizedHostedRuleSetIDs {
+		hostedSeen[id] = struct{}{}
+	}
+
+	if len(ruleProviderIDs) > 0 {
+		var rps []model.RuleProvider
+		if err := repository.DB.
+			Where("id IN ?", ruleProviderIDs).
+			Where("user_id = ? OR is_preset = ?", userID, true).
+			Find(&rps).Error; err != nil {
+			return nil, nil, err
+		}
+
+		for _, rp := range rps {
+			if rp.LegacyHostedRuleSetID != nil {
+				if _, exists := hostedSeen[*rp.LegacyHostedRuleSetID]; !exists {
+					hostedSeen[*rp.LegacyHostedRuleSetID] = struct{}{}
+					normalizedHostedRuleSetIDs = append(normalizedHostedRuleSetIDs, *rp.LegacyHostedRuleSetID)
+				}
+				continue
+			}
+			if _, exists := names[rp.Name]; exists {
+				return nil, nil, fmt.Errorf("规则集名称 %q 重复，请先调整名称", rp.Name)
+			}
+			names[rp.Name] = struct{}{}
+			normalizedRuleProviderIDs = append(normalizedRuleProviderIDs, rp.ID)
+		}
+	}
+
+	if len(normalizedHostedRuleSetIDs) > 0 {
+		var hosted []model.HostedRuleSet
+		if err := repository.DB.
+			Where("id IN ? AND user_id = ?", normalizedHostedRuleSetIDs, userID).
+			Find(&hosted).Error; err != nil {
+			return nil, nil, err
+		}
+
+		validHostedIDs := make([]uint, 0, len(hosted))
+		for _, hrs := range hosted {
+			if _, exists := names[hrs.Name]; exists {
+				return nil, nil, fmt.Errorf("规则集名称 %q 重复，请先调整名称", hrs.Name)
+			}
+			names[hrs.Name] = struct{}{}
+			validHostedIDs = append(validHostedIDs, hrs.ID)
+		}
+		normalizedHostedRuleSetIDs = validHostedIDs
+	}
+
+	return normalizedRuleProviderIDs, normalizedHostedRuleSetIDs, nil
 }
 
 func uniqueCustomConfigName(userID uint, baseName string) string {
