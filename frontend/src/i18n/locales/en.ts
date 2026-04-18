@@ -47,6 +47,7 @@ const en = {
   },
 
   nav: {
+    brandName: 'Clash Config Store',
     dashboard: 'Dashboard',
     providers: 'Providers',
     userAgents: 'UA Library',
@@ -481,6 +482,12 @@ const en = {
     zh: '中文',
     en: 'English',
     toggle: 'Toggle language',
+  },
+
+  footer: {
+    github: 'GitHub',
+    repoLinkA11y: 'Open this project on GitHub',
+    buildLabelTitle: 'Build version',
   },
 
   // Generic errors (used in axios interceptor and non-React contexts)
