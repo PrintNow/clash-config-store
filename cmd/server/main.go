@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"clash-config-store/internal/applog"
@@ -24,6 +25,10 @@ import (
 func main() {
 	applog.Init()
 	cfg := config.Load()
+	// godotenv 在 config.Load 中执行，晚于 gin 的 init()，此处同步 GIN_MODE
+	if m := strings.TrimSpace(os.Getenv("GIN_MODE")); m != "" {
+		gin.SetMode(m)
+	}
 
 	if err := util.InitGeoIP(cfg.GeoIPPath); err != nil {
 		slog.Warn("GeoIP 初始化失败", slog.String("component", "main"), slog.Any("err", err))
@@ -36,6 +41,10 @@ func main() {
 	}
 
 	r := gin.Default()
+	if err := r.SetTrustedProxies(ginTrustedProxies()); err != nil {
+		slog.Warn("Gin TrustedProxies 无效，回退为仅本机", slog.String("component", "main"), slog.Any("err", err))
+		_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+	}
 
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
@@ -175,4 +184,24 @@ func main() {
 		slog.Error("服务启动失败", slog.String("component", "main"), slog.Any("err", err))
 		os.Exit(1)
 	}
+}
+
+// ginTrustedProxies 解析 GIN_TRUSTED_PROXIES（逗号分隔的 IP 或 CIDR）；未设置时仅信任本机回环，避免默认「信任所有代理」。
+func ginTrustedProxies() []string {
+	s := strings.TrimSpace(os.Getenv("GIN_TRUSTED_PROXIES"))
+	if s == "" {
+		return []string{"127.0.0.1", "::1"}
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"127.0.0.1", "::1"}
+	}
+	return out
 }

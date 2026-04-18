@@ -33,7 +33,7 @@ func Load() *Config {
 	App = &Config{
 		Port:      getEnv("APP_PORT", "26406"),
 		DBType:    getEnv("DB_TYPE", "sqlite"),
-		DBDsn:     getEnv("DB_DSN", "clash-config-store.db"),
+		DBDsn:     getEnv("DB_DSN", "data.db"),
 		JWTSecret: getEnv("JWT_SECRET", "please-change-this-secret-in-production"),
 		JWTExpiry: getEnvInt("JWT_EXPIRY_HOURS", 24),
 		GeoIPPath: resolveGeoIPPath(),
@@ -46,7 +46,7 @@ func resolveGeoIPPath() string {
 	if v := os.Getenv("GEOIP_PATH"); v != "" {
 		return v
 	}
-	defaultPath := "/data/clash-config-store.d/GeoLite2-City.mmdb"
+	defaultPath := "/data/geoip/GeoLite2-City.mmdb"
 	if _, err := os.Stat(defaultPath); err == nil {
 		return defaultPath
 	}

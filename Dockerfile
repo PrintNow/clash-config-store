@@ -35,14 +35,14 @@ RUN apk --no-cache add ca-certificates curl \
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates tzdata \
- && mkdir -p /data/clash-config-store.d
+ && mkdir -p /data/geoip
 
 WORKDIR /app
 
-COPY --from=backend-builder /build/clash-config-store ./app/
+COPY --from=backend-builder /build/clash-config-store ./clash-config-store
 COPY --from=frontend-builder /tmp/assets.zip ./static/assets.zip
-COPY --from=geoip-downloader /geoip/GeoLite2-City.mmdb /data/clash-config-store.d/GeoLite2-City.mmdb
+COPY --from=geoip-downloader /geoip/GeoLite2-City.mmdb /data/geoip/GeoLite2-City.mmdb
 
 EXPOSE 26406
 
-CMD ["./app/clash-config-store"]
+CMD ["./clash-config-store"]

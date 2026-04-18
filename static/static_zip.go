@@ -17,8 +17,17 @@ func getAssetsPath() string {
 		return "static/assets.zip"
 	}
 	exeDir := filepath.Dir(exe)
-	projRoot := filepath.Dir(exeDir)
-	return filepath.Join(projRoot, "static", "assets.zip")
+	// 容器：/app/clash-config-store → /app/static/assets.zip；本机：bin/clash-config-store → 仓库根 static/
+	candidates := []string{
+		filepath.Join(exeDir, "static", "assets.zip"),
+		filepath.Join(filepath.Dir(exeDir), "static", "assets.zip"),
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return "static/assets.zip"
 }
 
 func GetFS() (fs.FS, error) {
