@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Shield } from 'lucide-react'
+import { Shield, AlertCircle } from 'lucide-react'
 import { authApi } from '@/api/auth'
+import { userApi } from '@/api/user'
+import { preloadPublicKey } from '@/api/crypto'
 import { useAuthStore } from '@/store/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 // 与后端 registerRequest Password binding:"min=6" 一致
 const REGISTER_PASSWORD_MIN_LEN = 6
@@ -28,7 +31,16 @@ export function Register() {
     email?: string
     password?: string
     confirmPassword?: string
+    form?: string
   }>({})
+
+  // 页面挂载时预加载 RSA 公钥并缓存，减少注册时的等待
+  useEffect(() => {
+    preloadPublicKey().catch(() => {
+      setErrors({ form: t('errors.publicKeyFailed') })
+    })
+  }, [t])
+
   const validate = () => {
     const newErrors: typeof errors = {}
     if (!name.trim()) newErrors.name = t('auth.nameRequired')
@@ -48,13 +60,19 @@ export function Register() {
     if (!validate()) return
 
     setLoading(true)
+    setErrors({})
     try {
-      const { token, user } = await authApi.register({ name, email, password })
-      setAuth(token, user)
+      const { token } = await authApi.register({ name, email, password })
+      // 先写入 token，再从服务端拉取最新用户信息
+      localStorage.setItem('token', token)
+      const freshUser = await userApi.getProfile()
+      setAuth(token, freshUser)
       toast.success(t('auth.registerSuccess'))
       navigate('/dashboard')
-    } catch {
-      // 业务/网络错误由 axios 拦截器 toast；文案以后端为准（如邮箱已注册）
+    } catch (err) {
+      // 注册错误直接在表单内展示，不弹 toast
+      const message = err instanceof Error ? err.message : t('errors.operationFailed')
+      setErrors({ form: message })
     } finally {
       setLoading(false)
     }
@@ -78,6 +96,14 @@ export function Register() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* 服务端/网络级错误：用 Alert 组件内联展示，不弹 toast */}
+              {errors.form && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errors.form}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="name">{t('auth.username')}</Label>
                 <Input
@@ -86,6 +112,8 @@ export function Register() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   disabled={loading}
+                  className={errors.name ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.name}
                 />
                 {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
               </div>
@@ -99,6 +127,8 @@ export function Register() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
+                  className={errors.email ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.email}
                 />
                 {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
               </div>
@@ -112,6 +142,8 @@ export function Register() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
+                  className={errors.password ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.password}
                 />
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
@@ -127,6 +159,8 @@ export function Register() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={loading}
+                  className={errors.confirmPassword ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.confirmPassword}
                 />
                 {errors.confirmPassword && (
                   <p className="text-sm text-destructive">{errors.confirmPassword}</p>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 import { Menu, X, Sun, Moon, Monitor, Languages, LogOut, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { useThemeStore } from '@/store/theme'
+import { userApi } from '@/api/user'
 import { Sidebar } from './Sidebar'
 import { ContextSaveBar } from './ContextSaveBar'
 import { Button } from '@/components/ui/button'
@@ -19,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export function AppLayout() {
-  const { user, token, logout } = useAuthStore()
+  const { user, token, logout, setAuth } = useAuthStore()
   const { theme, setTheme } = useThemeStore()
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -29,6 +31,23 @@ export function AppLayout() {
   useEffect(() => {
     useAuthStore.getState().initFromStorage()
   }, [])
+
+  // 挂载时从服务端拉取最新用户信息，同步到 store
+  useQuery({
+    queryKey: ['user-profile-sync'],
+    queryFn: async () => {
+      const freshUser = await userApi.getProfile()
+      const currentToken = localStorage.getItem('token')
+      if (currentToken) {
+        setAuth(currentToken, freshUser)
+      }
+      return freshUser
+    },
+    enabled: !!token || !!localStorage.getItem('token'),
+    // 静默刷新，窗口获得焦点时也重新拉取
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  })
 
   // 未登录重定向到登录页
   if (!token && !localStorage.getItem('token')) {

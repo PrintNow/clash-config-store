@@ -35,6 +35,11 @@ func main() {
 	}
 	defer util.CloseGeoIP()
 
+	if err := util.InitRSA(); err != nil {
+		slog.Error("RSA 密钥初始化失败", slog.String("component", "main"), slog.Any("err", err))
+		os.Exit(1)
+	}
+
 	if err := repository.Init(cfg); err != nil {
 		slog.Error("数据库初始化失败", slog.String("component", "main"), slog.Any("err", err))
 		os.Exit(1)
@@ -62,6 +67,7 @@ func main() {
 	api := r.Group("/api")
 	{
 		auth := api.Group("/auth")
+		auth.GET("/public-key", handler.GetPublicKey)
 		auth.POST("/register", handler.Register)
 		auth.POST("/login", handler.Login)
 

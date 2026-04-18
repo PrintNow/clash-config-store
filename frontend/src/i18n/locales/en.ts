@@ -482,6 +482,16 @@ const en = {
     en: 'English',
     toggle: 'Toggle language',
   },
+
+  // Generic errors (used in axios interceptor and non-React contexts)
+  errors: {
+    invalidCredentials: 'Invalid email or password',
+    operationFailed: 'Operation failed',
+    unauthorized: 'Unauthorized, please log in again',
+    networkError: 'Network error, please try again later',
+    encryptFailed: 'Password encryption failed, please refresh and try again',
+    publicKeyFailed: 'Failed to fetch security key, please refresh and try again',
+  },
 }
 
 export default en

@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Shield } from 'lucide-react'
+import { Shield, AlertCircle } from 'lucide-react'
 import { authApi } from '@/api/auth'
+import { userApi } from '@/api/user'
+import { preloadPublicKey } from '@/api/crypto'
 import { useAuthStore } from '@/store/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export function Login() {
   const { t } = useTranslation()
@@ -18,10 +21,17 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
+
+  // 页面挂载时预加载 RSA 公钥并缓存，减少登录时的等待
+  useEffect(() => {
+    preloadPublicKey().catch(() => {
+      setErrors({ form: t('errors.publicKeyFailed') })
+    })
+  }, [t])
 
   const validate = () => {
-    const newErrors: { email?: string; password?: string } = {}
+    const newErrors: typeof errors = {}
     if (!email) newErrors.email = t('auth.emailRequired')
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = t('auth.emailInvalid')
     if (!password) newErrors.password = t('auth.passwordRequired')
@@ -34,13 +44,19 @@ export function Login() {
     if (!validate()) return
 
     setLoading(true)
+    setErrors({})
     try {
-      const { token, user } = await authApi.login({ email, password })
-      setAuth(token, user)
+      const { token } = await authApi.login({ email, password })
+      // 先写入 token，再从服务端拉取最新用户信息
+      localStorage.setItem('token', token)
+      const freshUser = await userApi.getProfile()
+      setAuth(token, freshUser)
       toast.success(t('auth.loginSuccess'))
       navigate('/dashboard')
-    } catch {
-      // 错误已由 axios 拦截器处理
+    } catch (err) {
+      // 登录/注册错误不走 toast，直接展示在表单内
+      const message = err instanceof Error ? err.message : t('errors.invalidCredentials')
+      setErrors({ form: message })
     } finally {
       setLoading(false)
     }
@@ -64,6 +80,14 @@ export function Login() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* 服务端/网络级错误：用 Alert 组件内联展示，不弹 toast */}
+              {errors.form && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errors.form}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input
@@ -73,6 +97,8 @@ export function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
+                  className={errors.email ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.email}
                 />
                 {errors.email && (
                   <p className="text-sm text-destructive">{errors.email}</p>
@@ -88,6 +114,8 @@ export function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
+                  className={errors.password ? 'border-destructive' : ''}
+                  aria-invalid={!!errors.password}
                 />
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
