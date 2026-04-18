@@ -8,8 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const BaselineVersion int64 = 1
-
 type SchemaMigration struct {
 	Version   int64     `gorm:"primaryKey;autoIncrement:false"`
 	AppliedAt time.Time `gorm:"not null"`

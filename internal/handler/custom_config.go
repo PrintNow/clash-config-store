@@ -464,13 +464,6 @@ func normalizeCustomConfigRuleSetRefs(userID uint, ruleProviderIDs []uint, hoste
 		}
 
 		for _, rp := range rps {
-			if rp.LegacyHostedRuleSetID != nil {
-				if _, exists := hostedSeen[*rp.LegacyHostedRuleSetID]; !exists {
-					hostedSeen[*rp.LegacyHostedRuleSetID] = struct{}{}
-					normalizedHostedRuleSetIDs = append(normalizedHostedRuleSetIDs, *rp.LegacyHostedRuleSetID)
-				}
-				continue
-			}
 			if _, exists := names[rp.Name]; exists {
 				return nil, nil, fmt.Errorf("规则集名称 %q 重复，请先调整名称", rp.Name)
 			}

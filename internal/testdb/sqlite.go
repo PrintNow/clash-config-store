@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"clash-config-store/internal/repository"
+	"clash-config-store/internal/repository/migrations"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -20,7 +21,10 @@ func UseMemorySQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存 SQLite: %v", err)
 	}
-	if err := repository.MigrateAll(db); err != nil {
+	if err := migrations.Ensure(db); err != nil {
+		t.Fatalf("迁移: %v", err)
+	}
+	if err := migrations.Up(db); err != nil {
 		t.Fatalf("迁移: %v", err)
 	}
 	prev := repository.DB

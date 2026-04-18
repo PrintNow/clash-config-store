@@ -44,12 +44,6 @@ func TestMigrationsUp_memorySQLite(t *testing.T) {
 	if err := migrations.Ensure(db); err != nil {
 		t.Fatal(err)
 	}
-	if err := MigrateAll(db); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrations.MarkApplied(db, migrations.BaselineVersion); err != nil {
-		t.Fatal(err)
-	}
 	if err := migrations.Up(db); err != nil {
 		t.Fatal(err)
 	}
