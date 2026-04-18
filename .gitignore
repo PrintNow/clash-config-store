@@ -1,6 +1,6 @@
 # Go
 clash-config-store
-clash-config-store.db
+data.db
 *.db
 GeoLite2-*.mmdb
 *.mmdb

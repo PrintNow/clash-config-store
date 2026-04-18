@@ -54,7 +54,7 @@ cp .env.example .env
 # 编辑 .env，至少修改 JWT_SECRET
 
 # 可选：如果要把 SQLite 文件映射到宿主机文件，建议先创建
-touch ./clash-config-store.db
+touch ./data.db
 
 docker compose up -d --build
 ```
@@ -139,8 +139,10 @@ npm run dev
 | 变量                 | 默认值                                       | 说明                     |
 |--------------------|-------------------------------------------|------------------------|
 | `APP_PORT`         | `26406`                                   | 服务监听端口                 |
+| `GIN_MODE`         | `debug`（未设置时）                             | `debug` / `release` / `test`；生产与 Docker Compose 示例为 `release` |
+| `GIN_TRUSTED_PROXIES` | 未设置时为 `127.0.0.1,::1`                  | 逗号分隔的可信代理 IP 或 CIDR，勿使用「信任全部」；反代场景按需扩大网段 |
 | `DB_TYPE`          | `sqlite`                                  | `sqlite` 或 `mysql`     |
-| `DB_DSN`           | `clash-config-store.db`                   | SQLite 文件路径或 MySQL DSN |
+| `DB_DSN`           | `data.db`                                 | SQLite 文件路径或 MySQL DSN |
 | `JWT_SECRET`       | `please-change-this-secret-in-production` | JWT 密钥，生产环境必须修改        |
 | `JWT_EXPIRY_HOURS` | `24`                                      | JWT 有效期（小时）            |
 | `BASE_URL`         | `http://localhost:26406`                  | 用于生成订阅链接               |
@@ -150,7 +152,7 @@ npm run dev
 
 - 项目支持按国家进行访问限制，依赖 GeoLite2 数据库
 - `make geoip` 可下载 `GeoLite2-City.mmdb` 到 `.docker/geoip/`
-- Docker 镜像构建阶段默认会下载并放置到 `/data/clash-config-store.d/GeoLite2-City.mmdb`
+- Docker 镜像内布局：应用 `/app/clash-config-store` 与 `/app/static/assets.zip`；数据 `/data/data.db`（SQLite）与 `/data/geoip/GeoLite2-City.mmdb`（构建阶段下载的 GeoLite2）
 
 ## 免责声明
 
