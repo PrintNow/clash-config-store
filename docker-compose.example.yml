@@ -1,12 +1,17 @@
 # Clash Config Store（单体后端）
 # 默认：SQLite（推荐新用户，开箱即用，无需额外数据库）
 # 可选：外部 MySQL/MariaDB（设置 DB_TYPE=mysql 与 DB_DSN）
+#
+# 镜像来源（二选一）：
+# - 默认从 Docker Hub 拉取预构建镜像，启动更快：https://hub.docker.com/r/shine09/clash-config-store
+# - 若希望本地从 Dockerfile 构建（便于审计与可信构建）：注释掉 image，取消注释 build 段
 
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: shine09/clash-config-store:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: clash-config-store
     restart: unless-stopped
     ports:
