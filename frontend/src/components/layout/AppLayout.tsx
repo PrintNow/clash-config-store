@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Menu, X, Sun, Moon, Monitor, Languages, LogOut, User } from 'lucide-react'
@@ -8,6 +8,8 @@ import { useAuthStore } from '@/store/auth'
 import { useThemeStore } from '@/store/theme'
 import { userApi } from '@/api/user'
 import { Sidebar } from './Sidebar'
+import { SidebarBrand } from './SidebarBrand'
+import { SidebarFooter } from './SidebarFooter'
 import { ContextSaveBar } from './ContextSaveBar'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -73,16 +75,14 @@ export function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* 桌面端固定侧边栏 */}
       <aside className="hidden md:flex w-60 flex-col border-r bg-sidebar">
-        <div className="flex h-16 items-center px-4 border-b border-sidebar-border">
-          <Link
-            to="/dashboard"
-            className="text-lg font-bold text-sidebar-foreground hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm transition-colors"
-          >
-            Clash Config Store
-          </Link>
+        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-3">
+          <SidebarBrand className="min-w-0 flex-1" />
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          <Sidebar />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto py-2">
+            <Sidebar />
+          </div>
+          <SidebarFooter />
         </div>
       </aside>
 
@@ -100,20 +100,20 @@ export function AppLayout() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
-          <Link
-            to="/dashboard"
-            onClick={() => setSidebarOpen(false)}
-            className="text-lg font-bold text-sidebar-foreground hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm transition-colors truncate pr-2"
-          >
-            Clash Config Store
-          </Link>
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+        <div className="flex h-16 items-center justify-between gap-2 border-b border-sidebar-border px-3">
+          <SidebarBrand
+            className="min-w-0 flex-1"
+            onNavigate={() => setSidebarOpen(false)}
+          />
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} aria-label={t('common.close')}>
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          <Sidebar onNavClick={() => setSidebarOpen(false)} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto py-2">
+            <Sidebar onNavClick={() => setSidebarOpen(false)} />
+          </div>
+          <SidebarFooter />
         </div>
       </aside>
 
