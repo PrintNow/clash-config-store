@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./frontend/public/logo.svg" alt="Clash Config Store" width="96" height="96" />
+</p>
+
 # Clash Config Store
 
 Clash Config Store 是一个面向 Mihomo/Clash 的订阅编排与分发平台：  
@@ -149,9 +153,11 @@ npm run dev
 
 ## GeoIP（可选）
 
-- 项目支持按国家进行访问限制，依赖 GeoLite2 数据库
-- `make geoip` 可下载 `GeoLite2-City.mmdb` 到 `.docker/geoip/`
-- Docker 镜像内布局：应用 `/app/clash-config-store` 与 `/app/static/assets.zip`；GeoIP 在 `/data/geoip/GeoLite2-City.mmdb`。Compose 示例将宿主机 `./data` 挂到 `/data/store`，SQLite 路径为 `/data/store/data.db`。
+用于**订阅访问**场景：按客户端 IP 解析国家/城市，支撑「按国家限制访问」，并在访问日志里记录地理字段。与下发 YAML 里的 `GEOIP,CN,DIRECT` 等**客户端规则**不是同一回事。
+
+- **本地 `go run`**：未设置 `GEOIP_PATH` 且不存在默认路径下的库文件时，地理能力关闭（不影响其它功能）。
+- **Docker / Compose**：构建镜像时会下载并放入 `/data/geoip/GeoLite2-City.mmdb`，示例里的 `GEOIP_PATH` 即指向该路径；这与把宿主机 `./data` 挂到容器内 `/data/store`（仅用于 SQLite 数据目录）**互不冲突**。
+- **自建镜像或更新库**：`make geoip` 会把 `GeoLite2-City.mmdb` 下载到 `.docker/geoip/`，供 `make docker-build` 打进镜像；也可自行下载后通过 `GEOIP_PATH` 指向任意路径。
 
 ## 免责声明
 
