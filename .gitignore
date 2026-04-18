@@ -17,6 +17,8 @@ static/assets.zip
 
 # Docker
 .docker/
+docker-compose.yml
+docker-compose.yaml
 
 # IDE
 .idea/

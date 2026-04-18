@@ -48,6 +48,8 @@ Dockerfile                 # 多阶段构建镜像
 git clone https://github.com/PrintNow/clash-config-store.git
 cd clash-config-store
 
+cp docker-compose.example.yml docker-compose.yml
+
 cp .env.example .env
 # 编辑 .env，至少修改 JWT_SECRET
 
