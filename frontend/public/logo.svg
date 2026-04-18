@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Clash Config Store">
+  <rect width="48" height="48" rx="12" fill="#2563eb"/>
+  <path fill="#f8fafc" d="M 24 7.5 L 37.2 13.6 L 37.2 26.8 C 37.2 33.6 31.8 39.4 24 42.2 C 16.2 39.4 10.8 33.6 10.8 26.8 L 10.8 13.6 Z"/>
+  <path d="M 16.2 22.2 H 31.8 M 16.2 28.8 H 25.2" fill="none" stroke="#2563eb" stroke-opacity="0.5" stroke-width="2.65" stroke-linecap="round"/>
+</svg>

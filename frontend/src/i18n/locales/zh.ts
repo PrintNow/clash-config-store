@@ -49,6 +49,7 @@ const zh = {
 
   // 导航菜单
   nav: {
+    brandName: 'Clash Config Store',
     dashboard: '仪表盘',
     providers: '订阅源',
     userAgents: 'UA 库',
@@ -495,6 +496,13 @@ const zh = {
     zh: '中文',
     en: 'English',
     toggle: '切换语言',
+  },
+
+  // 页脚 / 开源
+  footer: {
+    github: 'GitHub',
+    repoLinkA11y: '在 GitHub 打开本仓库',
+    buildLabelTitle: '构建版本',
   },
 
   // 通用错误（用于 axios 拦截器等非 React 上下文）
