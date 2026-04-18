@@ -53,8 +53,7 @@ cp docker-compose.example.yml docker-compose.yml
 cp .env.example .env
 # 编辑 .env，至少修改 JWT_SECRET
 
-# 可选：如果要把 SQLite 文件映射到宿主机文件，建议先创建
-touch ./data.db
+# Compose 会将 ./data 挂载为数据目录，首次启动会自动创建 SQLite，无需 touch
 
 docker compose up -d --build
 ```
@@ -152,7 +151,7 @@ npm run dev
 
 - 项目支持按国家进行访问限制，依赖 GeoLite2 数据库
 - `make geoip` 可下载 `GeoLite2-City.mmdb` 到 `.docker/geoip/`
-- Docker 镜像内布局：应用 `/app/clash-config-store` 与 `/app/static/assets.zip`；数据 `/data/data.db`（SQLite）与 `/data/geoip/GeoLite2-City.mmdb`（构建阶段下载的 GeoLite2）
+- Docker 镜像内布局：应用 `/app/clash-config-store` 与 `/app/static/assets.zip`；GeoIP 在 `/data/geoip/GeoLite2-City.mmdb`。Compose 示例将宿主机 `./data` 挂到 `/data/store`，SQLite 路径为 `/data/store/data.db`。
 
 ## 免责声明
 

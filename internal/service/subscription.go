@@ -138,10 +138,6 @@ func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hos
 			return nil, err
 		}
 		for _, rp := range rps {
-			if rp.LegacyHostedRuleSetID != nil {
-				hostedSeen[*rp.LegacyHostedRuleSetID] = struct{}{}
-				continue
-			}
 			if _, exists := names[rp.Name]; exists {
 				return nil, fmt.Errorf("规则集名称 %q 重复", rp.Name)
 			}

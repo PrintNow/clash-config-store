@@ -91,6 +91,7 @@ const zh = {
     passwordMismatch: '两次密码不一致',
     emailRequired: '请输入邮箱',
     passwordRequired: '请输入密码',
+    passwordMinLength: '密码至少 {{min}} 位',
     nameRequired: '请输入用户名',
     emailInvalid: '邮箱格式不正确',
   },
@@ -494,6 +495,16 @@ const zh = {
     zh: '中文',
     en: 'English',
     toggle: '切换语言',
+  },
+
+  // 通用错误（用于 axios 拦截器等非 React 上下文）
+  errors: {
+    invalidCredentials: '邮箱或密码错误',
+    operationFailed: '操作失败',
+    unauthorized: '未授权，请重新登录',
+    networkError: '网络错误，请稍后重试',
+    encryptFailed: '密码加密失败，请刷新页面重试',
+    publicKeyFailed: '获取安全公钥失败，请刷新页面重试',
   },
 }
 

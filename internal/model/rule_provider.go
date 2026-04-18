@@ -5,9 +5,8 @@ package model
 type RuleProvider struct {
 	Base
 	// UserID 仅自定义规则集有值；系统预设为 nil，以满足 MySQL 外键（无 id=0 用户）
-	UserID                *uint  `gorm:"index" json:"user_id"`
-	LegacyHostedRuleSetID *uint  `gorm:"column:hosted_rule_set_id;-:migration" json:"-"`
-	Name                  string `gorm:"not null" json:"name"`
+	UserID *uint `gorm:"index" json:"user_id"`
+	Name   string `gorm:"not null" json:"name"`
 	Type                  string `gorm:"not null;default:'http'" json:"type"`       // http | file
 	URL                   string `gorm:"default:''" json:"url"`                     // http 类型远程地址
 	Behavior              string `gorm:"not null;default:'domain'" json:"behavior"` // domain | ipcidr | classical

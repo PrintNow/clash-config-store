@@ -69,8 +69,39 @@ const { t } = useTranslation()
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'  // 全局 Toast，不用 useToast
 ```
+
+## 表单错误提示规范
+
+**优先使用 shadcn/ui 现成组件，不要自己写 div/p 样式组件。**
+
+```tsx
+// 字段级错误（input 下方红字）：
+// 1. Input 加 border-destructive + aria-invalid
+<Input
+  className={errors.field ? 'border-destructive' : ''}
+  aria-invalid={!!errors.field}
+/>
+// 2. shadcn/ui Label + 错误文案段落
+{errors.field && <p className="text-sm text-destructive">{errors.field}</p>}
+
+// 表单级（服务端/网络错误）：用 Alert 组件，不弹 toast
+// toast 只用于操作成功反馈，不用于表单校验错误
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertCircle } from 'lucide-react'
+
+{errors.form && (
+  <Alert variant="destructive">
+    <AlertCircle className="h-4 w-4" />
+    <AlertDescription>{errors.form}</AlertDescription>
+  </Alert>
+)}
+```
+
+> **原则**：表单输入错误（含 API 返回的字段错误）一律在表单内展示，避免弹 toast 导致 Input 失焦。
+> toast 仅用于操作成功（如保存成功、删除成功）或与当前表单无关的全局通知。
 
 ## 删除确认模式
 

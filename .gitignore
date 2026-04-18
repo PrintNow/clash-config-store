@@ -19,6 +19,8 @@ static/assets.zip
 .docker/
 docker-compose.yml
 docker-compose.yaml
+# Compose 默认 SQLite 数据目录（bind mount）
+data/
 
 # IDE
 .idea/

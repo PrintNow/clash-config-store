@@ -40,20 +40,6 @@ func Init(cfg *config.Config) error {
 	if err := migrations.Ensure(DB); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
-	applied, err := migrations.AppliedVersions(DB)
-	if err != nil {
-		return fmt.Errorf("数据库迁移失败: %w", err)
-	}
-	if len(applied) == 0 {
-		if !DB.Migrator().HasTable(&model.User{}) {
-			if err := MigrateAll(DB); err != nil {
-				return fmt.Errorf("数据库迁移失败: %w", err)
-			}
-		}
-		if err := migrations.MarkApplied(DB, migrations.BaselineVersion); err != nil {
-			return fmt.Errorf("数据库迁移失败: %w", err)
-		}
-	}
 	if err := migrations.Up(DB); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
@@ -70,23 +56,12 @@ func Init(cfg *config.Config) error {
 	return nil
 }
 
-// MigrateAll 对所有模型执行 AutoMigrate（生产初始化与单测共用）
+// MigrateAll 与 migrations.ApplySchema 等价（单测等场景）
 func MigrateAll(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("MigrateAll: db 不能为空")
 	}
-	return db.AutoMigrate(
-		&model.User{},
-		&model.UserAgent{},
-		&model.Provider{},
-		&model.ConfigTemplate{},
-		&model.RuleProvider{},
-		&model.HostedRuleSet{},
-		&model.CustomConfig{},
-		&model.Subscription{},
-		&model.AccessRestriction{},
-		&model.AccessLog{},
-	)
+	return migrations.ApplySchema(db)
 }
 
 // SeedRuleProviders 初始化 Loyalsoldier 内置预设规则集（仅首次，幂等）

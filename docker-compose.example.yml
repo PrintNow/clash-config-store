@@ -16,9 +16,9 @@ services:
       GIN_MODE: release
       # 前有 Nginx/Caddy 等反代且依赖 X-Forwarded-For 时，按需设置可信代理网段，例如：
       # GIN_TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      # 默认 SQLite：数据文件保存在 /data/data.db
+      # 默认 SQLite：库文件在 /data/store/data.db（见 volumes；勿用单文件挂载以免宿主机无文件时被建成目录）
       DB_TYPE: ${DB_TYPE:-sqlite}
-      DB_DSN: ${DB_DSN:-/data/data.db}
+      DB_DSN: ${DB_DSN:-/data/store/data.db}
       # 外部 MySQL/MariaDB 示例（写入 .env）：
       # DB_TYPE=mysql
       # DB_DSN=clash:clashpassword@tcp(127.0.0.1:3306)/clash_config_store?charset=utf8mb4&parseTime=True&loc=Local
@@ -29,5 +29,5 @@ services:
       BASE_URL: ${BASE_URL:-http://localhost:26406}
       TZ: ${TZ:-UTC}
     volumes:
-      # SQLite 数据文件直接映射到宿主机（首次可先执行：touch ./data.db）
-      - ./data.db:/data/data.db
+      # 挂载目录而非单文件：宿主机不存在目标文件时 Docker 会误建「目录」，导致 SQLite 无法打开
+      - ./data:/data/store
