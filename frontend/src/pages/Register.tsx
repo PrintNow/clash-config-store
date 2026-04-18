@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+// 与后端 registerRequest Password binding:"min=6" 一致
+const REGISTER_PASSWORD_MIN_LEN = 6
+
 export function Register() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -26,13 +29,15 @@ export function Register() {
     password?: string
     confirmPassword?: string
   }>({})
-
   const validate = () => {
     const newErrors: typeof errors = {}
-    if (!name) newErrors.name = t('auth.nameRequired')
-    if (!email) newErrors.email = t('auth.emailRequired')
+    if (!name.trim()) newErrors.name = t('auth.nameRequired')
+    if (!email.trim()) newErrors.email = t('auth.emailRequired')
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = t('auth.emailInvalid')
     if (!password) newErrors.password = t('auth.passwordRequired')
+    else if (password.length < REGISTER_PASSWORD_MIN_LEN) {
+      newErrors.password = t('auth.passwordMinLength', { min: REGISTER_PASSWORD_MIN_LEN })
+    }
     if (password !== confirmPassword) newErrors.confirmPassword = t('auth.passwordMismatch')
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -49,7 +54,7 @@ export function Register() {
       toast.success(t('auth.registerSuccess'))
       navigate('/dashboard')
     } catch {
-      // 错误已由 axios 拦截器处理
+      // 业务/网络错误由 axios 拦截器 toast；文案以后端为准（如邮箱已注册）
     } finally {
       setLoading(false)
     }

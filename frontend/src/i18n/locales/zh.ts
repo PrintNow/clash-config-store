@@ -91,6 +91,7 @@ const zh = {
     passwordMismatch: '两次密码不一致',
     emailRequired: '请输入邮箱',
     passwordRequired: '请输入密码',
+    passwordMinLength: '密码至少 {{min}} 位',
     nameRequired: '请输入用户名',
     emailInvalid: '邮箱格式不正确',
   },

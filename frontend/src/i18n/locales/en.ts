@@ -88,6 +88,7 @@ const en = {
     passwordMismatch: 'Passwords do not match',
     emailRequired: 'Email is required',
     passwordRequired: 'Password is required',
+    passwordMinLength: 'Password must be at least {{min}} characters',
     nameRequired: 'Username is required',
     emailInvalid: 'Invalid email format',
   },
