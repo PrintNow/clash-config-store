@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-IMAGE_REPO="${IMAGE_REPO:-}"
+IMAGE_REPO="${IMAGE_REPO:-shine09/clash-config-store}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 if [[ -z "${IMAGE_REPO}" ]]; then
