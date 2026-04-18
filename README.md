@@ -40,27 +40,44 @@ Clash Config Store 是一个面向 Mihomo/Clash 的订阅编排与分发平台�
 cmd/server/main.go         # 程序入口、路由注册
 internal/                  # 后端核心代码（handler/service/model 等）
 frontend/                  # 前端工程
-docker-compose.yml         # 默认部署编排（SQLite）
+docker-compose.example.yml # Compose 示例：默认拉取 Docker Hub 镜像，可改为本地构建
 Dockerfile                 # 多阶段构建镜像
 ```
+
+预构建镜像（Docker Hub，拉取即用）：[`shine09/clash-config-store`](https://hub.docker.com/r/shine09/clash-config-store)
 
 ## 怎么用
 
 ### 1. Docker Compose（推荐）
 
+**方式 A：拉取预构建镜像（推荐，启动快）**
+
+无需本地构建；确保已安装 [Docker Compose](https://docs.docker.com/compose/)。
+
 ```bash
 git clone https://github.com/PrintNow/clash-config-store.git
 cd clash-config-store
 
-cp docker-compose.example.yml docker-compose.yml
-
 cp .env.example .env
 # 编辑 .env，至少修改 JWT_SECRET
 
-# Compose 会将 ./data 挂载为数据目录，首次启动会自动创建 SQLite，无需 touch
+# 首次会拉取 Hub 镜像；./data 挂载为数据目录，首次启动会自动创建 SQLite
 
-docker compose up -d --build
+docker compose -f docker-compose.example.yml up -d
 ```
+
+**方式 B：本地构建镜像（更利于审计与可信构建）**
+
+克隆仓库后，将示例复制为本地专用文件（勿提交仓库），在副本里注释掉 `image`、取消注释 `build` 段，例如：
+
+```bash
+cp docker-compose.example.yml compose.local.yml
+# 编辑 compose.local.yml …
+
+docker compose -f compose.local.yml up -d --build
+```
+
+说明：预构建镜像由发布者维护，生产环境请自行评估信任边界；若更在意供应链安全，优先采用方式 B 在本地或自有 CI 中构建。
 
 默认访问地址：
 
@@ -70,7 +87,7 @@ docker compose up -d --build
 
 说明：
 
-- 默认 `docker-compose.yml` 使用 SQLite（`DB_TYPE=sqlite`）
+- 示例 Compose 默认 SQLite（`DB_TYPE=sqlite`）；`image` 默认为 `shine09/clash-config-store:latest`，可按 [Docker Hub 标签](https://hub.docker.com/r/shine09/clash-config-store/tags) 改为固定版本（如 `v1.1.0-beta.1`）以便复现部署
 - 如需外部 MySQL/MariaDB，请在 `.env` 设置：
     - `DB_TYPE=mysql`
     - `DB_DSN=<mysql dsn>`
