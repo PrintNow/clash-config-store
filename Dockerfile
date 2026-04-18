@@ -27,9 +27,7 @@ FROM alpine:latest AS geoip-downloader
 
 ARG GEOIP_MMDB_URL=https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb
 
-RUN apk --no-cache add ca-certificates curl \
- && mkdir -p /geoip \
- && curl -fL "${GEOIP_MMDB_URL}" -o /geoip/GeoLite2-City.mmdb
+ADD $GEOIP_MMDB_URL /geoip/GeoLite2-City.mmdb
 
 # Stage 4: Final image
 FROM alpine:latest
