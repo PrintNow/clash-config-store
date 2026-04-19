@@ -32,12 +32,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
 import {
   Dialog,
   DialogContent,
@@ -470,22 +467,17 @@ export function SubscriptionDetail() {
               {/* 选择自定义配置 */}
               <div className="space-y-2">
                 <Label>{t('subscriptions.customConfig')}</Label>
-                <Select
+                <NativeSelect
                   value={customConfigId || '__none__'}
-                  onValueChange={(v) => setCustomConfigId(v === '__none__' ? '' : v)}
+                  onChange={(e) => setCustomConfigId(e.target.value === '__none__' ? '' : e.target.value)}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('subscriptions.selectCustomConfig')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{t('subscriptions.noCustomConfig')}</SelectItem>
-                    {customConfigs.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="__none__">{t('subscriptions.noCustomConfig')}</NativeSelectOption>
+                  {customConfigs.map((c) => (
+                    <NativeSelectOption key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
               </div>
 
               {/* 已选配置摘要信息 */}
@@ -539,19 +531,14 @@ export function SubscriptionDetail() {
               {/* 规则插入模式 */}
               <div className="space-y-2">
                 <Label>{t('subscriptions.ruleInsertMode')}</Label>
-                <Select
+                <NativeSelect
                   value={ruleInsertMode}
-                  onValueChange={(v) => setRuleInsertMode(v as typeof ruleInsertMode)}
+                  onChange={(e) => setRuleInsertMode(e.target.value as typeof ruleInsertMode)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="prepend">{t('subscriptions.prepend')}</SelectItem>
-                    <SelectItem value="append">{t('subscriptions.append')}</SelectItem>
-                    <SelectItem value="replace">{t('subscriptions.replace')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="prepend">{t('subscriptions.prepend')}</NativeSelectOption>
+                  <NativeSelectOption value="append">{t('subscriptions.append')}</NativeSelectOption>
+                  <NativeSelectOption value="replace">{t('subscriptions.replace')}</NativeSelectOption>
+                </NativeSelect>
               </div>
 
               {/* 节点前缀 Switch */}
@@ -578,22 +565,17 @@ export function SubscriptionDetail() {
               {/* 选择配置模板 */}
               <div className="space-y-2">
                 <Label>{t('subscriptions.configTemplate')}</Label>
-                <Select
+                <NativeSelect
                   value={configTemplateId || '__none__'}
-                  onValueChange={(v) => setConfigTemplateId(v === '__none__' ? '' : v)}
+                  onChange={(e) => setConfigTemplateId(e.target.value === '__none__' ? '' : e.target.value)}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('subscriptions.selectConfigTemplate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{t('subscriptions.noConfigTemplate')}</SelectItem>
-                    {configTemplates.map((tmpl) => (
-                      <SelectItem key={tmpl.id} value={String(tmpl.id)}>
-                        {tmpl.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="__none__">{t('subscriptions.noConfigTemplate')}</NativeSelectOption>
+                  {configTemplates.map((tmpl) => (
+                    <NativeSelectOption key={tmpl.id} value={String(tmpl.id)}>
+                      {tmpl.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
               </div>
 
               {/* 已选模板摘要 */}
@@ -687,21 +669,19 @@ export function SubscriptionDetail() {
               {/* 限制类型 */}
               <div className="space-y-2">
                 <Label>{t('subscriptions.restrictionType')}</Label>
-                <Select
+                <NativeSelect
                   value={restrictionForm.type}
-                  onValueChange={(v) =>
-                    setRestrictionForm((prev) => ({ ...prev, type: v as RestrictionForm['type'] }))
+                  onChange={(e) =>
+                    setRestrictionForm((prev) => ({
+                      ...prev,
+                      type: e.target.value as RestrictionForm['type'],
+                    }))
                   }
                 >
-                  <SelectTrigger type="button">
-                    <SelectValue />
-                  </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ip">{t('subscriptions.typeIP')}</SelectItem>
-                  <SelectItem value="cidr">{t('subscriptions.typeCIDR')}</SelectItem>
-                  <SelectItem value="country">{t('subscriptions.typeCountry')}</SelectItem>
-                </SelectContent>
-              </Select>
+                  <NativeSelectOption value="ip">{t('subscriptions.typeIP')}</NativeSelectOption>
+                  <NativeSelectOption value="cidr">{t('subscriptions.typeCIDR')}</NativeSelectOption>
+                  <NativeSelectOption value="country">{t('subscriptions.typeCountry')}</NativeSelectOption>
+                </NativeSelect>
             </div>
 
             {/* 限制值 */}
@@ -725,20 +705,18 @@ export function SubscriptionDetail() {
             {/* 限制模式 */}
             <div className="space-y-2">
               <Label>{t('subscriptions.restrictionMode')}</Label>
-              <Select
+              <NativeSelect
                 value={restrictionForm.mode}
-                onValueChange={(v) =>
-                  setRestrictionForm((prev) => ({ ...prev, mode: v as RestrictionForm['mode'] }))
+                onChange={(e) =>
+                  setRestrictionForm((prev) => ({
+                    ...prev,
+                    mode: e.target.value as RestrictionForm['mode'],
+                  }))
                 }
               >
-                <SelectTrigger type="button">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allow">{t('subscriptions.allow')}</SelectItem>
-                  <SelectItem value="deny">{t('subscriptions.deny')}</SelectItem>
-                </SelectContent>
-              </Select>
+                <NativeSelectOption value="allow">{t('subscriptions.allow')}</NativeSelectOption>
+                <NativeSelectOption value="deny">{t('subscriptions.deny')}</NativeSelectOption>
+              </NativeSelect>
             </div>
             </div>
 
