@@ -2610,9 +2610,9 @@ export function CustomConfigDetail() {
   if (isLoading) {
     return (
       <>
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-10 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-9 w-full" />
           <Skeleton className="h-96 w-full" />
         </div>
         <CustomConfigLeaveDialog blocker={blocker} />
@@ -2631,27 +2631,27 @@ export function CustomConfigDetail() {
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ── 顶部操作栏 ── */}
-      <div className="rounded-2xl border bg-background/95 p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
+      <div className="rounded-xl border bg-background/95 p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-2.5">
             <Button
               variant="ghost"
               size="icon"
-              className="-ml-1 mt-1"
+              className="-ml-1 mt-0.5"
               onClick={() => navigate('/custom-configs')}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="h-9 text-lg font-bold"
+                    className="h-8 text-base font-bold"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleSave()
                       if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
@@ -2677,7 +2677,7 @@ export function CustomConfigDetail() {
               ) : (
                 <div className="flex items-center gap-2">
                   <h1
-                    className="text-2xl font-bold cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
+                    className="text-xl font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
                     title={t('customConfigs.clickToEditTitle')}
                     onClick={() => setEditingName(true)}
                   >
@@ -2686,7 +2686,7 @@ export function CustomConfigDetail() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-6 w-6"
                     onClick={() => setEditingName(true)}
                     aria-label={t('customConfigs.clickToEditTitle')}
                   >
@@ -2694,7 +2694,8 @@ export function CustomConfigDetail() {
                   </Button>
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* 固定一行高度，避免切到「规则」tab 时徽章出现导致整块变高、右侧按钮上下漂移 */}
+              <div className="flex min-h-6 flex-wrap items-center gap-1.5">
                 {activeTab === 'rules' && (
                   <Badge
                     variant="outline"
@@ -2729,9 +2730,9 @@ export function CustomConfigDetail() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <Button variant="outline" onClick={handleOpenPreview}>
-              <Eye className="mr-2 h-4 w-4" />
+          <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+            <Button variant="outline" size="sm" onClick={handleOpenPreview}>
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
               {t('customConfigs.previewYaml')}
             </Button>
           </div>
@@ -2740,8 +2741,8 @@ export function CustomConfigDetail() {
 
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
       <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
-        <div className="overflow-x-auto pb-1">
-          <TabsList>
+        <div className="overflow-x-auto pb-0.5">
+          <TabsList className="h-9 gap-0.5 p-0.5">
             <TabsTrigger value="proxies">
               {t('customConfigs.tabProxies')}
               {proxies.length > 0 && (
@@ -2772,7 +2773,7 @@ export function CustomConfigDetail() {
         </div>
 
         {/* ── Tab 1: 代理节点 ── */}
-        <TabsContent value="proxies" className="space-y-4 mt-4">
+        <TabsContent value="proxies" className="space-y-3 mt-3">
           <div className="flex justify-end">
             <Button onClick={openAddProxy}>
               <Plus className="mr-2 h-4 w-4" />
@@ -2845,7 +2846,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 2: 代理组 ── */}
-        <TabsContent value="proxyGroups" className="space-y-4 mt-4">
+        <TabsContent value="proxyGroups" className="space-y-3 mt-3">
           <div className="flex justify-end">
             <Button onClick={openAddGroup}>
               <Plus className="mr-2 h-4 w-4" />
@@ -2898,7 +2899,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 3: 规则 ── */}
-        <TabsContent value="rules" className="space-y-3 mt-3">
+        <TabsContent value="rules" className="space-y-3 mt-2.5">
           <TooltipProvider delayDuration={300}>
           <div className="space-y-3">
             <div className="space-y-3">
@@ -3380,7 +3381,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 4: 规则集引用 ── */}
-        <TabsContent value="ruleSets" className="space-y-4 mt-4">
+        <TabsContent value="ruleSets" className="space-y-3 mt-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">{t('customConfigs.ruleSetHint')}</p>
             {allRuleSets.length > 0 && (
