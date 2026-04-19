@@ -27,12 +27,9 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const emptyForm = {
@@ -282,31 +279,29 @@ export function HostedRuleSets() {
 
               <div className="space-y-1.5">
                 <Label>{t('ruleProviders.providerBehavior')}</Label>
-                <Select
+                <NativeSelect
                   value={form.behavior}
-                  onValueChange={(v) => setForm((f) => ({ ...f, behavior: v as HostedRuleSet['behavior'] }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, behavior: e.target.value as HostedRuleSet['behavior'] }))
+                  }
                 >
-                  <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="domain">{t('ruleProviders.behaviorDomain')}</SelectItem>
-                    <SelectItem value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</SelectItem>
-                    <SelectItem value="classical">{t('ruleProviders.behaviorClassical')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
+                  <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
+                  <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
+                </NativeSelect>
               </div>
 
               <div className="space-y-1.5">
                 <Label>{t('ruleProviders.providerFormat')}</Label>
-                <Select
+                <NativeSelect
                   value={form.format}
-                  onValueChange={(v) => setForm((f) => ({ ...f, format: v as HostedRuleSet['format'] }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, format: e.target.value as HostedRuleSet['format'] }))
+                  }
                 >
-                  <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yaml">{t('ruleProviders.formatYaml')}</SelectItem>
-                    <SelectItem value="text">{t('ruleProviders.formatText')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
+                  <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
+                </NativeSelect>
               </div>
             </div>
 

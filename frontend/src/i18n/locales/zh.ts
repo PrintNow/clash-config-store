@@ -263,6 +263,9 @@ const zh = {
     ruleType: '规则类型',
     rulePayload: '匹配内容',
     ruleTarget: '目标策略',
+    ruleNoResolve: 'no-resolve',
+    ruleNoResolveHint:
+      '仅适用于 GEOIP、IP-CIDR 等目标 IP 类规则。勾选后写入 ,no-resolve，域名命中该规则时将跳过 DNS 解析以检查目标 IP；若更早的规则已触发解析，仍可能匹配到本规则。',
     ruleTargetHint: '从内置策略、代理组或节点中选择',
     rawRulesMode: '原始文本模式',
     structuredRulesMode: '结构化编辑',

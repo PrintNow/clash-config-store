@@ -17,12 +17,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
 import {
   Table,
   TableBody,
@@ -322,22 +319,20 @@ export function Providers() {
 
               <div className="space-y-2">
                 <Label>{t('providers.userAgent')}</Label>
-                <Select
+                <NativeSelect
                   value={formData.user_agent_id || '__none__'}
-                  onValueChange={(v) => setFormData((p) => ({ ...p, user_agent_id: v === '__none__' ? '' : v }))}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setFormData((p) => ({ ...p, user_agent_id: v === '__none__' ? '' : v }))
+                  }}
                 >
-                  <SelectTrigger type="button">
-                    <SelectValue placeholder={t('providers.selectUA')} />
-                  </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{t('providers.noUA')}</SelectItem>
+                  <NativeSelectOption value="__none__">{t('providers.noUA')}</NativeSelectOption>
                   {userAgents.map((ua) => (
-                    <SelectItem key={ua.id} value={String(ua.id)}>
+                    <NativeSelectOption key={ua.id} value={String(ua.id)}>
                       {ua.name}
-                    </SelectItem>
+                    </NativeSelectOption>
                   ))}
-                </SelectContent>
-                </Select>
+                </NativeSelect>
               </div>
 
               <div className="space-y-2">

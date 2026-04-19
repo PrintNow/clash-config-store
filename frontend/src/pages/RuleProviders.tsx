@@ -25,12 +25,9 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -280,13 +277,15 @@ export function RuleProviders() {
 
               <div className="space-y-1.5">
                 <Label>{t('ruleProviders.providerType')}</Label>
-                <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v as 'http' | 'file', url: '' }))}>
-                  <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="http">{t('ruleProviders.typeHttp')}</SelectItem>
-                    <SelectItem value="file">{t('ruleProviders.typeFile')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={form.type}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, type: e.target.value as 'http' | 'file', url: '' }))
+                  }
+                >
+                  <NativeSelectOption value="http">{t('ruleProviders.typeHttp')}</NativeSelectOption>
+                  <NativeSelectOption value="file">{t('ruleProviders.typeFile')}</NativeSelectOption>
+                </NativeSelect>
               </div>
 
               {form.type === 'http' && (
@@ -301,26 +300,33 @@ export function RuleProviders() {
 
               <div className="space-y-1.5">
                 <Label>{t('ruleProviders.providerBehavior')}</Label>
-                <Select value={form.behavior} onValueChange={(v) => setForm((f) => ({ ...f, behavior: v as 'domain' | 'ipcidr' | 'classical' }))}>
-                  <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="domain">{t('ruleProviders.behaviorDomain')}</SelectItem>
-                    <SelectItem value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</SelectItem>
-                    <SelectItem value="classical">{t('ruleProviders.behaviorClassical')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={form.behavior}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      behavior: e.target.value as 'domain' | 'ipcidr' | 'classical',
+                    }))
+                  }
+                >
+                  <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
+                  <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
+                  <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
+                </NativeSelect>
               </div>
 
               <div className="space-y-1.5">
                 <Label>{t('ruleProviders.providerFormat')}</Label>
-                <Select value={form.format} onValueChange={(v) => setForm((f) => ({ ...f, format: v as 'yaml' | 'text' | 'mrs' }))}>
-                  <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yaml">{t('ruleProviders.formatYaml')}</SelectItem>
-                    <SelectItem value="text">{t('ruleProviders.formatText')}</SelectItem>
-                    <SelectItem value="mrs">{t('ruleProviders.formatMrs')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={form.format}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, format: e.target.value as 'yaml' | 'text' | 'mrs' }))
+                  }
+                >
+                  <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
+                  <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
+                  <NativeSelectOption value="mrs">{t('ruleProviders.formatMrs')}</NativeSelectOption>
+                </NativeSelect>
               </div>
 
               <div className="space-y-1.5">

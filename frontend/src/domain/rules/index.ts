@@ -2,6 +2,8 @@ export interface ParsedRule {
   type: string
   payload: string
   target: string
+  /** 末尾附加 `,no-resolve`（仅对部分目标 IP 类规则有意义） */
+  noResolve?: boolean
 }
 
 export interface ParsedRulesTextResult {
@@ -89,29 +91,50 @@ export function normalizeRuleType(type: string): string {
   return type.trim().toUpperCase()
 }
 
+/** Mihomo：域名匹配走目标 IP 类规则时会触发解析；no-resolve 可跳过 DNS 解析 */
+export const NO_RESOLVE_RULE_TYPES = new Set<string>([
+  'GEOIP',
+  'IP-CIDR',
+  'IP-CIDR6',
+  'IP-SUFFIX',
+  'IP-ASN',
+])
+
+export function ruleSupportsNoResolve(ruleType: string): boolean {
+  return NO_RESOLVE_RULE_TYPES.has(normalizeRuleType(ruleType))
+}
+
 export function parseRule(rule: string): ParsedRule {
-  const parts = rule.split(',').map((s) => s.trim())
+  const rawParts = rule.split(',').map((s) => s.trim())
+  let noResolve = false
+  let parts = rawParts
+  if (parts.length > 0 && parts[parts.length - 1]?.toLowerCase() === 'no-resolve') {
+    noResolve = true
+    parts = parts.slice(0, -1)
+  }
   const type = normalizeRuleType(parts[0] || '')
   if (type === 'MATCH') {
-    return { type: 'MATCH', payload: '', target: parts[1] || '' }
+    return { type: 'MATCH', payload: '', target: parts[1] || '', noResolve: false }
   }
   if (COMMA_PAYLOAD_RULE_TYPES.has(type)) {
     return {
       type,
       payload: parts.slice(1, -1).join(','),
       target: parts.at(-1) || '',
+      noResolve,
     }
   }
-  return { type, payload: parts[1] || '', target: parts[2] || '' }
+  return { type, payload: parts[1] || '', target: parts[2] || '', noResolve }
 }
 
 export function ruleToString(r: ParsedRule): string {
   const type = normalizeRuleType(r.type)
+  const nr = r.noResolve ? ',no-resolve' : ''
   if (type === 'MATCH') return `MATCH,${r.target.trim()}`
   if (COMMA_PAYLOAD_RULE_TYPES.has(type)) {
-    return `${type},${r.payload.trim()},${r.target.trim()}`
+    return `${type},${r.payload.trim()},${r.target.trim()}${nr}`
   }
-  return `${type},${r.payload.trim()},${r.target.trim()}`
+  return `${type},${r.payload.trim()},${r.target.trim()}${nr}`
 }
 
 export function parseRulesText(text: string): ParsedRulesTextResult {
@@ -201,6 +224,9 @@ export function buildRuleAnalysis(rule: string, ctx: RuleAnalysisContext): RuleA
   if (type === 'MATCH' && target && !ctx.isLastRule) {
     warnings.push('MATCH 建议保持在规则列表最后')
     quickFixes.push({ type: 'move-match-to-bottom', label: '移到底部' })
+  }
+  if (parsed.noResolve && !ruleSupportsNoResolve(type)) {
+    warnings.push('no-resolve 通常仅用于 GEOIP / IP-CIDR 等目标 IP 类规则，当前类型可能不会按预期生效')
   }
   if (ctx.duplicateCount > 1) {
     warnings.push(`存在 ${ctx.duplicateCount} 条完全相同的规则`)

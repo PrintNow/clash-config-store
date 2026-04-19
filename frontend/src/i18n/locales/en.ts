@@ -256,6 +256,9 @@ const en = {
     ruleType: 'Rule Type',
     rulePayload: 'Payload',
     ruleTarget: 'Target',
+    ruleNoResolve: 'no-resolve',
+    ruleNoResolveHint:
+      'For GEOIP / IP-CIDR-style destination-IP rules. Appends ,no-resolve so Mihomo skips DNS resolution when checking whether a domain hits this rule. If an earlier rule already resolved DNS, this rule may still match.',
     ruleTargetHint: 'Choose from built-ins, proxy groups, or proxy nodes',
     rawRulesMode: 'Raw Text Mode',
     structuredRulesMode: 'Structured Mode',

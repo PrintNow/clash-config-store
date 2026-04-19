@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, useBlocker } from 'react-router-dom'
 import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -51,19 +51,20 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
 import {
   Dialog,
   DialogContent,
@@ -89,6 +90,7 @@ import {
   RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
   RULE_TYPES,
+  ruleSupportsNoResolve,
   ruleToString,
 } from '@/domain/rules'
 
@@ -323,16 +325,43 @@ function getRuleTypeMeta(type: string): RuleTypeMeta {
   }
 }
 
-function getRuleStatusTone(status: RuleAnalysis['status']) {
-  if (status === 'error') return 'text-destructive border-destructive/40 bg-destructive/5'
-  if (status === 'warning') return 'text-amber-700 border-amber-500/40 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/10'
-  return 'text-emerald-700 border-emerald-500/30 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/10'
-}
-
 function getRuleStatusLabel(status: RuleAnalysis['status'], t: (key: string) => string) {
   if (status === 'error') return t('customConfigs.ruleStatusError')
   if (status === 'warning') return t('customConfigs.ruleStatusWarning')
   return t('customConfigs.ruleStatusValid')
+}
+
+/** 规则状态色点（与 Badge 语义色一致） */
+function getRuleStatusDotClass(status: RuleAnalysis['status']) {
+  if (status === 'error') return 'bg-destructive'
+  if (status === 'warning') return 'bg-amber-500 dark:bg-amber-400'
+  return 'bg-emerald-500 dark:bg-emerald-400'
+}
+
+/** 仅颜色圆点 + Tooltip / aria-label，便于紧凑展示且新手可悬停查看含义 */
+function RuleStatusIndicator({
+  status,
+  t,
+}: {
+  status: RuleAnalysis['status']
+  t: (key: string) => string
+}) {
+  const label = getRuleStatusLabel(status, t)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          className={cn(
+            'inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border/60',
+            getRuleStatusDotClass(status)
+          )}
+        />
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function buildRuleSaveChecklist(
@@ -365,16 +394,18 @@ interface SortableRuleRowProps {
   item: RuleListItem
   allRuleSets: RuleSetReferenceItem[]
   targetOptionGroups: RuleTargetOptionGroup[]
-  onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
+  onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string | boolean) => void
   onDelete: (sourceIndex: number) => void
   isActive: boolean
+  /** 点击标题栏切换展开/收起 */
+  onToggle: (sourceIndex: number) => void
   onFocus: (sourceIndex: number) => void
   onQuickFix: (sourceIndex: number, action: RuleQuickFixAction) => void
   t: (key: string) => string
 }
 
 function SortableRuleRow({
-  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onFocus, onQuickFix, t,
+  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onToggle, onFocus, onQuickFix, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -406,24 +437,28 @@ function SortableRuleRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group cursor-pointer rounded-xl border bg-background transition-colors',
+        'group rounded-lg border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
-        isActive &&
-          'border-primary/40 bg-primary/[0.09] shadow-sm dark:border-primary/35 dark:bg-primary/[0.14]',
+        !isActive && 'hover:bg-muted/50',
+        // 展开时仅用边框区分当前行，避免整块底色与 hover 叠加显得脏
+        isActive && 'border-primary/40 shadow-sm dark:border-primary/35',
         analysis.status === 'error' && 'border-destructive/40',
         analysis.status === 'warning' && 'border-amber-500/40',
         isDragging && 'relative z-10 shadow-md'
       )}
-      onClick={() => onFocus(sourceIndex)}
     >
-      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
-        <div className="flex items-center gap-2 self-stretch">
+      <div
+        className="flex cursor-pointer items-center gap-1.5 border-b border-border/60 px-2 py-1.5"
+        onClick={() => onToggle(sourceIndex)}
+      >
+        <div className="flex items-center gap-1 self-stretch">
           <button
             type="button"
             className={cn(
-              'flex h-9 w-8 items-center justify-center rounded text-muted-foreground transition-opacity hover:text-foreground cursor-grab active:cursor-grabbing',
+              'flex h-8 w-7 items-center justify-center rounded text-muted-foreground transition-opacity hover:text-foreground cursor-grab active:cursor-grabbing',
               isActive ? 'opacity-100' : 'opacity-30 group-hover:opacity-100'
             )}
+            onClick={(e) => e.stopPropagation()}
             {...attributes}
             {...listeners}
           >
@@ -431,30 +466,37 @@ function SortableRuleRow({
           </button>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">
-              {lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}
-            </span>
-            <Badge variant="outline">{parsed.type || 'UNKNOWN'}</Badge>
-            <Badge variant="outline" className={cn('border', getRuleStatusTone(analysis.status))}>
-              {getRuleStatusLabel(analysis.status, t)}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1">
+              <RuleStatusIndicator status={analysis.status} t={t} />
+              <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                {lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}
+              </span>
+            </div>
+            <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[11px] font-medium">
+              {parsed.type || 'UNKNOWN'}
             </Badge>
             {!isActive && parsed.payload && (
-              <span className="max-w-[240px] truncate rounded-full bg-muted px-2 py-1 text-xs font-mono text-muted-foreground">
+              <span className="max-w-[240px] truncate rounded-full bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-tight text-muted-foreground">
                 {parsed.payload}
               </span>
             )}
             {!isActive && parsed.target && (
-              <span className="max-w-[220px] truncate rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground/80">
+              <span className="max-w-[220px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium leading-tight text-foreground/80">
                 {parsed.target}
               </span>
+            )}
+            {!isActive && parsed.noResolve && (
+              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">
+                no-resolve
+              </Badge>
             )}
           </div>
           </div>
           <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
           onClick={(e) => {
             e.stopPropagation()
             onDelete(sourceIndex)
@@ -465,90 +507,76 @@ function SortableRuleRow({
           </div>
 
           {isActive && (
-          <div className="space-y-3 px-3 py-3">
-          <div className="grid gap-3 lg:grid-cols-[160px_minmax(220px,1fr)_minmax(220px,1fr)] lg:items-start">
+          <div className="space-y-1.5 px-2 pb-1.5 pt-1">
+          <div className="grid gap-x-2 gap-y-1.5 lg:grid-cols-[200px_minmax(180px,1fr)_minmax(160px,1fr)] lg:items-start">
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleType')}</Label>
-              <Select value={parsed.type} onValueChange={(v) => onUpdate(sourceIndex, 'type', v)}>
-                <SelectTrigger className="h-9 text-sm" onFocus={() => onFocus(sourceIndex)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
-                    <>
-                      <SelectItem value={parsed.type}>{parsed.type}</SelectItem>
-                      <SelectSeparator />
-                    </>
-                  )}
-                  {RULE_TYPES.map((rt) => (
-                    <SelectItem key={rt} value={rt}>{rt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-0.5 min-w-0">
+              <Label className="text-[11px] leading-tight text-muted-foreground">{t('customConfigs.ruleType')}</Label>
+              <NativeSelect
+                value={parsed.type}
+                onChange={(e) => onUpdate(sourceIndex, 'type', e.target.value)}
+                onFocus={() => onFocus(sourceIndex)}
+                className="h-8 pr-5 text-[13px]"
+              >
+                {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
+                  <NativeSelectOption value={parsed.type}>{parsed.type}</NativeSelectOption>
+                )}
+                {RULE_TYPES.map((rt) => (
+                  <NativeSelectOption key={rt} value={rt}>{rt}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">
+            <div className="space-y-0.5">
+              <Label className="text-[11px] leading-tight text-muted-foreground">
                 {parsed.type === 'MATCH'
                   ? t('customConfigs.rulePayloadNotRequired')
                   : meta.payloadLabel || t('customConfigs.rulePayload')}
               </Label>
               {parsed.type === 'MATCH' ? (
-                <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                <div className="flex h-8 items-center rounded-md border border-input bg-muted/40 px-2 text-[13px] text-muted-foreground">
                   {t('customConfigs.matchRuleCompactHint')}
                 </div>
               ) : parsed.type === 'RULE-SET' ? (
-                <Select
+                <NativeSelect
                   value={parsed.payload}
-                  onValueChange={(v) => onUpdate(sourceIndex, 'payload', v)}
+                  onChange={(e) => onUpdate(sourceIndex, 'payload', e.target.value)}
+                  onFocus={() => onFocus(sourceIndex)}
+                  className={cn(
+                    'h-8 text-[13px]',
+                    !ruleProviderExists && parsed.payload && 'border-destructive text-destructive',
+                    ruleProviderExists && analysis.warnings.some((message) => message.includes('尚未')) && 'border-amber-500'
+                  )}
                 >
-                  <SelectTrigger
-                    className={cn(
-                      'h-9 text-sm',
-                      !ruleProviderExists && parsed.payload && 'border-destructive text-destructive',
-                      ruleProviderExists && analysis.warnings.some((message) => message.includes('尚未')) && 'border-amber-500'
-                    )}
-                    onFocus={() => onFocus(sourceIndex)}
-                  >
-                    <SelectValue placeholder={t('customConfigs.selectRuleSets')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currentRuleProvider && (
-                      <>
-                        <SelectItem value={currentRuleProvider}>{currentRuleProvider}</SelectItem>
-                        <SelectSeparator />
-                      </>
-                    )}
-                    {allRuleSets.some((rp) => rp.source === 'preset') && (
-                      <SelectGroup>
-                        <SelectLabel>{t('ruleProviders.loyalsoldierSection')}</SelectLabel>
-                        {allRuleSets.filter((rp) => rp.source === 'preset').map((rp) => (
-                          <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )}
-                    {allRuleSets.some((rp) => rp.source === 'external') && (
-                      <SelectGroup>
-                        <SelectLabel>{t('ruleProviders.customSection')}</SelectLabel>
-                        {allRuleSets.filter((rp) => rp.source === 'external').map((rp) => (
-                          <SelectItem key={rp.id} value={rp.name}>{rp.name}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )}
-                    {allRuleSets.some((rp) => rp.source === 'hosted') && (
-                      <SelectGroup>
-                        <SelectLabel>{t('hostedRuleSets.customSection')}</SelectLabel>
-                        {allRuleSets.filter((rp) => rp.source === 'hosted').map((rp) => (
-                          <SelectItem key={`hosted-${rp.id}`} value={rp.name}>{rp.name}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )}
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="">{t('customConfigs.selectRuleSets')}</NativeSelectOption>
+                  {currentRuleProvider && (
+                    <NativeSelectOption value={currentRuleProvider}>{currentRuleProvider}</NativeSelectOption>
+                  )}
+                  {allRuleSets.some((rp) => rp.source === 'preset') && (
+                    <NativeSelectOptGroup label={t('ruleProviders.loyalsoldierSection')}>
+                      {allRuleSets.filter((rp) => rp.source === 'preset').map((rp) => (
+                        <NativeSelectOption key={rp.id} value={rp.name}>{rp.name}</NativeSelectOption>
+                      ))}
+                    </NativeSelectOptGroup>
+                  )}
+                  {allRuleSets.some((rp) => rp.source === 'external') && (
+                    <NativeSelectOptGroup label={t('ruleProviders.customSection')}>
+                      {allRuleSets.filter((rp) => rp.source === 'external').map((rp) => (
+                        <NativeSelectOption key={rp.id} value={rp.name}>{rp.name}</NativeSelectOption>
+                      ))}
+                    </NativeSelectOptGroup>
+                  )}
+                  {allRuleSets.some((rp) => rp.source === 'hosted') && (
+                    <NativeSelectOptGroup label={t('hostedRuleSets.customSection')}>
+                      {allRuleSets.filter((rp) => rp.source === 'hosted').map((rp) => (
+                        <NativeSelectOption key={`hosted-${rp.id}`} value={rp.name}>{rp.name}</NativeSelectOption>
+                      ))}
+                    </NativeSelectOptGroup>
+                  )}
+                </NativeSelect>
               ) : (
                 <Input
-                  className="h-9 text-sm font-mono"
+                  className="h-8 font-mono text-[13px]"
                   value={parsed.payload}
                   onFocus={() => onFocus(sourceIndex)}
                   onChange={(e) => onUpdate(sourceIndex, 'payload', e.target.value)}
@@ -557,55 +585,62 @@ function SortableRuleRow({
               )}
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{t('customConfigs.ruleTarget')}</Label>
-              <Select value={parsed.target} onValueChange={(v) => onUpdate(sourceIndex, 'target', v)}>
-                <SelectTrigger
-                  className={cn(
-                    'h-9 text-sm',
-                    !targetExists && parsed.target && 'border-destructive text-destructive'
-                  )}
-                  onFocus={() => onFocus(sourceIndex)}
-                >
-                  <SelectValue placeholder="DIRECT / PROXY" />
-                </SelectTrigger>
-                <SelectContent viewportClassName="p-0.5">
-                  {currentTarget && (
-                    <>
-                      <SelectItem
-                        value={currentTarget}
-                        className="py-1 pl-9 pr-1.5"
-                      >
-                        {currentTarget}
-                      </SelectItem>
-                      <SelectSeparator />
-                    </>
-                  )}
-                  {targetOptionGroups.map((group) => (
-                    group.values.length > 0 && (
-                      <SelectGroup key={group.key}>
-                        <SelectLabel className="py-0.5 pl-2 pr-2 text-sm font-semibold text-muted-foreground">
-                          {group.label}
-                        </SelectLabel>
-                        {group.values.map((value) => (
-                          <SelectItem
-                            key={`${group.key}-${value}`}
-                            value={value}
-                            className="py-1 pl-9 pr-1.5"
-                          >
-                            {value}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-0.5">
+              <Label className="text-[11px] leading-tight text-muted-foreground">{t('customConfigs.ruleTarget')}</Label>
+              <NativeSelect
+                value={parsed.target}
+                onChange={(e) => onUpdate(sourceIndex, 'target', e.target.value)}
+                onFocus={() => onFocus(sourceIndex)}
+                aria-invalid={!targetExists && !!parsed.target}
+                className={cn(
+                  'h-8 text-[13px]',
+                  !targetExists && parsed.target && 'border-destructive text-destructive'
+                )}
+              >
+                <NativeSelectOption value="">DIRECT / PROXY</NativeSelectOption>
+                {currentTarget && (
+                  <NativeSelectOption value={currentTarget}>{currentTarget}</NativeSelectOption>
+                )}
+                {targetOptionGroups.map((group) => (
+                  group.values.length > 0 && (
+                    <NativeSelectOptGroup key={group.key} label={group.label}>
+                      {group.values.map((value) => (
+                        <NativeSelectOption key={`${group.key}-${value}`} value={value}>
+                          {value}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelectOptGroup>
+                  )
+                ))}
+              </NativeSelect>
             </div>
           </div>
 
+          {parsed.type !== 'MATCH' && ruleSupportsNoResolve(parsed.type) && (
+            <div className="flex w-full gap-2.5 rounded-md border border-border/60 bg-muted/10 px-2 py-1.5">
+              <Checkbox
+                id={`rule-nr-${sourceIndex}`}
+                className="shrink-0 translate-y-px"
+                checked={!!parsed.noResolve}
+                onCheckedChange={(v) => onUpdate(sourceIndex, 'noResolve', v === true)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <Label
+                  htmlFor={`rule-nr-${sourceIndex}`}
+                  className="block cursor-pointer text-[12px] font-medium leading-tight"
+                >
+                  {t('customConfigs.ruleNoResolve')}
+                </Label>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  {t('customConfigs.ruleNoResolveHint')}
+                </p>
+              </div>
+            </div>
+          )}
+
           {parsed.type === 'MATCH' && analysis.warnings.some((message) => message.includes('MATCH')) && (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            <div className="rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>{t('customConfigs.matchShouldBeLast')}</span>
                 <Button
@@ -625,8 +660,8 @@ function SortableRuleRow({
           )}
 
           {(analysis.errors.length > 0 || analysis.warnings.length > 0 || showHelp) && (
-            <div className="rounded-lg bg-muted/20 px-3 py-2 text-xs">
-              <div className="space-y-1">
+            <div className="rounded-md bg-muted/20 px-2 py-1.5 text-[11px] leading-snug">
+              <div className="space-y-0.5">
                 {analysis.errors.map((message) => (
                   <p key={`e-${message}`} className="text-destructive">{message}</p>
                 ))}
@@ -643,7 +678,7 @@ function SortableRuleRow({
                 )}
               </div>
               {analysis.quickFixes.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {analysis.quickFixes.map((fix) => (
                     <Button
                       key={`${sourceIndex}-${fix.type}`}
@@ -1103,14 +1138,11 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           {commonFields}
           <div className="space-y-1">
             <Label>Cipher</Label>
-            <Select value={form.cipher} onValueChange={(v) => set('cipher', v)}>
-              <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305'].map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <NativeSelect value={form.cipher} onChange={(e) => set('cipher', e.target.value)}>
+              {['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305'].map((c) => (
+                <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>
+              ))}
+            </NativeSelect>
           </div>
           <div className="space-y-1">
             <Label>Password</Label>
@@ -1144,27 +1176,21 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
             </div>
             <div className="space-y-1">
               <Label>Cipher</Label>
-              <Select value={form.cipher} onValueChange={(v) => set('cipher', v)}>
-                <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['auto', 'aes-128-gcm', 'chacha20-poly1305', 'none'].map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect value={form.cipher} onChange={(e) => set('cipher', e.target.value)}>
+                {['auto', 'aes-128-gcm', 'chacha20-poly1305', 'none'].map((c) => (
+                  <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Network</Label>
-              <Select value={form.network} onValueChange={(v) => set('network', v)}>
-                <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['tcp', 'ws', 'http', 'h2', 'grpc'].map((n) => (
-                    <SelectItem key={n} value={n}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect value={form.network} onChange={(e) => set('network', e.target.value)}>
+                {['tcp', 'ws', 'http', 'h2', 'grpc'].map((n) => (
+                  <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
             <div className="flex items-center gap-2 pt-6">
               <Checkbox id="vmess-tls" checked={form.tls} onCheckedChange={(v) => set('tls', !!v)} />
@@ -1186,14 +1212,11 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Network</Label>
-              <Select value={form.network} onValueChange={(v) => set('network', v)}>
-                <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['tcp', 'ws', 'http', 'grpc'].map((n) => (
-                    <SelectItem key={n} value={n}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect value={form.network} onChange={(e) => set('network', e.target.value)}>
+                {['tcp', 'ws', 'http', 'grpc'].map((n) => (
+                  <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
             <div className="flex items-center gap-2 pt-6">
               <Checkbox id="vless-tls" checked={form.tls} onCheckedChange={(v) => set('tls', !!v)} />
@@ -1384,20 +1407,18 @@ function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
           {!yamlMode && (
             <div className="space-y-1">
               <Label>{t('customConfigs.proxyType')}</Label>
-              <Select
+              <NativeSelect
                 value={form.type}
-                onValueChange={(v) => {
-                  set('type', v as ProxyProtocol)
+                onChange={(e) => {
+                  const v = e.target.value as ProxyProtocol
+                  set('type', v)
                   if (v === 'custom') setYamlMode(true)
                 }}
               >
-                <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PROXY_PROTOCOLS.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {PROXY_PROTOCOLS.map((p) => (
+                  <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
           )}
 
@@ -1651,14 +1672,14 @@ function ProxyGroupDialog({
           {/* 类型 */}
           <div className="space-y-1">
             <Label>{t('customConfigs.groupType')}</Label>
-            <Select value={form.type} onValueChange={(v) => set('type', v as ProxyGroup['type'])}>
-              <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {GROUP_TYPES.map((gt) => (
-                  <SelectItem key={gt} value={gt}>{gt}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <NativeSelect
+              value={form.type}
+              onChange={(e) => set('type', e.target.value as ProxyGroup['type'])}
+            >
+              {GROUP_TYPES.map((gt) => (
+                <NativeSelectOption key={gt} value={gt}>{gt}</NativeSelectOption>
+              ))}
+            </NativeSelect>
           </div>
 
           {/* 成员节点：已选可排序 + 未选复选框 */}
@@ -1771,14 +1792,11 @@ function ProxyGroupDialog({
           {form.type === 'load-balance' && (
             <div className="space-y-1">
               <Label>{t('customConfigs.groupStrategy')}</Label>
-              <Select value={form.strategy} onValueChange={(v) => set('strategy', v)}>
-                <SelectTrigger type="button"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['consistent-hashing', 'round-robin', 'sticky-sessions'].map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect value={form.strategy} onChange={(e) => set('strategy', e.target.value)}>
+                {['consistent-hashing', 'round-robin', 'sticky-sessions'].map((s) => (
+                  <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
           )}
           </div>
@@ -1898,6 +1916,10 @@ export function CustomConfigDetail() {
   const [ruleFilter, setRuleFilter] = useState<RuleFilterValue>('all')
   const [showOnlyIssues, setShowOnlyIssues] = useState(false)
   const [activeRuleIndex, setActiveRuleIndex] = useState<number | null>(null)
+  /** 规则列表拖拽结束时间戳（用于抑制误点） */
+  const lastRulesDragEndAtRef = useRef(0)
+  /** 最近一次拖拽的规则 sourceIndex，仅该行在短时间内的标题点击会被忽略 */
+  const lastDraggedRuleSourceIndexRef = useRef<number | null>(null)
   const [selectedDiagnosticLine, setSelectedDiagnosticLine] = useState<number | null>(null)
   const [lastValidationState, setLastValidationState] = useState<'idle' | 'valid' | 'warning' | 'error'>('idle')
 
@@ -2172,7 +2194,22 @@ export function CustomConfigDetail() {
     activationConstraint: { distance: 5 },
   }))
 
+  const toggleRuleRow = useCallback((sourceIndex: number) => {
+    const now = Date.now()
+    if (
+      now - lastRulesDragEndAtRef.current < 400
+      && lastDraggedRuleSourceIndexRef.current === sourceIndex
+    ) {
+      return
+    }
+    setActiveRuleIndex((prev) => (prev === sourceIndex ? null : sourceIndex))
+  }, [])
+
   const handleRulesDragEnd = (event: DragEndEvent) => {
+    lastRulesDragEndAtRef.current = Date.now()
+    const idStr = String(event.active.id)
+    const m = /^rule-(\d+)$/.exec(idStr)
+    lastDraggedRuleSourceIndexRef.current = m ? Number(m[1]) : null
     const { active, over } = event
     if (!over || active.id === over.id) return
     let oldIndex = -1
@@ -2205,16 +2242,27 @@ export function CustomConfigDetail() {
     setActiveRuleIndex(result.inserted ? result.insertIndex : null)
   }
 
-  const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string) => {
+  const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string | boolean) => {
     setRules((prev) => {
       const parsed = parseRule(prev[idx])
       if (field === 'type' && value === 'MATCH' && !canUseMatchType(prev, idx)) {
         toast.error(t('customConfigs.matchRuleUnique'))
         return prev
       }
-      parsed[field] = value
+      if (field === 'noResolve') {
+        parsed.noResolve = Boolean(value)
+      } else {
+        parsed[field] = value as string
+      }
       if (field === 'type' && value === 'MATCH') {
         parsed.payload = ''
+      }
+      if (
+        field === 'type'
+        && typeof value === 'string'
+        && (value === 'MATCH' || !ruleSupportsNoResolve(value))
+      ) {
+        parsed.noResolve = false
       }
       return prev.map((r, i) => (i === idx ? ruleToString(parsed) : r))
     })
@@ -2850,6 +2898,7 @@ export function CustomConfigDetail() {
 
         {/* ── Tab 3: 规则 ── */}
         <TabsContent value="rules" className="space-y-4 mt-4">
+          <TooltipProvider delayDuration={300}>
           <div className="space-y-4">
             <div className="space-y-4">
               <div className="rounded-2xl border bg-background p-4 shadow-sm">
@@ -3076,13 +3125,11 @@ export function CustomConfigDetail() {
                                 )}
                                 onClick={() => setSelectedDiagnosticLine(item.lineNumber ?? null)}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="font-mono text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <RuleStatusIndicator status={item.analysis.status} t={t} />
+                                  <p className="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
                                     L{item.lineNumber}: {item.analysis.rule}
                                   </p>
-                                  <Badge variant="outline" className={cn('border', getRuleStatusTone(item.analysis.status))}>
-                                    {getRuleStatusLabel(item.analysis.status, t)}
-                                  </Badge>
                                 </div>
                                 {item.analysis.errors.map((message) => (
                                   <p key={`e-${message}`} className="mt-2 text-xs text-destructive">
@@ -3115,12 +3162,18 @@ export function CustomConfigDetail() {
                       sensors={sensors}
                       collisionDetection={closestCorners}
                       onDragEnd={handleRulesDragEnd}
+                      onDragCancel={(event) => {
+                        lastRulesDragEndAtRef.current = Date.now()
+                        const idStr = String(event.active.id)
+                        const m = /^rule-(\d+)$/.exec(idStr)
+                        lastDraggedRuleSourceIndexRef.current = m ? Number(m[1]) : null
+                      }}
                     >
                       <SortableContext
                         items={filteredRuleListItems.map((item) => `rule-${item.sourceIndex}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {filteredRuleListItems.map((item) => (
                             <SortableRuleRow
                               key={`rule-${item.sourceIndex}`}
@@ -3131,6 +3184,7 @@ export function CustomConfigDetail() {
                               onUpdate={updateParsedRule}
                               onDelete={deleteRule}
                               isActive={activeRuleItem?.sourceIndex === item.sourceIndex}
+                              onToggle={toggleRuleRow}
                               onFocus={setActiveRuleIndex}
                               onQuickFix={handleRuleQuickFix}
                               t={t}
@@ -3155,13 +3209,11 @@ export function CustomConfigDetail() {
                     </div>
 
                     <div className="mt-4 rounded-xl border bg-muted/10 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h5 className="text-sm font-semibold">{t('customConfigs.currentRuleCard')}</h5>
+                      <div className="flex items-center gap-2">
                         {activeRuleItem ? (
-                          <Badge variant="outline" className={cn('border', getRuleStatusTone(activeRuleItem.analysis.status))}>
-                            {getRuleStatusLabel(activeRuleItem.analysis.status, t)}
-                          </Badge>
+                          <RuleStatusIndicator status={activeRuleItem.analysis.status} t={t} />
                         ) : null}
+                        <h5 className="text-sm font-semibold">{t('customConfigs.currentRuleCard')}</h5>
                       </div>
                       {!activeRuleItem ? (
                         <p className="mt-3 text-sm text-muted-foreground">{t('customConfigs.noActiveRule')}</p>
@@ -3317,6 +3369,7 @@ export function CustomConfigDetail() {
               </div>
             </div>
           </div>
+          </TooltipProvider>
         </TabsContent>
 
         {/* ── Tab 4: 规则集引用 ── */}
