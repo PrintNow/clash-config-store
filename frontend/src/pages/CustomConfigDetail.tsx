@@ -60,6 +60,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   NativeSelect,
   NativeSelectOptGroup,
@@ -2609,9 +2610,9 @@ export function CustomConfigDetail() {
   if (isLoading) {
     return (
       <>
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-10 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-9 w-full" />
           <Skeleton className="h-96 w-full" />
         </div>
         <CustomConfigLeaveDialog blocker={blocker} />
@@ -2630,27 +2631,27 @@ export function CustomConfigDetail() {
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ── 顶部操作栏 ── */}
-      <div className="rounded-2xl border bg-background/95 p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
+      <div className="rounded-xl border bg-background/95 p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-2.5">
             <Button
               variant="ghost"
               size="icon"
-              className="-ml-1 mt-1"
+              className="-ml-1 mt-0.5"
               onClick={() => navigate('/custom-configs')}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="h-9 text-lg font-bold"
+                    className="h-8 text-base font-bold"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleSave()
                       if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
@@ -2676,7 +2677,7 @@ export function CustomConfigDetail() {
               ) : (
                 <div className="flex items-center gap-2">
                   <h1
-                    className="text-2xl font-bold cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
+                    className="text-xl font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
                     title={t('customConfigs.clickToEditTitle')}
                     onClick={() => setEditingName(true)}
                   >
@@ -2685,7 +2686,7 @@ export function CustomConfigDetail() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-6 w-6"
                     onClick={() => setEditingName(true)}
                     aria-label={t('customConfigs.clickToEditTitle')}
                   >
@@ -2693,7 +2694,8 @@ export function CustomConfigDetail() {
                   </Button>
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* 固定一行高度，避免切到「规则」tab 时徽章出现导致整块变高、右侧按钮上下漂移 */}
+              <div className="flex min-h-6 flex-wrap items-center gap-1.5">
                 {activeTab === 'rules' && (
                   <Badge
                     variant="outline"
@@ -2728,9 +2730,9 @@ export function CustomConfigDetail() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <Button variant="outline" onClick={handleOpenPreview}>
-              <Eye className="mr-2 h-4 w-4" />
+          <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+            <Button variant="outline" size="sm" onClick={handleOpenPreview}>
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
               {t('customConfigs.previewYaml')}
             </Button>
           </div>
@@ -2739,8 +2741,8 @@ export function CustomConfigDetail() {
 
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
       <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
-        <div className="overflow-x-auto pb-1">
-          <TabsList>
+        <div className="overflow-x-auto pb-0.5">
+          <TabsList className="h-9 gap-0.5 p-0.5">
             <TabsTrigger value="proxies">
               {t('customConfigs.tabProxies')}
               {proxies.length > 0 && (
@@ -2771,7 +2773,7 @@ export function CustomConfigDetail() {
         </div>
 
         {/* ── Tab 1: 代理节点 ── */}
-        <TabsContent value="proxies" className="space-y-4 mt-4">
+        <TabsContent value="proxies" className="space-y-3 mt-3">
           <div className="flex justify-end">
             <Button onClick={openAddProxy}>
               <Plus className="mr-2 h-4 w-4" />
@@ -2844,7 +2846,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 2: 代理组 ── */}
-        <TabsContent value="proxyGroups" className="space-y-4 mt-4">
+        <TabsContent value="proxyGroups" className="space-y-3 mt-3">
           <div className="flex justify-end">
             <Button onClick={openAddGroup}>
               <Plus className="mr-2 h-4 w-4" />
@@ -2897,26 +2899,28 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 3: 规则 ── */}
-        <TabsContent value="rules" className="space-y-4 mt-4">
+        <TabsContent value="rules" className="space-y-3 mt-2.5">
           <TooltipProvider delayDuration={300}>
-          <div className="space-y-4">
-            <div className="space-y-4">
-              <div className="rounded-2xl border bg-background p-4 shadow-sm">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold">{t('customConfigs.rulesWorkspaceTitle')}</h3>
-                      <p className="text-xs text-muted-foreground">
+          <div className="space-y-3">
+            <div className="space-y-3">
+              <div className="rounded-xl border bg-background p-3 shadow-sm">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold leading-tight">
+                        {t('customConfigs.rulesWorkspaceTitle')}
+                      </h3>
+                      <p className="mt-1 text-xs leading-snug text-muted-foreground">
                         {rulesTextMode
                           ? t('customConfigs.rulesWorkspaceTextHint')
                           : t('customConfigs.rulesWorkspaceStructuredHint')}
                       </p>
                     </div>
-                    <div className="inline-flex rounded-xl border bg-muted/40 px-2 py-2">
+                    <div className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-1">
                       <button
                         type="button"
                         className={cn(
-                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors',
+                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
                           !rulesTextMode
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
@@ -2928,7 +2932,7 @@ export function CustomConfigDetail() {
                       <button
                         type="button"
                         className={cn(
-                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors',
+                          'inline-flex h-8 min-w-[112px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors',
                           rulesTextMode
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
@@ -2942,14 +2946,14 @@ export function CustomConfigDetail() {
                   </div>
 
                   {!rulesTextMode && (
-                    <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+                    <div className="grid gap-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
                       <div className="flex flex-wrap items-center gap-2">
                         <Button onClick={() => addRule('DOMAIN')} size="sm">
                           <Plus className="mr-1 h-3.5 w-3.5" />
                           {t('customConfigs.addRule')}
                         </Button>
-                        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-muted/20 p-1 px-1.5">
-                          <span className="px-1 text-xs font-medium text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/20 px-1.5 py-0.5">
+                          <span className="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">
                             {t('customConfigs.quickInsert')}
                           </span>
                           {(Object.keys(RULE_TEMPLATE_MAP) as Array<keyof typeof RULE_TEMPLATE_MAP>).map((key) => (
@@ -2970,7 +2974,7 @@ export function CustomConfigDetail() {
                       <div className="relative min-w-0">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
-                          className="pl-9"
+                          className="h-9 pl-9"
                           value={ruleSearch}
                           onChange={(e) => setRuleSearch(e.target.value)}
                           placeholder={t('customConfigs.ruleSearchPlaceholder')}
@@ -3002,29 +3006,33 @@ export function CustomConfigDetail() {
                   )}
 
                   {!rulesTextMode && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 px-2 py-2">
-                      <div className="flex items-center gap-2 px-1 py-2">
-                        <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/20 px-2 py-1.5">
+                      <div className="flex items-center gap-1.5 px-0.5">
+                        <ListFilter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">
                           {t('customConfigs.ruleQuickFilter')}
                         </span>
                       </div>
-                      {RULE_FILTER_OPTIONS.map((option) => (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          size="sm"
-                          variant={ruleFilter === option.value ? 'secondary' : 'outline'}
-                          onClick={() => setRuleFilter(option.value)}
-                        >
-                          {t(option.labelKey)}
-                        </Button>
-                      ))}
+                      <ToggleGroup
+                        type="single"
+                        value={ruleFilter}
+                        onValueChange={(v) => setRuleFilter((v || 'all') as RuleFilterValue)}
+                        variant="filter"
+                        size="xs"
+                        aria-label={t('customConfigs.ruleQuickFilter')}
+                      >
+                        {RULE_FILTER_OPTIONS.map((option) => (
+                          <ToggleGroupItem key={option.value} value={option.value}>
+                            {t(option.labelKey)}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
                       {hasActiveFilters && (
                         <Button
                           type="button"
-                          size="sm"
                           variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
                           onClick={() => {
                             setRuleSearch('')
                             setRuleFilter('all')
@@ -3034,7 +3042,7 @@ export function CustomConfigDetail() {
                           {t('customConfigs.clearFilters')}
                         </Button>
                       )}
-                      <span className="ml-auto text-xs text-muted-foreground">
+                      <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
                         {t('customConfigs.visibleRules', { count: visibleRuleCount, total: ruleStats.total })}
                       </span>
                     </div>
@@ -3042,49 +3050,49 @@ export function CustomConfigDetail() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <button
                   type="button"
-                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
                   onClick={() => {
                     setRuleFilter('all')
                     setShowOnlyIssues(false)
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
-                  <p className="mt-2 text-2xl font-semibold">{ruleStats.total}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.total}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
                   onClick={() => setRuleFilter('rule-set')}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
-                  <p className="mt-2 text-2xl font-semibold">{ruleStats.selectedRuleSets}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.selectedRuleSets}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-amber-50"
+                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-amber-50"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
-                  <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-amber-600 dark:text-amber-300">
                     {ruleStats.warnings}
                   </p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border bg-muted/10 p-3 text-left transition-colors hover:bg-destructive/5"
+                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-destructive/5"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
-                  <p className="mt-2 text-2xl font-semibold text-destructive">{ruleStats.errors}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-destructive">{ruleStats.errors}</p>
                 </button>
               </div>
 
@@ -3373,7 +3381,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 4: 规则集引用 ── */}
-        <TabsContent value="ruleSets" className="space-y-4 mt-4">
+        <TabsContent value="ruleSets" className="space-y-3 mt-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">{t('customConfigs.ruleSetHint')}</p>
             {allRuleSets.length > 0 && (

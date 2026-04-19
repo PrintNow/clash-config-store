@@ -2,12 +2,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import { computeProductionBuildLabel } from './scripts/git-build-info'
 
 export default defineConfig(({ mode }) => {
-  // 仅 production build 读 git；dev / vitest 等使用 dev
+  // 生产构建标签由环境变量注入（Docker/CI 无 .git）；本地可用 Makefile 注入
   const VITE_BUILD_LABEL =
-    mode === 'production' ? computeProductionBuildLabel() : 'dev'
+    mode === 'production'
+      ? (process.env.VITE_BUILD_LABEL?.trim() || 'v0.0.0-unknown')
+      : 'dev'
 
   return {
     define: {

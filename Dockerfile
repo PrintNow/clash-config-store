@@ -7,6 +7,10 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
+
+ARG VITE_BUILD_LABEL=v0.0.0-docker
+ENV VITE_BUILD_LABEL=$VITE_BUILD_LABEL
+
 RUN npm run build && zip -r - dist > /tmp/assets.zip
 
 # Stage 2: Build backend

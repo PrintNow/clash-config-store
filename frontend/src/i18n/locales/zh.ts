@@ -121,7 +121,7 @@ const zh = {
     leave: '离开',
     viewDiff: '差异',
     diffTitle: '变更预览',
-    diffDescription: '将已保存与当前草稿渲染为 YAML，并以词级 inline 高亮展示增删（绿色为新增，红色删除线为移除）。',
+    diffDescription: '将已保存与当前草稿渲染为 YAML，并以词级 inline 高亮展示增删（绿色为新增，红色删除线为移除）。打开时自动滚动到首处变更。',
     diffNoChanges: '与已保存内容一致，无差异。',
   },
 

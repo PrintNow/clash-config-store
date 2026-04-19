@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { diffWordsWithSpace } from 'diff'
 import {
@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { configPayloadToYaml } from '@/lib/config-payload-yaml'
 
@@ -29,6 +28,8 @@ export function ConfigPayloadDiffDialog({
   draft,
 }: ConfigPayloadDiffDialogProps) {
   const { t } = useTranslation()
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const firstChangeRef = useRef<HTMLSpanElement | null>(null)
 
   const { leftYaml, rightYaml, parts } = useMemo(() => {
     const left = configPayloadToYaml(saved)
@@ -42,6 +43,46 @@ export function ConfigPayloadDiffDialog({
 
   const hasChange = useMemo(() => leftYaml !== rightYaml, [leftYaml, rightYaml])
 
+  const firstChangeIndex = useMemo(() => {
+    if (!hasChange) return -1
+    return parts.findIndex((p) => p.added || p.removed)
+  }, [hasChange, parts])
+
+  const scrollToFirstChange = useMemo(() => {
+    return () => {
+      const container = scrollContainerRef.current
+      const target = firstChangeRef.current
+      if (!container || !target) return false
+      const cRect = container.getBoundingClientRect()
+      const tRect = target.getBoundingClientRect()
+      const nextTop = container.scrollTop + (tRect.top - cRect.top) - 10
+      container.scrollTo({ top: Math.max(0, nextTop), behavior: 'auto' })
+      return true
+    }
+  }, [])
+
+  // 布局提交后立刻试一次（Radix ScrollArea + scrollIntoView 不可靠，已改为原生 overflow + scrollTop）
+  useLayoutEffect(() => {
+    if (!open || !hasChange || firstChangeIndex < 0) return
+    scrollToFirstChange()
+  }, [open, hasChange, firstChangeIndex, scrollToFirstChange, leftYaml, rightYaml])
+
+  // Dialog zoom 动画约 200ms，再补几次避免首帧矩形不准
+  useEffect(() => {
+    if (!open || !hasChange || firstChangeIndex < 0) return
+    let cancelled = false
+    const delays = [50, 150, 320, 500]
+    const ids = delays.map((ms) =>
+      window.setTimeout(() => {
+        if (!cancelled) scrollToFirstChange()
+      }, ms)
+    )
+    return () => {
+      cancelled = true
+      ids.forEach(clearTimeout)
+    }
+  }, [open, hasChange, firstChangeIndex, scrollToFirstChange, leftYaml, rightYaml])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-4">
@@ -49,7 +90,10 @@ export function ConfigPayloadDiffDialog({
           <DialogTitle>{t('contextSaveBar.diffTitle')}</DialogTitle>
           <DialogDescription>{t('contextSaveBar.diffDescription')}</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-[min(60vh,520px)] w-full rounded-md border bg-muted/30">
+        <div
+          ref={scrollContainerRef}
+          className="h-[min(60vh,520px)] w-full overflow-y-auto overflow-x-auto rounded-md border bg-muted/30"
+        >
           <div className="p-3">
             {!hasChange ? (
               <p className="text-sm text-muted-foreground">{t('contextSaveBar.diffNoChanges')}</p>
@@ -61,7 +105,9 @@ export function ConfigPayloadDiffDialog({
                 {parts.map((part, i) => (
                   <span
                     key={i}
+                    ref={i === firstChangeIndex ? firstChangeRef : undefined}
                     className={cn(
+                      i === firstChangeIndex && 'scroll-mt-3',
                       part.added &&
                         cn(
                           'rounded-sm bg-emerald-500/40 px-0.5 text-emerald-950',
@@ -83,7 +129,7 @@ export function ConfigPayloadDiffDialog({
               </pre>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )
