@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, useBlocker } from 'react-router-dom'
 import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -51,6 +51,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -323,16 +329,43 @@ function getRuleTypeMeta(type: string): RuleTypeMeta {
   }
 }
 
-function getRuleStatusTone(status: RuleAnalysis['status']) {
-  if (status === 'error') return 'text-destructive border-destructive/40 bg-destructive/5'
-  if (status === 'warning') return 'text-amber-700 border-amber-500/40 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/10'
-  return 'text-emerald-700 border-emerald-500/30 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/10'
-}
-
 function getRuleStatusLabel(status: RuleAnalysis['status'], t: (key: string) => string) {
   if (status === 'error') return t('customConfigs.ruleStatusError')
   if (status === 'warning') return t('customConfigs.ruleStatusWarning')
   return t('customConfigs.ruleStatusValid')
+}
+
+/** 规则状态色点（与 Badge 语义色一致） */
+function getRuleStatusDotClass(status: RuleAnalysis['status']) {
+  if (status === 'error') return 'bg-destructive'
+  if (status === 'warning') return 'bg-amber-500 dark:bg-amber-400'
+  return 'bg-emerald-500 dark:bg-emerald-400'
+}
+
+/** 仅颜色圆点 + Tooltip / aria-label，便于紧凑展示且新手可悬停查看含义 */
+function RuleStatusIndicator({
+  status,
+  t,
+}: {
+  status: RuleAnalysis['status']
+  t: (key: string) => string
+}) {
+  const label = getRuleStatusLabel(status, t)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          className={cn(
+            'inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border/60',
+            getRuleStatusDotClass(status)
+          )}
+        />
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function buildRuleSaveChecklist(
@@ -368,13 +401,15 @@ interface SortableRuleRowProps {
   onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
   onDelete: (sourceIndex: number) => void
   isActive: boolean
+  /** 点击标题栏切换展开/收起 */
+  onToggle: (sourceIndex: number) => void
   onFocus: (sourceIndex: number) => void
   onQuickFix: (sourceIndex: number, action: RuleQuickFixAction) => void
   t: (key: string) => string
 }
 
 function SortableRuleRow({
-  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onFocus, onQuickFix, t,
+  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onToggle, onFocus, onQuickFix, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -406,7 +441,7 @@ function SortableRuleRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group cursor-pointer rounded-xl border bg-background transition-colors',
+        'group rounded-xl border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
         isActive &&
           'border-primary/40 bg-primary/[0.09] shadow-sm dark:border-primary/35 dark:bg-primary/[0.14]',
@@ -414,9 +449,11 @@ function SortableRuleRow({
         analysis.status === 'warning' && 'border-amber-500/40',
         isDragging && 'relative z-10 shadow-md'
       )}
-      onClick={() => onFocus(sourceIndex)}
     >
-      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
+      <div
+        className="flex cursor-pointer items-center gap-2 border-b border-border/60 px-3 py-3"
+        onClick={() => onToggle(sourceIndex)}
+      >
         <div className="flex items-center gap-2 self-stretch">
           <button
             type="button"
@@ -424,6 +461,7 @@ function SortableRuleRow({
               'flex h-9 w-8 items-center justify-center rounded text-muted-foreground transition-opacity hover:text-foreground cursor-grab active:cursor-grabbing',
               isActive ? 'opacity-100' : 'opacity-30 group-hover:opacity-100'
             )}
+            onClick={(e) => e.stopPropagation()}
             {...attributes}
             {...listeners}
           >
@@ -432,13 +470,13 @@ function SortableRuleRow({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">
-              {lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <RuleStatusIndicator status={analysis.status} t={t} />
+              <span className="text-xs font-medium text-muted-foreground">
+                {lineNumber ? `L${lineNumber}` : `#${sourceIndex + 1}`}
+              </span>
+            </div>
             <Badge variant="outline">{parsed.type || 'UNKNOWN'}</Badge>
-            <Badge variant="outline" className={cn('border', getRuleStatusTone(analysis.status))}>
-              {getRuleStatusLabel(analysis.status, t)}
-            </Badge>
             {!isActive && parsed.payload && (
               <span className="max-w-[240px] truncate rounded-full bg-muted px-2 py-1 text-xs font-mono text-muted-foreground">
                 {parsed.payload}
@@ -1898,6 +1936,10 @@ export function CustomConfigDetail() {
   const [ruleFilter, setRuleFilter] = useState<RuleFilterValue>('all')
   const [showOnlyIssues, setShowOnlyIssues] = useState(false)
   const [activeRuleIndex, setActiveRuleIndex] = useState<number | null>(null)
+  /** 规则列表拖拽结束时间戳（用于抑制误点） */
+  const lastRulesDragEndAtRef = useRef(0)
+  /** 最近一次拖拽的规则 sourceIndex，仅该行在短时间内的标题点击会被忽略 */
+  const lastDraggedRuleSourceIndexRef = useRef<number | null>(null)
   const [selectedDiagnosticLine, setSelectedDiagnosticLine] = useState<number | null>(null)
   const [lastValidationState, setLastValidationState] = useState<'idle' | 'valid' | 'warning' | 'error'>('idle')
 
@@ -2172,7 +2214,22 @@ export function CustomConfigDetail() {
     activationConstraint: { distance: 5 },
   }))
 
+  const toggleRuleRow = useCallback((sourceIndex: number) => {
+    const now = Date.now()
+    if (
+      now - lastRulesDragEndAtRef.current < 400
+      && lastDraggedRuleSourceIndexRef.current === sourceIndex
+    ) {
+      return
+    }
+    setActiveRuleIndex((prev) => (prev === sourceIndex ? null : sourceIndex))
+  }, [])
+
   const handleRulesDragEnd = (event: DragEndEvent) => {
+    lastRulesDragEndAtRef.current = Date.now()
+    const idStr = String(event.active.id)
+    const m = /^rule-(\d+)$/.exec(idStr)
+    lastDraggedRuleSourceIndexRef.current = m ? Number(m[1]) : null
     const { active, over } = event
     if (!over || active.id === over.id) return
     let oldIndex = -1
@@ -2850,6 +2907,7 @@ export function CustomConfigDetail() {
 
         {/* ── Tab 3: 规则 ── */}
         <TabsContent value="rules" className="space-y-4 mt-4">
+          <TooltipProvider delayDuration={300}>
           <div className="space-y-4">
             <div className="space-y-4">
               <div className="rounded-2xl border bg-background p-4 shadow-sm">
@@ -3076,13 +3134,11 @@ export function CustomConfigDetail() {
                                 )}
                                 onClick={() => setSelectedDiagnosticLine(item.lineNumber ?? null)}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="font-mono text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <RuleStatusIndicator status={item.analysis.status} t={t} />
+                                  <p className="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
                                     L{item.lineNumber}: {item.analysis.rule}
                                   </p>
-                                  <Badge variant="outline" className={cn('border', getRuleStatusTone(item.analysis.status))}>
-                                    {getRuleStatusLabel(item.analysis.status, t)}
-                                  </Badge>
                                 </div>
                                 {item.analysis.errors.map((message) => (
                                   <p key={`e-${message}`} className="mt-2 text-xs text-destructive">
@@ -3115,6 +3171,12 @@ export function CustomConfigDetail() {
                       sensors={sensors}
                       collisionDetection={closestCorners}
                       onDragEnd={handleRulesDragEnd}
+                      onDragCancel={(event) => {
+                        lastRulesDragEndAtRef.current = Date.now()
+                        const idStr = String(event.active.id)
+                        const m = /^rule-(\d+)$/.exec(idStr)
+                        lastDraggedRuleSourceIndexRef.current = m ? Number(m[1]) : null
+                      }}
                     >
                       <SortableContext
                         items={filteredRuleListItems.map((item) => `rule-${item.sourceIndex}`)}
@@ -3131,6 +3193,7 @@ export function CustomConfigDetail() {
                               onUpdate={updateParsedRule}
                               onDelete={deleteRule}
                               isActive={activeRuleItem?.sourceIndex === item.sourceIndex}
+                              onToggle={toggleRuleRow}
                               onFocus={setActiveRuleIndex}
                               onQuickFix={handleRuleQuickFix}
                               t={t}
@@ -3155,13 +3218,11 @@ export function CustomConfigDetail() {
                     </div>
 
                     <div className="mt-4 rounded-xl border bg-muted/10 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h5 className="text-sm font-semibold">{t('customConfigs.currentRuleCard')}</h5>
+                      <div className="flex items-center gap-2">
                         {activeRuleItem ? (
-                          <Badge variant="outline" className={cn('border', getRuleStatusTone(activeRuleItem.analysis.status))}>
-                            {getRuleStatusLabel(activeRuleItem.analysis.status, t)}
-                          </Badge>
+                          <RuleStatusIndicator status={activeRuleItem.analysis.status} t={t} />
                         ) : null}
+                        <h5 className="text-sm font-semibold">{t('customConfigs.currentRuleCard')}</h5>
                       </div>
                       {!activeRuleItem ? (
                         <p className="mt-3 text-sm text-muted-foreground">{t('customConfigs.noActiveRule')}</p>
@@ -3317,6 +3378,7 @@ export function CustomConfigDetail() {
               </div>
             </div>
           </div>
+          </TooltipProvider>
         </TabsContent>
 
         {/* ── Tab 4: 规则集引用 ── */}
