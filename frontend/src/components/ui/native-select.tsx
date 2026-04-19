@@ -18,8 +18,9 @@ const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'aria-[invalid=true]:border-destructive',
-        size === 'default' && 'h-10 px-3 py-2 text-sm',
-        size === 'sm' && 'h-8 px-2 py-1 text-xs',
+        // 仅保留适度左右留白；py 用 0 + leading 与高度对齐，避免挤占可视区域导致文字显示不全
+        size === 'default' && 'h-10 py-0 pl-2.5 pr-8 text-sm leading-10',
+        size === 'sm' && 'h-8 py-0 pl-2 pr-7 text-xs leading-8',
         className
       )}
       {...props}

@@ -90,6 +90,7 @@ import {
   RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
   RULE_TYPES,
+  ruleSupportsNoResolve,
   ruleToString,
 } from '@/domain/rules'
 
@@ -393,7 +394,7 @@ interface SortableRuleRowProps {
   item: RuleListItem
   allRuleSets: RuleSetReferenceItem[]
   targetOptionGroups: RuleTargetOptionGroup[]
-  onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string) => void
+  onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string | boolean) => void
   onDelete: (sourceIndex: number) => void
   isActive: boolean
   /** 点击标题栏切换展开/收起 */
@@ -439,8 +440,8 @@ function SortableRuleRow({
         'group rounded-lg border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
         !isActive && 'hover:bg-muted/50',
-        isActive &&
-          'border-primary/40 bg-primary/[0.09] shadow-sm hover:bg-primary/[0.12] dark:border-primary/35 dark:bg-primary/[0.14] dark:hover:bg-primary/[0.18]',
+        // 展开时仅用边框区分当前行，避免整块底色与 hover 叠加显得脏
+        isActive && 'border-primary/40 shadow-sm dark:border-primary/35',
         analysis.status === 'error' && 'border-destructive/40',
         analysis.status === 'warning' && 'border-amber-500/40',
         isDragging && 'relative z-10 shadow-md'
@@ -485,6 +486,11 @@ function SortableRuleRow({
                 {parsed.target}
               </span>
             )}
+            {!isActive && parsed.noResolve && (
+              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">
+                no-resolve
+              </Badge>
+            )}
           </div>
           </div>
           <Button
@@ -502,15 +508,15 @@ function SortableRuleRow({
 
           {isActive && (
           <div className="space-y-1.5 px-2 pb-1.5 pt-1">
-          <div className="grid gap-x-2 gap-y-1.5 lg:grid-cols-[140px_minmax(180px,1fr)_minmax(160px,1fr)] lg:items-start">
+          <div className="grid gap-x-2 gap-y-1.5 lg:grid-cols-[200px_minmax(180px,1fr)_minmax(160px,1fr)] lg:items-start">
 
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 min-w-0">
               <Label className="text-[11px] leading-tight text-muted-foreground">{t('customConfigs.ruleType')}</Label>
               <NativeSelect
                 value={parsed.type}
                 onChange={(e) => onUpdate(sourceIndex, 'type', e.target.value)}
                 onFocus={() => onFocus(sourceIndex)}
-                className="h-8 text-[13px]"
+                className="h-8 pr-5 text-[13px]"
               >
                 {!RULE_TYPES.includes(parsed.type as (typeof RULE_TYPES)[number]) && parsed.type && (
                   <NativeSelectOption value={parsed.type}>{parsed.type}</NativeSelectOption>
@@ -609,6 +615,29 @@ function SortableRuleRow({
               </NativeSelect>
             </div>
           </div>
+
+          {parsed.type !== 'MATCH' && ruleSupportsNoResolve(parsed.type) && (
+            <div className="flex w-full gap-2.5 rounded-md border border-border/60 bg-muted/10 px-2 py-1.5">
+              <Checkbox
+                id={`rule-nr-${sourceIndex}`}
+                className="shrink-0 translate-y-px"
+                checked={!!parsed.noResolve}
+                onCheckedChange={(v) => onUpdate(sourceIndex, 'noResolve', v === true)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <Label
+                  htmlFor={`rule-nr-${sourceIndex}`}
+                  className="block cursor-pointer text-[12px] font-medium leading-tight"
+                >
+                  {t('customConfigs.ruleNoResolve')}
+                </Label>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  {t('customConfigs.ruleNoResolveHint')}
+                </p>
+              </div>
+            </div>
+          )}
 
           {parsed.type === 'MATCH' && analysis.warnings.some((message) => message.includes('MATCH')) && (
             <div className="rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
@@ -2213,16 +2242,27 @@ export function CustomConfigDetail() {
     setActiveRuleIndex(result.inserted ? result.insertIndex : null)
   }
 
-  const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string) => {
+  const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string | boolean) => {
     setRules((prev) => {
       const parsed = parseRule(prev[idx])
       if (field === 'type' && value === 'MATCH' && !canUseMatchType(prev, idx)) {
         toast.error(t('customConfigs.matchRuleUnique'))
         return prev
       }
-      parsed[field] = value
+      if (field === 'noResolve') {
+        parsed.noResolve = Boolean(value)
+      } else {
+        parsed[field] = value as string
+      }
       if (field === 'type' && value === 'MATCH') {
         parsed.payload = ''
+      }
+      if (
+        field === 'type'
+        && typeof value === 'string'
+        && (value === 'MATCH' || !ruleSupportsNoResolve(value))
+      ) {
+        parsed.noResolve = false
       }
       return prev.map((r, i) => (i === idx ? ruleToString(parsed) : r))
     })

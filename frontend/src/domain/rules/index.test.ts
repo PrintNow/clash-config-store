@@ -14,12 +14,22 @@ describe('rules domain', () => {
   describe('parseRule / ruleToString', () => {
     it('解析并序列化普通规则', () => {
       const parsed = parseRule('DOMAIN, github.com , DIRECT')
-      expect(parsed).toEqual({ type: 'DOMAIN', payload: 'github.com', target: 'DIRECT' })
+      expect(parsed).toEqual({
+        type: 'DOMAIN',
+        payload: 'github.com',
+        target: 'DIRECT',
+        noResolve: false,
+      })
       expect(ruleToString(parsed)).toBe('DOMAIN,github.com,DIRECT')
     })
 
     it('解析 MATCH 规则', () => {
-      expect(parseRule('MATCH,PROXY')).toEqual({ type: 'MATCH', payload: '', target: 'PROXY' })
+      expect(parseRule('MATCH,PROXY')).toEqual({
+        type: 'MATCH',
+        payload: '',
+        target: 'PROXY',
+        noResolve: false,
+      })
       expect(ruleToString({ type: 'match', payload: 'ignored', target: 'PROXY' })).toBe(
         'MATCH,PROXY'
       )
@@ -27,8 +37,44 @@ describe('rules domain', () => {
 
     it('支持 payload 含逗号的规则', () => {
       const parsed = parseRule('DOMAIN-REGEX,^foo,bar$,PROXY')
-      expect(parsed).toEqual({ type: 'DOMAIN-REGEX', payload: '^foo,bar$', target: 'PROXY' })
+      expect(parsed).toEqual({
+        type: 'DOMAIN-REGEX',
+        payload: '^foo,bar$',
+        target: 'PROXY',
+        noResolve: false,
+      })
       expect(ruleToString(parsed)).toBe('DOMAIN-REGEX,^foo,bar$,PROXY')
+    })
+
+    it('解析并序列化带 no-resolve 的目标 IP 类规则', () => {
+      const parsed = parseRule('IP-CIDR,10.0.0.0/8,DIRECT,no-resolve')
+      expect(parsed).toEqual({
+        type: 'IP-CIDR',
+        payload: '10.0.0.0/8',
+        target: 'DIRECT',
+        noResolve: true,
+      })
+      expect(ruleToString(parsed)).toBe('IP-CIDR,10.0.0.0/8,DIRECT,no-resolve')
+    })
+
+    it('MATCH 忽略末尾 no-resolve 标记', () => {
+      expect(parseRule('MATCH,PROXY,no-resolve')).toEqual({
+        type: 'MATCH',
+        payload: '',
+        target: 'PROXY',
+        noResolve: false,
+      })
+    })
+
+    it('payload 含逗号的规则可带 no-resolve', () => {
+      const parsed = parseRule('DOMAIN-REGEX,^a,b$,PROXY,no-resolve')
+      expect(parsed).toEqual({
+        type: 'DOMAIN-REGEX',
+        payload: '^a,b$',
+        target: 'PROXY',
+        noResolve: true,
+      })
+      expect(ruleToString(parsed)).toBe('DOMAIN-REGEX,^a,b$,PROXY,no-resolve')
     })
   })
 
@@ -131,6 +177,12 @@ describe('rules domain', () => {
       const result = buildRuleAnalysis('DOMAIN,a.com,OTHER', baseContext)
       expect(result.status).toBe('warning')
       expect(result.warnings).toContain('目标策略 "OTHER" 当前不存在于内置策略、代理组或节点中')
+    })
+
+    it('非目标 IP 类规则带 no-resolve 时给出警告', () => {
+      const result = buildRuleAnalysis('DOMAIN,a.com,DIRECT,no-resolve', baseContext)
+      expect(result.status).toBe('warning')
+      expect(result.warnings.some((w) => w.includes('no-resolve'))).toBe(true)
     })
   })
 })
