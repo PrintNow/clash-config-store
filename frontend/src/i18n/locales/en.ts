@@ -118,7 +118,7 @@ const en = {
     leave: 'Leave',
     viewDiff: 'Diff',
     diffTitle: 'Change preview',
-    diffDescription: 'Renders both snapshots as YAML, then shows an inline word-level diff (green = added, red strikethrough = removed).',
+    diffDescription: 'Renders both snapshots as YAML, then shows an inline word-level diff (green = added, red strikethrough = removed). Opens scrolled to the first change.',
     diffNoChanges: 'No differences from the last saved version.',
   },
 
