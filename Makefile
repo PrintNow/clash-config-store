@@ -2,6 +2,8 @@
 
 FRONTEND_DIR := frontend
 BINARY       := bin/clash-config-store
+# 前端生产构建版本展示；可被覆盖。Docker 构建请用 --build-arg VITE_BUILD_LABEL=...
+VITE_BUILD_LABEL ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-local")
 LDFLAGS      := -s -w
 GEOIP_DIR    := .docker/geoip
 GEOIP_FILE   := $(GEOIP_DIR)/GeoLite2-City.mmdb
@@ -19,7 +21,7 @@ help:
 
 build:
 	@mkdir -p bin
-	@cd $(FRONTEND_DIR) && npm run build
+	@cd $(FRONTEND_DIR) && VITE_BUILD_LABEL="$(VITE_BUILD_LABEL)" npm run build
 	@cd $(FRONTEND_DIR) && zip -r - dist > ../static/assets.zip
 	@go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/server
 	@ls -lh $(BINARY)
@@ -35,7 +37,7 @@ geoip:
 	@ls -lh "$(GEOIP_FILE)"
 
 docker-build: geoip
-	@docker build --build-arg GEOIP_MMDB_URL="$(GEOIP_URL)" -t clash-config-store:latest .
+	@docker build --build-arg GEOIP_MMDB_URL="$(GEOIP_URL)" --build-arg VITE_BUILD_LABEL="$(VITE_BUILD_LABEL)" -t clash-config-store:latest .
 
 test:
 	go test ./...

@@ -13,9 +13,16 @@ fi
 
 IMAGE_REF="${IMAGE_REPO}:${IMAGE_TAG}"
 
+# 与 Makefile 一致：优先用已导出的 VITE_BUILD_LABEL（CI 可设），否则用 git describe
+if [[ -z "${VITE_BUILD_LABEL:-}" ]]; then
+  VITE_BUILD_LABEL="$(git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-local")"
+fi
+
+echo "VITE_BUILD_LABEL=${VITE_BUILD_LABEL}"
 echo "Building multi-arch image (amd64, arm64)..."
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --output type=image,push=true \
+  --build-arg "VITE_BUILD_LABEL=${VITE_BUILD_LABEL}" \
   -t "${IMAGE_REF}" \
   .
