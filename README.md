@@ -27,6 +27,11 @@ Clash Config Store 是一个面向 Mihomo/Clash 的订阅编排与分发平台�
 | ![自定义配置-代理组](./screenshots/custom-config--proxy-group.png) | ![自定义配置-规则](./screenshots/custom-config--rules.png) |
 
 
+| 订阅管理 - 二维码分享                                                        | 规则集库                                                  |
+|---------------------------------------------------------------------|-------------------------------------------------------|
+| ![subscriptions--qrcode.png](screenshots/subscriptions--qrcode.png) | ![rule-providers.png](screenshots/rule-providers.png) |
+
+
 ## 技术栈与结构
 
 - 后端：Go 1.25、Gin、GORM、JWT
