@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Copy, Plus, Settings, Trash2 } from 'lucide-react'
+import { CalendarClock, Check, Copy, Plus, QrCode, Server, Settings, Trash2 } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
 import type { Subscription } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -26,15 +26,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-
-/** 与 SubscriptionDetail 一致：开发环境用同源 /sub/{token}，生产优先用后端 subscription_url */
-function subscriptionPublicUrl(sub: Pick<Subscription, 'token' | 'subscription_url'>): string {
-  if (import.meta.env.DEV) {
-    return `${window.location.origin}/sub/${sub.token}`
-  }
-
-  return sub.subscription_url ?? `${window.location.origin}/sub/${sub.token}`
-}
+import { SubscriptionShareDialog } from '@/components/subscriptions/SubscriptionShareDialog'
+import { subscriptionPublicUrl } from '@/lib/subscription-url'
 
 export function Subscriptions() {
   const { t } = useTranslation()
@@ -44,6 +37,8 @@ export function Subscriptions() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingSubscription, setDeletingSubscription] = useState<Subscription | null>(null)
+  const [shareSubscription, setShareSubscription] = useState<Subscription | null>(null)
+  const [copiedId, setCopiedId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
   const [nameError, setNameError] = useState('')
 
@@ -91,9 +86,17 @@ export function Subscriptions() {
     setDeleteDialogOpen(true)
   }
 
+  const markCopied = (id: number) => {
+    setCopiedId(id)
+    setTimeout(() => {
+      setCopiedId((current) => (current === id ? null : current))
+    }, 2000)
+  }
+
   const copySubscriptionLink = async (sub: Subscription) => {
     try {
       await navigator.clipboard.writeText(subscriptionPublicUrl(sub))
+      markCopied(sub.id)
       toast.success(t('subscriptions.copySuccess'))
     } catch {
       toast.error(t('common.error'))
@@ -102,6 +105,30 @@ export function Subscriptions() {
 
   // Token 显示：仅显示前 8 位
   const maskToken = (token: string) => `${token.slice(0, 8)}...`
+
+  const formatDate = (value?: string) => {
+    if (!value) return '-'
+    return new Date(value).toLocaleDateString()
+  }
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return '-'
+    return new Date(value).toLocaleString()
+  }
+
+  const getExpiryBadge = (sub: Subscription) => {
+    if (!sub.token_expired_at) {
+      return <Badge variant="outline">{t('subscriptions.tokenNeverExpires')}</Badge>
+    }
+
+    const expired = new Date(sub.token_expired_at) < new Date()
+
+    return (
+      <Badge variant={expired ? 'destructive' : 'secondary'}>
+        {expired ? t('subscriptions.tokenExpired') : t('subscriptions.tokenExpiresSoon')}
+      </Badge>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -120,94 +147,142 @@ export function Subscriptions() {
           <TableHeader>
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
-              <TableHead>{t('subscriptions.token')}</TableHead>
-              <TableHead className="text-right tabular-nums">{t('subscriptions.accessLogCount')}</TableHead>
+              <TableHead className="w-[180px]">{t('subscriptions.accessOverview')}</TableHead>
               <TableHead>{t('subscriptions.tokenExpiredAt')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[140px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[160px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 5 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : subscriptions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
             ) : (
-              subscriptions.map((sub) => (
-                <TableRow key={sub.id}>
-                  <TableCell className="font-medium">{sub.name}</TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                      {maskToken(sub.token)}
-                    </code>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <button
-                      type="button"
-                      className="text-sm text-primary underline-offset-4 hover:underline"
-                      onClick={() => navigate(`/subscriptions/${sub.id}/logs`)}
-                      title={t('subscriptions.viewLogs')}
-                    >
-                      {sub.access_log_count ?? 0}
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    {sub.token_expired_at ? (
-                      <Badge
-                        variant={new Date(sub.token_expired_at) < new Date() ? 'destructive' : 'secondary'}
-                      >
-                        {new Date(sub.token_expired_at).toLocaleDateString()}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">{t('subscriptions.tokenNeverExpires')}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(sub.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => copySubscriptionLink(sub)}
-                        title={t('subscriptions.copySubscriptionUrl')}
-                        aria-label={t('subscriptions.copySubscriptionUrl')}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate(`/subscriptions/${sub.id}`)}
-                        title={t('common.detail')}
-                        aria-label={t('common.detail')}
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openDeleteDialog(sub)}
-                        className="text-destructive hover:text-destructive"
-                        aria-label={t('common.delete')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              subscriptions.map((sub) => {
+                const copied = copiedId === sub.id
+
+                return (
+                  <TableRow key={sub.id}>
+                    <TableCell className="align-top">
+                      <div className="space-y-2 py-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="font-medium text-left underline-offset-4 hover:text-primary hover:underline"
+                            onClick={() => navigate(`/subscriptions/${sub.id}`)}
+                          >
+                            {sub.name}
+                          </button>
+                          {copied && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Check className="h-3 w-3" />
+                              {t('common.copied')}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <code className="rounded bg-muted px-1.5 py-0.5">
+                            {t('subscriptions.token')}: {maskToken(sub.token)}
+                          </code>
+                          <span className="inline-flex items-center gap-1">
+                            <Server className="h-3.5 w-3.5" />
+                            {t('subscriptions.activeProviderCount', {
+                              count: sub.enabled_provider_ids.length,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="space-y-1 py-1">
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => navigate(`/subscriptions/${sub.id}/logs`)}
+                          title={t('subscriptions.viewLogs')}
+                        >
+                          <p className="text-2xl font-semibold leading-none tabular-nums">
+                            {sub.access_log_count ?? 0}
+                          </p>
+                          <p className="mt-1 text-xs text-primary underline-offset-4 hover:underline">
+                            {t('subscriptions.viewLogs')}
+                          </p>
+                        </button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="space-y-2 py-1">
+                        {getExpiryBadge(sub)}
+                        <p className="text-xs text-muted-foreground">
+                          {sub.token_expired_at
+                            ? formatDateTime(sub.token_expired_at)
+                            : t('subscriptions.noExpiryDescription')}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top text-sm text-muted-foreground">
+                      <div className="space-y-1 py-1">
+                        <div className="inline-flex items-center gap-1">
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          <span>{formatDate(sub.created_at)}</span>
+                        </div>
+                        <p className="text-xs">{formatDateTime(sub.created_at)}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex items-center gap-1 py-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setShareSubscription(sub)}
+                          title={t('subscriptions.shareSubscriptionUrl')}
+                          aria-label={t('subscriptions.shareSubscriptionUrl')}
+                        >
+                          <QrCode className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => copySubscriptionLink(sub)}
+                          title={t('subscriptions.copySubscriptionUrl')}
+                          aria-label={t('subscriptions.copySubscriptionUrl')}
+                        >
+                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => navigate(`/subscriptions/${sub.id}`)}
+                          title={t('common.detail')}
+                          aria-label={t('common.detail')}
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteDialog(sub)}
+                          className="text-destructive hover:text-destructive"
+                          aria-label={t('common.delete')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
@@ -237,7 +312,7 @@ export function Subscriptions() {
                 {nameError && <p className="text-sm text-destructive">{nameError}</p>}
               </div>
               <p className="text-sm text-muted-foreground">
-                创建后可在详情页配置代理源、规则集等。
+                {t('subscriptions.createHint')}
               </p>
             </div>
             <DialogFooter>
@@ -280,6 +355,22 @@ export function Subscriptions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SubscriptionShareDialog
+        open={shareSubscription !== null}
+        subscriptionName={shareSubscription?.name ?? ''}
+        subscriptionUrl={shareSubscription ? subscriptionPublicUrl(shareSubscription) : ''}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShareSubscription(null)
+          }
+        }}
+        onCopy={() => {
+          if (shareSubscription) {
+            copySubscriptionLink(shareSubscription)
+          }
+        }}
+      />
     </div>
   )
 }

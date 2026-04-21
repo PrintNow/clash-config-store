@@ -21,7 +21,7 @@ import { subscriptionsApi } from '@/api/subscriptions'
 import { providersApi } from '@/api/providers'
 import { customConfigsApi } from '@/api/custom-configs'
 import { configTemplatesApi } from '@/api/config-templates'
-import type { Subscription, Provider, CustomConfig, ConfigTemplate, AccessRestriction } from '@/types'
+import type { Provider, CustomConfig, ConfigTemplate, AccessRestriction } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,19 +51,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { subscriptionPublicUrl } from '@/lib/subscription-url'
 
 interface RestrictionForm {
   type: 'ip' | 'cidr' | 'country'
   value: string
   mode: 'allow' | 'deny'
-}
-
-/** 开发走 Vite proxy（同 origin）；生产优先用后端 BASE_URL 拼的 subscription_url */
-function subscriptionPublicUrl(sub: Pick<Subscription, 'token' | 'subscription_url'>): string {
-  if (import.meta.env.DEV) {
-    return `${window.location.origin}/sub/${sub.token}`
-  }
-  return sub.subscription_url ?? `${window.location.origin}/sub/${sub.token}`
 }
 
 export function SubscriptionDetail() {
