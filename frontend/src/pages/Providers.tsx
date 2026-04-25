@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/EmptyState'
 import {
   Tooltip,
   TooltipContent,
@@ -190,8 +191,17 @@ export function Providers() {
               ))
             ) : providers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  {t('common.noData')}
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    title={t('providers.emptyTitle')}
+                    description={t('providers.emptyDescription')}
+                    actions={(
+                      <Button size="sm" onClick={openCreateDialog}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        {t('providers.addProvider')}
+                      </Button>
+                    )}
+                  />
                 </TableCell>
               </TableRow>
             ) : (

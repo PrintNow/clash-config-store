@@ -15,6 +15,8 @@ import {
   XCircle,
   Clock,
   AlertCircle,
+  ArrowRight,
+  ChevronDown,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
 import { providersApi } from '@/api/providers'
@@ -33,6 +35,8 @@ export function Dashboard() {
   const [copiedId, setCopiedId] = useState<number | null>(null)
   // 正在刷新中的 provider id 集合
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
+  // null 表示按当前账号状态决定默认展开/收起
+  const [onboardingOpen, setOnboardingOpen] = useState<boolean | null>(null)
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -133,6 +137,37 @@ export function Dashboard() {
     },
   ]
 
+  const hasMissingOnboardingStep = Boolean(
+    stats &&
+    (stats.total_providers === 0 ||
+      stats.total_custom_configs === 0 ||
+      stats.total_subscriptions === 0)
+  )
+  const showOnboardingGuide = Boolean(!isLoading && stats)
+  const isOnboardingOpen = onboardingOpen ?? hasMissingOnboardingStep
+
+  const onboardingSteps = [
+    {
+      title: t('onboarding.stepProviderTitle'),
+      description: t('onboarding.stepProviderDescription'),
+      path: '/providers',
+      done: (stats?.total_providers ?? 0) > 0,
+    },
+    {
+      title: t('onboarding.stepConfigTitle'),
+      description: t('onboarding.stepConfigDescription'),
+      path: '/custom-configs',
+      done: (stats?.total_custom_configs ?? 0) > 0,
+    },
+    {
+      title: t('onboarding.stepSubscriptionTitle'),
+      description: t('onboarding.stepSubscriptionDescription'),
+      path: '/subscriptions',
+      done: (stats?.total_subscriptions ?? 0) > 0,
+    },
+  ]
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length
+
   // 渲染 provider 缓存状态 Badge
   const renderCacheBadge = (provider: ProviderStatus) => {
     if (provider.cache_stale) {
@@ -200,6 +235,64 @@ export function Dashboard() {
           {t('dashboard.refreshAll')}
         </Button>
       </div>
+
+      {showOnboardingGuide && (
+        <Card className="border-primary/20 bg-muted/20">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-base">{t('onboarding.dashboardTitle')}</CardTitle>
+                  <Badge variant={hasMissingOnboardingStep ? 'outline' : 'success'} className="text-xs">
+                    {t('onboarding.progress', {
+                      done: completedOnboardingSteps,
+                      total: onboardingSteps.length,
+                    })}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{t('onboarding.dashboardDescription')}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-fit gap-1"
+                onClick={() => setOnboardingOpen((open) => !(open ?? hasMissingOnboardingStep))}
+              >
+                {isOnboardingOpen ? t('onboarding.collapse') : t('onboarding.expand')}
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOnboardingOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </div>
+          </CardHeader>
+          {isOnboardingOpen && (
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-3">
+                {onboardingSteps.map((step, index) => (
+                  <button
+                    key={step.path}
+                    type="button"
+                    onClick={() => navigate(step.path)}
+                    className="rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={step.done ? 'success' : 'outline'} className="h-5 px-1.5 text-xs">
+                            {step.done ? t('onboarding.done') : index + 1}
+                          </Badge>
+                          <p className="text-sm font-medium">{step.title}</p>
+                        </div>
+                        <p className="text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+                      </div>
+                      <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* 统计数字卡片行（5个卡片） */}
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">

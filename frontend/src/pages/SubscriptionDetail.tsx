@@ -413,8 +413,20 @@ export function SubscriptionDetail() {
               )}
 
               {providers.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-8 text-center">
-                  {t('subscriptions.noProviders')}
+                <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+                  <p className="text-sm font-medium">{t('subscriptions.noProvidersTitle')}</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                    {t('subscriptions.noProvidersDescription')}
+                  </p>
+                  <Button
+                    className="mt-4"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate('/providers')}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('providers.addProvider')}
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-1 max-h-80 overflow-y-auto rounded-md border p-2">
@@ -472,6 +484,24 @@ export function SubscriptionDetail() {
                   ))}
                 </NativeSelect>
               </div>
+
+              {customConfigs.length === 0 && (
+                <div className="rounded-lg border border-dashed px-4 py-6 text-center">
+                  <p className="text-sm font-medium">{t('subscriptions.noCustomConfigsTitle')}</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                    {t('subscriptions.noCustomConfigsDescription')}
+                  </p>
+                  <Button
+                    className="mt-4"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate('/custom-configs')}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('customConfigs.addConfig')}
+                  </Button>
+                </div>
+              )}
 
               {/* 已选配置摘要信息 */}
               {selectedCustomConfig && (

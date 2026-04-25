@@ -122,6 +122,21 @@ const en = {
     diffNoChanges: 'No differences from the last saved version.',
   },
 
+  onboarding: {
+    dashboardTitle: 'Create your first subscription in three steps',
+    dashboardDescription: 'A workflow you can revisit any time: add an upstream provider, prepare a custom config, then create a subscription URL for your client.',
+    done: 'Done',
+    progress: '{{done}} / {{total}} steps done',
+    expand: 'Show steps',
+    collapse: 'Hide steps',
+    stepProviderTitle: 'Add a provider',
+    stepProviderDescription: 'Paste an existing upstream subscription URL so the app can cache and parse its nodes.',
+    stepConfigTitle: 'Prepare a custom config',
+    stepConfigDescription: 'Start from the sample config, then adjust proxy groups, rules, and rule-set references.',
+    stepSubscriptionTitle: 'Create a subscription',
+    stepSubscriptionDescription: 'Bind providers and config, then copy the generated URL into Mihomo or Clash.',
+  },
+
   dashboard: {
     title: 'Dashboard',
     totalProviders: 'Providers',
@@ -176,6 +191,8 @@ const en = {
     namePlaceholder: 'Enter provider name',
     urlPlaceholder: 'Enter subscription URL',
     cacheTTLPlaceholder: 'Cache TTL in seconds, 0 = no cache',
+    emptyTitle: 'Add your first upstream provider',
+    emptyDescription: 'Providers supply the real nodes. Later, subscriptions can enable these sources and merge them into the final config.',
   },
 
   userAgents: {
@@ -334,6 +351,12 @@ const en = {
     saveBlockedByErrors: 'Rule errors still exist, save was blocked',
     renameConflict: 'This name is already used by another proxy or proxy group',
     renameRefsSynced: 'Updated {{count}} reference(s) automatically',
+    emptyTitle: 'Start with a custom config',
+    emptyDescription: 'Custom configs organize proxy groups and rules. Beginners can import the sample first, then adjust it around their own providers.',
+    importSample: 'Import Sample Config',
+    sampleName: 'Starter Sample Config',
+    detailGuideTitle: 'A config has three main parts',
+    detailGuideDescription: 'Proxies are optional hand-written nodes, proxy groups combine nodes or providers into strategies, and rules decide which strategy traffic uses. Beginners usually start with groups and rules.',
   },
 
   configTemplates: {
@@ -458,6 +481,12 @@ const en = {
     proxyPrefixStatus: 'Proxy prefix',
     proxyPrefixOn: 'Enabled',
     proxyPrefixOff: 'Disabled',
+    emptyTitle: 'Create a distributable subscription',
+    emptyDescription: 'A subscription combines providers, custom config, and template into the final YAML, then gives you a URL or QR code to import.',
+    noProvidersTitle: 'No providers to enable yet',
+    noProvidersDescription: 'Add an upstream provider first, then return here to choose which node sources participate in generation.',
+    noCustomConfigsTitle: 'No custom configs yet',
+    noCustomConfigsDescription: 'Custom configs manage proxy groups and rules. Start with the sample config, then return here to bind it.',
   },
 
   accessLogs: {

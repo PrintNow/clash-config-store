@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/EmptyState'
 import { SubscriptionShareDialog } from '@/components/subscriptions/SubscriptionShareDialog'
 import { subscriptionPublicUrl } from '@/lib/subscription-url'
 
@@ -164,8 +165,20 @@ export function Subscriptions() {
               ))
             ) : subscriptions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  {t('common.noData')}
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    title={t('subscriptions.emptyTitle')}
+                    description={t('subscriptions.emptyDescription')}
+                    actions={(
+                      <Button
+                        size="sm"
+                        onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        {t('subscriptions.addSubscription')}
+                      </Button>
+                    )}
+                  />
                 </TableCell>
               </TableRow>
             ) : (
