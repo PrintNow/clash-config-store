@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, Trash2, ExternalLink, MoreHorizontal, Copy, Download, Upload, FolderUp } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, MoreHorizontal, Copy, Download, Upload, FolderUp, Sparkles } from 'lucide-react'
 import { customConfigsApi } from '@/api/custom-configs'
 import type { CustomConfig, CustomConfigTransferPayload } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/EmptyState'
 
 export function CustomConfigs() {
   const { t } = useTranslation()
@@ -157,6 +158,28 @@ export function CustomConfigs() {
     importMutation.mutate(payload)
   }
 
+  const handleImportSample = () => {
+    const payload: CustomConfigTransferPayload = {
+      name: t('customConfigs.sampleName'),
+      proxies: [],
+      proxy_groups: [
+        {
+          name: 'PROXY',
+          type: 'select',
+          proxies: ['DIRECT'],
+        },
+      ],
+      rules: [
+        'DOMAIN-SUFFIX,github.com,DIRECT',
+        'GEOIP,CN,DIRECT',
+        'MATCH,PROXY',
+      ],
+      rule_provider_ids: [],
+      hosted_rule_set_ids: [],
+    }
+    importMutation.mutate(payload)
+  }
+
   const handleImportFileChange = async (file?: File) => {
     if (!file) return
     const text = await file.text()
@@ -259,8 +282,27 @@ export function CustomConfigs() {
               ))
             ) : configs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  {t('common.noData')}
+                <TableCell colSpan={4}>
+                  <EmptyState
+                    title={t('customConfigs.emptyTitle')}
+                    description={t('customConfigs.emptyDescription')}
+                    actions={(
+                      <>
+                        <Button size="sm" onClick={handleImportSample} disabled={importMutation.isPending}>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          {importMutation.isPending ? t('common.submitting') : t('customConfigs.importSample')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          {t('customConfigs.addConfig')}
+                        </Button>
+                      </>
+                    )}
+                  />
                 </TableCell>
               </TableRow>
             ) : (

@@ -2,7 +2,16 @@ import { useState, useEffect } from 'react'
 import { Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Menu, X, Sun, Moon, Monitor, Languages, LogOut, User } from 'lucide-react'
+import {
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Monitor,
+  Languages,
+  LogOut,
+  User,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { useThemeStore } from '@/store/theme'
@@ -21,6 +30,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+
+const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed'
+const SIDEBAR_TRANSITION_MS = 50
 
 export function AppLayout() {
   const { user, token, logout, setAuth } = useAuthStore()
@@ -28,11 +41,34 @@ export function AppLayout() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  )
+  const [sidebarLabelsVisible, setSidebarLabelsVisible] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== 'true'
+  )
 
   // 初始化时从 localStorage 恢复认证信息
   useEffect(() => {
     useAuthStore.getState().initFromStorage()
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed))
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    if (sidebarCollapsed) {
+      setSidebarLabelsVisible(false)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setSidebarLabelsVisible(true)
+    }, SIDEBAR_TRANSITION_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [sidebarCollapsed])
 
   // 挂载时从服务端拉取最新用户信息，同步到 store
   useQuery({
@@ -74,15 +110,45 @@ export function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* 桌面端固定侧边栏 */}
-      <aside className="hidden md:flex w-60 flex-col border-r bg-sidebar">
-        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-3">
-          <SidebarBrand className="min-w-0 flex-1" />
+      <aside
+        className={cn(
+          'hidden flex-col border-r bg-sidebar transition-[width] duration-200 md:flex',
+          sidebarCollapsed ? 'w-16' : 'w-60'
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-16 shrink-0 items-center border-b border-sidebar-border px-3',
+            sidebarCollapsed ? 'justify-center px-2' : 'gap-2'
+          )}
+        >
+          <SidebarBrand
+            className={cn('min-w-0', sidebarCollapsed ? 'flex-none' : 'flex-1')}
+            collapsed={sidebarCollapsed}
+            labelsVisible={sidebarLabelsVisible}
+          />
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto py-2">
-            <Sidebar />
+          <div
+            className={cn(
+              'flex-1 overflow-y-auto py-2 transition-colors',
+              sidebarCollapsed && 'cursor-e-resize hover:bg-sidebar-accent/20'
+            )}
+            title={sidebarCollapsed ? t('layout.expandSidebar') : undefined}
+            onClick={(event) => {
+              if (!sidebarCollapsed) return
+              const target = event.target as HTMLElement
+              if (target.closest('a, button')) return
+              setSidebarCollapsed(false)
+            }}
+          >
+            <Sidebar collapsed={sidebarCollapsed} labelsVisible={sidebarLabelsVisible} />
           </div>
-          <SidebarFooter />
+          <SidebarFooter
+            collapsed={sidebarCollapsed}
+            labelsVisible={sidebarLabelsVisible}
+            onToggleCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          />
         </div>
       </aside>
 

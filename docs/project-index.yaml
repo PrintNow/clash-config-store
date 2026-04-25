@@ -1,0 +1,164 @@
+# 机器可读的项目入口索引，帮助 agent 按领域定位文件。
+# 该文件只记录稳定事实来源；细节以源码为准。
+
+project:
+  name: clash-config-store
+  description: Mihomo/Clash 订阅编排与分发平台
+  primary_flow:
+    - provider
+    - custom_config
+    - config_template
+    - subscription
+    - public_subscription
+
+commands:
+  frontend_build: cd frontend && npm run build
+  backend_test: go test ./...
+
+global_entrypoints:
+  frontend_routes: frontend/src/App.tsx
+  frontend_navigation: frontend/src/components/layout/Sidebar.tsx
+  frontend_i18n:
+    - frontend/src/i18n/locales/zh.ts
+    - frontend/src/i18n/locales/en.ts
+  backend_routes: cmd/server/main.go
+  db_bootstrap: internal/repository/db.go
+  yaml_builder: internal/util/yaml.go
+
+domains:
+  dashboard:
+    frontend_pages:
+      - frontend/src/pages/Dashboard.tsx
+    frontend_api: frontend/src/api/dashboard.ts
+    backend_handler: internal/handler/dashboard.go
+    backend_routes:
+      - GET /api/dashboard/stats
+      - POST /api/dashboard/refresh-all-providers
+
+  provider:
+    frontend_pages:
+      - frontend/src/pages/Providers.tsx
+    frontend_api: frontend/src/api/providers.ts
+    backend_model: internal/model/provider.go
+    backend_handler: internal/handler/provider.go
+    backend_service: internal/service/provider.go
+    backend_routes:
+      - GET /api/providers
+      - POST /api/providers
+      - PUT /api/providers/:id
+      - DELETE /api/providers/:id
+      - POST /api/providers/:id/refresh
+
+  custom_config:
+    frontend_pages:
+      - frontend/src/pages/CustomConfigs.tsx
+      - frontend/src/pages/CustomConfigDetail.tsx
+    frontend_api: frontend/src/api/custom-configs.ts
+    backend_model: internal/model/custom_config.go
+    backend_handler: internal/handler/custom_config.go
+    backend_routes:
+      - GET /api/custom-configs
+      - POST /api/custom-configs
+      - POST /api/custom-configs/import
+      - GET /api/custom-configs/:id
+      - PUT /api/custom-configs/:id
+      - DELETE /api/custom-configs/:id
+      - POST /api/custom-configs/:id/clone
+      - GET /api/custom-configs/:id/export
+      - GET /api/custom-configs/:id/preview
+    notes:
+      - rule_provider_ids 和 hosted_rule_set_ids 依赖实例数据库主键，跨实例示例不要直接携带。
+
+  config_template:
+    frontend_pages:
+      - frontend/src/pages/ConfigTemplates.tsx
+      - frontend/src/pages/ConfigTemplateDetail.tsx
+    frontend_api: frontend/src/api/config-templates.ts
+    backend_model: internal/model/config_template.go
+    backend_handler: internal/handler/config_template.go
+    backend_routes:
+      - GET /api/config-templates
+      - POST /api/config-templates
+      - GET /api/config-templates/:id
+      - PUT /api/config-templates/:id
+      - DELETE /api/config-templates/:id
+
+  rule_provider:
+    frontend_pages:
+      - frontend/src/pages/RuleProviders.tsx
+    frontend_api: frontend/src/api/rule-providers.ts
+    backend_model: internal/model/rule_provider.go
+    backend_handler: internal/handler/rule_provider.go
+    backend_routes:
+      - GET /api/rule-providers
+      - POST /api/rule-providers
+      - GET /api/rule-providers/:id
+      - PUT /api/rule-providers/:id
+      - DELETE /api/rule-providers/:id
+
+  hosted_rule_set:
+    frontend_pages:
+      - frontend/src/pages/HostedRuleSets.tsx
+    frontend_api: frontend/src/api/hosted-rule-sets.ts
+    backend_model: internal/model/hosted_rule_set.go
+    backend_handler: internal/handler/hosted_rule_set.go
+    public_handler: internal/handler/ruleset_public.go
+    backend_routes:
+      - GET /api/hosted-rule-sets
+      - POST /api/hosted-rule-sets
+      - GET /api/hosted-rule-sets/:id
+      - PUT /api/hosted-rule-sets/:id
+      - DELETE /api/hosted-rule-sets/:id
+      - POST /api/hosted-rule-sets/reset-tokens
+      - GET /ruleset/:token/:name
+
+  subscription:
+    frontend_pages:
+      - frontend/src/pages/Subscriptions.tsx
+      - frontend/src/pages/SubscriptionDetail.tsx
+      - frontend/src/pages/AccessLogs.tsx
+    frontend_api: frontend/src/api/subscriptions.ts
+    frontend_url_helper: frontend/src/lib/subscription-url.ts
+    backend_model: internal/model/subscription.go
+    backend_handler:
+      - internal/handler/subscription.go
+      - internal/handler/sub.go
+    backend_service: internal/service/subscription.go
+    backend_routes:
+      - GET /api/subscriptions
+      - POST /api/subscriptions
+      - GET /api/subscriptions/:id
+      - PUT /api/subscriptions/:id
+      - DELETE /api/subscriptions/:id
+      - POST /api/subscriptions/:id/regenerate-token
+      - GET /api/subscriptions/:id/access-logs
+      - GET /api/subscriptions/:id/restrictions
+      - POST /api/subscriptions/:id/restrictions
+      - DELETE /api/subscriptions/:id/restrictions/:rid
+      - GET /sub/:token
+    notes:
+      - EnabledProviderIDs 在后端以 JSON 文本存储。
+      - GET /sub/:token 是公开订阅下发入口。
+
+  user_agent:
+    frontend_pages:
+      - frontend/src/pages/UserAgents.tsx
+    frontend_api: frontend/src/api/user-agents.ts
+    backend_model: internal/model/user_agent.go
+    backend_handler: internal/handler/user_agent.go
+    backend_routes:
+      - GET /api/user-agents
+      - POST /api/user-agents
+      - PUT /api/user-agents/:id
+      - DELETE /api/user-agents/:id
+
+  settings:
+    frontend_pages:
+      - frontend/src/pages/Settings.tsx
+    frontend_api: frontend/src/api/user.ts
+    backend_model: internal/model/user.go
+    backend_handler: internal/handler/user.go
+    backend_routes:
+      - GET /api/user/profile
+      - PUT /api/user/profile
+      - PUT /api/user/password

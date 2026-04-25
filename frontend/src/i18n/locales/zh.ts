@@ -63,6 +63,11 @@ const zh = {
     profile: '个人资料',
   },
 
+  layout: {
+    collapseSidebar: '收起侧边栏',
+    expandSidebar: '展开侧边栏',
+  },
+
   // 认证
   auth: {
     login: '登录',
@@ -125,6 +130,21 @@ const zh = {
     diffNoChanges: '与已保存内容一致，无差异。',
   },
 
+  onboarding: {
+    dashboardTitle: '三步生成第一条订阅',
+    dashboardDescription: '这是一份随时可看的使用流程：先接入上游订阅源，再准备自定义配置，最后创建订阅链接导入客户端。',
+    done: '完成',
+    progress: '{{done}} / {{total}} 步完成',
+    expand: '查看步骤',
+    collapse: '收起步骤',
+    stepProviderTitle: '添加订阅源',
+    stepProviderDescription: '填入已有的上游订阅 URL，系统会缓存并解析其中的节点。',
+    stepConfigTitle: '准备自定义配置',
+    stepConfigDescription: '从示例配置开始，逐步补充代理组、规则和规则集引用。',
+    stepSubscriptionTitle: '创建订阅',
+    stepSubscriptionDescription: '绑定订阅源与配置后，复制生成的链接导入 Mihomo/Clash 客户端。',
+  },
+
   // 仪表盘
   dashboard: {
     title: '仪表盘',
@@ -134,6 +154,15 @@ const zh = {
     totalConfigTemplates: '配置模板',
     totalRuleProviders: '规则集',
     recentLogs: '最近访问日志',
+    recentLogsDescription: '最近 10 次订阅链接访问记录，用于快速判断来源与拦截情况。',
+    recentActivity: '最近活动',
+    recentActivitySummary: '允许 {{allowed}} / 拒绝 {{denied}}',
+    allowedCount: '允许 {{count}}',
+    deniedCount: '拒绝 {{count}}',
+    allowedCountTooltip: '最近 10 条访问日志中被允许的请求数',
+    deniedCountTooltip: '最近 10 条访问日志中被拒绝的请求数',
+    noRecentLogsTitle: '暂无访问记录',
+    noRecentLogsDescription: '当订阅链接被客户端访问后，最近活动会显示在这里。',
     ip: 'IP 地址',
     country: '国家/地区',
     allowed: '状态',
@@ -141,7 +170,11 @@ const zh = {
     time: '时间',
     subscription: '订阅',
     providerStatus: '订阅源状态',
+    providerStatusDescription: '关注缓存刷新、上游获取错误和需要手动处理的源。',
     subscriptionHealth: '订阅健康',
+    subscriptionHealthDescription: '确认 Token 有效性以及配置、模板绑定情况。',
+    needAttention: '{{count}} 项关注',
+    allClear: '全部正常',
     refreshAll: '一键刷新所有订阅源',
     refreshAllSuccess: '已触发所有订阅源刷新',
     cacheStale: '缓存过期',
@@ -157,6 +190,10 @@ const zh = {
     hasCustomConfig: '已关联配置',
     hasConfigTemplate: '已关联模板',
     fetchError: '获取失败',
+    unknownLocation: '未知地区',
+    relativeJustNow: '刚刚',
+    relativeMinutesAgo: '{{count}} 分钟前',
+    relativeHoursAgo: '{{count}} 小时前',
   },
 
   // 订阅源
@@ -181,6 +218,8 @@ const zh = {
     namePlaceholder: '请输入订阅源名称',
     urlPlaceholder: '请输入订阅 URL',
     cacheTTLPlaceholder: '缓存有效期（秒），0 表示不缓存',
+    emptyTitle: '先添加一个上游订阅源',
+    emptyDescription: '订阅源负责提供真实节点。后续创建订阅时，可以勾选这些来源并统一生成最终配置。',
   },
 
   // UA 库
@@ -341,6 +380,12 @@ const zh = {
     saveBlockedByErrors: '仍有规则错误，已阻止保存',
     renameConflict: '该名称已被其他代理节点或代理组使用',
     renameRefsSynced: '已同步更新 {{count}} 处引用',
+    emptyTitle: '从一个自定义配置开始',
+    emptyDescription: '自定义配置负责组织代理组和规则。新手可以先导入示例配置，再按自己的订阅源逐步调整。',
+    importSample: '导入示例配置',
+    sampleName: '新手示例配置',
+    detailGuideTitle: '配置由三块内容组成',
+    detailGuideDescription: '代理节点是可选的手写节点，代理组负责把节点或订阅源组合成策略，规则决定流量走哪个策略。新手通常先维护代理组和规则即可。',
   },
 
   // 配置模板
@@ -468,6 +513,12 @@ const zh = {
     proxyPrefixStatus: '节点前缀',
     proxyPrefixOn: '已启用',
     proxyPrefixOff: '未启用',
+    emptyTitle: '创建一个可分发的订阅',
+    emptyDescription: '订阅会把订阅源、自定义配置和模板组合成最终 YAML，并生成可复制或扫码导入的链接。',
+    noProvidersTitle: '还没有可启用的订阅源',
+    noProvidersDescription: '先添加上游订阅源，再回到这里勾选需要参与生成的节点来源。',
+    noCustomConfigsTitle: '还没有自定义配置',
+    noCustomConfigsDescription: '自定义配置用于管理代理组和规则。可以从示例配置开始，再回到这里绑定。',
   },
 
   // 访问日志

@@ -2772,6 +2772,18 @@ export function CustomConfigDetail() {
           </TabsList>
         </div>
 
+        <div className="mt-3 rounded-lg border bg-muted/20 p-3">
+          <div className="flex items-start gap-2">
+            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{t('customConfigs.detailGuideTitle')}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t('customConfigs.detailGuideDescription')}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* ── Tab 1: 代理节点 ── */}
         <TabsContent value="proxies" className="space-y-3 mt-3">
           <div className="flex justify-end">
