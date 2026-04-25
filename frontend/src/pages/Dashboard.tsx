@@ -20,8 +20,6 @@ import {
   ChevronDown,
   MapPin,
   Server,
-  ShieldAlert,
-  ShieldCheck,
   Wifi,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
@@ -30,6 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProviderStatus, SubscriptionHealth, AccessLog } from '@/types'
 
 export function Dashboard() {
@@ -178,40 +177,6 @@ export function Dashboard() {
   const recentDeniedCount = recentLogs.length - recentAllowedCount
   const staleProviderCount = stats?.providers?.filter((provider) => provider.cache_stale || provider.fetch_error).length ?? 0
   const expiringSubscriptionCount = stats?.subscriptions?.filter((sub) => sub.token_expired).length ?? 0
-  const isSystemHealthy = staleProviderCount === 0 && expiringSubscriptionCount === 0
-
-  const operationHighlights = [
-    {
-      key: 'providers',
-      label: t('dashboard.providerStatus'),
-      value: stats?.providers?.length ?? 0,
-      meta:
-        staleProviderCount > 0
-          ? t('dashboard.providerAttention', { count: staleProviderCount })
-          : t('dashboard.providerAllGood'),
-      status: staleProviderCount > 0 ? 'warning' : 'success',
-    },
-    {
-      key: 'subscriptions',
-      label: t('dashboard.subscriptionHealth'),
-      value: stats?.subscriptions?.length ?? 0,
-      meta:
-        expiringSubscriptionCount > 0
-          ? t('dashboard.subscriptionAttention', { count: expiringSubscriptionCount })
-          : t('dashboard.subscriptionAllGood'),
-      status: expiringSubscriptionCount > 0 ? 'warning' : 'success',
-    },
-    {
-      key: 'logs',
-      label: t('dashboard.recentActivity'),
-      value: recentLogs.length,
-      meta: t('dashboard.recentActivitySummary', {
-        allowed: recentAllowedCount,
-        denied: recentDeniedCount,
-      }),
-      status: recentDeniedCount > 0 ? 'warning' : 'success',
-    },
-  ]
 
   // 渲染 provider 缓存状态 Badge
   const renderCacheBadge = (provider: ProviderStatus) => {
@@ -273,59 +238,17 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       {/* 顶部操作区 */}
-      <section className="rounded-2xl border bg-card/70 p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant={isSystemHealthy ? 'success' : 'warning'}
-                className="gap-1.5 px-2 py-1 text-xs"
-              >
-                {isSystemHealthy ? (
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                ) : (
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                )}
-                {isSystemHealthy ? t('dashboard.systemHealthy') : t('dashboard.systemNeedsAttention')}
-              </Badge>
-              <span className="text-xs text-muted-foreground">{t('dashboard.operatorConsole')}</span>
-            </div>
-          </div>
-          <Button
-            onClick={() => refreshAllMutation.mutate()}
-            disabled={refreshAllMutation.isPending}
-            className="w-fit gap-2 shadow-sm"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
-            {t('dashboard.refreshAll')}
-          </Button>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          {operationHighlights.map((item) => (
-            <div
-              key={item.key}
-              className="rounded-xl border bg-background/60 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {item.label}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold">{isLoading ? '-' : item.value}</p>
-                </div>
-                <span
-                  className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                    item.status === 'success' ? 'bg-green-500' : 'bg-yellow-500'
-                  }`}
-                />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">{isLoading ? t('common.loading') : item.meta}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
+        <Button
+          onClick={() => refreshAllMutation.mutate()}
+          disabled={refreshAllMutation.isPending}
+          className="w-fit gap-2 shadow-sm"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
+          {t('dashboard.refreshAll')}
+        </Button>
+      </div>
 
       {showOnboardingGuide && (
         <Card className="border-primary/20 bg-muted/20">
@@ -589,23 +512,35 @@ export function Dashboard() {
               </CardTitle>
               <CardDescription>{t('dashboard.recentLogsDescription')}</CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="success" className="gap-1 text-xs">
-                <CheckCircle2 className="h-3 w-3" />
-                {t('dashboard.allowedCount', { count: recentAllowedCount })}
-              </Badge>
-              <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="gap-1 text-xs">
-                <XCircle className="h-3 w-3" />
-                {t('dashboard.deniedCount', { count: recentDeniedCount })}
-              </Badge>
-            </div>
+            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+              <div className="flex flex-wrap gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="success" className="cursor-help gap-1 text-xs">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {t('dashboard.allowedCount', { count: recentAllowedCount })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('dashboard.allowedCountTooltip')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="cursor-help gap-1 text-xs">
+                      <XCircle className="h-3 w-3" />
+                      {t('dashboard.deniedCount', { count: recentDeniedCount })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('dashboard.deniedCountTooltip')}</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+                <Skeleton key={i} className="h-11 w-full" />
               ))}
             </div>
           ) : !stats?.recent_access_logs?.length ? (
@@ -615,62 +550,36 @@ export function Dashboard() {
               <p className="mt-1 text-sm text-muted-foreground">{t('dashboard.noRecentLogsDescription')}</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y rounded-xl border">
               {recentLogs.map((log: AccessLog) => (
-                <article
+                <div
                   key={log.id}
-                  className={`rounded-xl border p-4 transition-colors ${
+                  className={`flex min-w-0 items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                     log.allowed
                       ? 'bg-background/70 hover:bg-green-500/5'
-                      : 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+                      : 'bg-destructive/5 hover:bg-destructive/10'
                   }`}
                 >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 gap-3">
-                      <div
-                        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                          log.allowed
-                            ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-200'
-                            : 'bg-destructive/15 text-destructive'
-                        }`}
-                      >
-                        {log.allowed ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-sm font-semibold">{log.ip}</span>
-                          <Badge variant={log.allowed ? 'success' : 'destructive'} className="h-5 gap-1 text-xs">
-                            {log.allowed ? t('accessLogs.allowedBadge') : t('accessLogs.deniedBadge')}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {log.allowed
-                            ? t('dashboard.accessAllowedDescription')
-                            : t('dashboard.accessDeniedDescription')}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {getLogLocation(log)}
-                          </span>
-                          {log.deny_reason && (
-                            <span className="inline-flex items-center gap-1 text-destructive">
-                              <AlertCircle className="h-3 w-3" />
-                              {log.deny_reason}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <time className="shrink-0 text-xs text-muted-foreground" dateTime={log.created_at}>
-                      {formatLogTime(log.created_at)}
-                    </time>
-                  </div>
-                </article>
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      log.allowed ? 'bg-green-500' : 'bg-destructive'
+                    }`}
+                  />
+                  <span className="w-28 shrink-0 font-mono font-semibold">{log.ip}</span>
+                  <span className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{getLogLocation(log)}</span>
+                    {log.deny_reason && (
+                      <>
+                        <span className="text-muted-foreground/60">/</span>
+                        <span className="truncate text-destructive">{log.deny_reason}</span>
+                      </>
+                    )}
+                  </span>
+                  <time className="shrink-0 text-xs text-muted-foreground" dateTime={log.created_at}>
+                    {formatLogTime(log.created_at)}
+                  </time>
+                </div>
               ))}
             </div>
           )}
