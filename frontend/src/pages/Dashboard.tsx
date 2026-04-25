@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
+  Activity,
   Globe,
   Link,
   Settings2,
@@ -17,10 +18,15 @@ import {
   AlertCircle,
   ArrowRight,
   ChevronDown,
+  MapPin,
+  Server,
+  ShieldAlert,
+  ShieldCheck,
+  Wifi,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
 import { providersApi } from '@/api/providers'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -167,6 +173,45 @@ export function Dashboard() {
     },
   ]
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length
+  const recentLogs = stats?.recent_access_logs?.slice(0, 10) ?? []
+  const recentAllowedCount = recentLogs.filter((log) => log.allowed).length
+  const recentDeniedCount = recentLogs.length - recentAllowedCount
+  const staleProviderCount = stats?.providers?.filter((provider) => provider.cache_stale || provider.fetch_error).length ?? 0
+  const expiringSubscriptionCount = stats?.subscriptions?.filter((sub) => sub.token_expired).length ?? 0
+  const isSystemHealthy = staleProviderCount === 0 && expiringSubscriptionCount === 0
+
+  const operationHighlights = [
+    {
+      key: 'providers',
+      label: t('dashboard.providerStatus'),
+      value: stats?.providers?.length ?? 0,
+      meta:
+        staleProviderCount > 0
+          ? t('dashboard.providerAttention', { count: staleProviderCount })
+          : t('dashboard.providerAllGood'),
+      status: staleProviderCount > 0 ? 'warning' : 'success',
+    },
+    {
+      key: 'subscriptions',
+      label: t('dashboard.subscriptionHealth'),
+      value: stats?.subscriptions?.length ?? 0,
+      meta:
+        expiringSubscriptionCount > 0
+          ? t('dashboard.subscriptionAttention', { count: expiringSubscriptionCount })
+          : t('dashboard.subscriptionAllGood'),
+      status: expiringSubscriptionCount > 0 ? 'warning' : 'success',
+    },
+    {
+      key: 'logs',
+      label: t('dashboard.recentActivity'),
+      value: recentLogs.length,
+      meta: t('dashboard.recentActivitySummary', {
+        allowed: recentAllowedCount,
+        denied: recentDeniedCount,
+      }),
+      status: recentDeniedCount > 0 ? 'warning' : 'success',
+    },
+  ]
 
   // 渲染 provider 缓存状态 Badge
   const renderCacheBadge = (provider: ProviderStatus) => {
@@ -213,28 +258,74 @@ export function Dashboard() {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffMin = Math.floor(diffMs / 60000)
-    if (diffMin < 1) return '刚刚'
-    if (diffMin < 60) return `${diffMin} 分钟前`
+    if (diffMin < 1) return t('dashboard.relativeJustNow')
+    if (diffMin < 60) return t('dashboard.relativeMinutesAgo', { count: diffMin })
     const diffH = Math.floor(diffMin / 60)
-    if (diffH < 24) return `${diffH} 小时前`
+    if (diffH < 24) return t('dashboard.relativeHoursAgo', { count: diffH })
     return date.toLocaleString()
+  }
+
+  const getLogLocation = (log: AccessLog) => {
+    const location = [log.country, log.city].filter(Boolean).join(' / ')
+    return location || t('dashboard.unknownLocation')
   }
 
   return (
     <div className="space-y-6">
       {/* 顶部操作区 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
-        <Button
-          onClick={() => refreshAllMutation.mutate()}
-          disabled={refreshAllMutation.isPending}
-          variant="outline"
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
-          {t('dashboard.refreshAll')}
-        </Button>
-      </div>
+      <section className="rounded-2xl border bg-card/70 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={isSystemHealthy ? 'success' : 'warning'}
+                className="gap-1.5 px-2 py-1 text-xs"
+              >
+                {isSystemHealthy ? (
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                ) : (
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                )}
+                {isSystemHealthy ? t('dashboard.systemHealthy') : t('dashboard.systemNeedsAttention')}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{t('dashboard.operatorConsole')}</span>
+            </div>
+          </div>
+          <Button
+            onClick={() => refreshAllMutation.mutate()}
+            disabled={refreshAllMutation.isPending}
+            className="w-fit gap-2 shadow-sm"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
+            {t('dashboard.refreshAll')}
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {operationHighlights.map((item) => (
+            <div
+              key={item.key}
+              className="rounded-xl border bg-background/60 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">{isLoading ? '-' : item.value}</p>
+                </div>
+                <span
+                  className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                    item.status === 'success' ? 'bg-green-500' : 'bg-yellow-500'
+                  }`}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{isLoading ? t('common.loading') : item.meta}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {showOnboardingGuide && (
         <Card className="border-primary/20 bg-muted/20">
@@ -294,32 +385,31 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* 统计数字卡片行（5个卡片） */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      {/* 核心资源指标 */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {statCards.map((card) => {
           const Icon = card.icon
           return (
-            <Card
+            <button
               key={card.key}
-              className="cursor-pointer transition-shadow hover:shadow-md"
+              type="button"
+              className="group rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
               onClick={() => navigate(card.path)}
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {card.title}
-                </CardTitle>
-                <div className={`rounded-lg p-2 ${card.bg}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-muted-foreground">{card.title}</p>
+                  {isLoading ? (
+                    <Skeleton className="mt-3 h-8 w-14" />
+                  ) : (
+                    <p className="mt-2 text-3xl font-bold tracking-tight">{card.value}</p>
+                  )}
+                </div>
+                <div className={`rounded-lg p-2 transition-transform group-hover:scale-105 ${card.bg}`}>
                   <Icon className={`h-4 w-4 ${card.color}`} />
                 </div>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <div className="text-3xl font-bold">{card.value}</div>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            </button>
           )
         })}
       </div>
@@ -327,14 +417,27 @@ export function Dashboard() {
       {/* 两列布局：左列 Provider 状态，右列订阅健康 */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 左列：订阅源状态 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('dashboard.providerStatus')}</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/20 pb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Server className="h-4 w-4 text-muted-foreground" />
+                  {t('dashboard.providerStatus')}
+                </CardTitle>
+                <CardDescription>{t('dashboard.providerStatusDescription')}</CardDescription>
+              </div>
+              <Badge variant={staleProviderCount > 0 ? 'warning' : 'success'} className="shrink-0">
+                {staleProviderCount > 0
+                  ? t('dashboard.needAttention', { count: staleProviderCount })
+                  : t('dashboard.allClear')}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-4">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))
             ) : !stats?.providers?.length ? (
               <p className="text-center text-sm text-muted-foreground py-6">{t('common.noData')}</p>
@@ -342,11 +445,16 @@ export function Dashboard() {
               stats.providers.map((provider: ProviderStatus) => (
                 <div
                   key={provider.id}
-                  className="rounded-lg border p-3 space-y-1.5"
+                  className="rounded-xl border bg-background/70 p-3 transition-colors hover:bg-muted/30"
                 >
                   {/* 名称 + 缓存状态 Badge + 刷新按钮 */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          provider.cache_stale || provider.fetch_error ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                      />
                       <span className="font-semibold truncate text-sm">{provider.name}</span>
                       {renderCacheBadge(provider)}
                     </div>
@@ -364,7 +472,7 @@ export function Dashboard() {
                   </div>
 
                   {/* 最后刷新时间 */}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     <span>
                       {t('dashboard.lastFetched')}：
@@ -388,14 +496,27 @@ export function Dashboard() {
         </Card>
 
         {/* 右列：订阅健康 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('dashboard.subscriptionHealth')}</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/20 pb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Wifi className="h-4 w-4 text-muted-foreground" />
+                  {t('dashboard.subscriptionHealth')}
+                </CardTitle>
+                <CardDescription>{t('dashboard.subscriptionHealthDescription')}</CardDescription>
+              </div>
+              <Badge variant={expiringSubscriptionCount > 0 ? 'warning' : 'success'} className="shrink-0">
+                {expiringSubscriptionCount > 0
+                  ? t('dashboard.needAttention', { count: expiringSubscriptionCount })
+                  : t('dashboard.allClear')}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-4">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))
             ) : !stats?.subscriptions?.length ? (
               <p className="text-center text-sm text-muted-foreground py-6">{t('common.noData')}</p>
@@ -403,11 +524,16 @@ export function Dashboard() {
               stats.subscriptions.map((sub: SubscriptionHealth) => (
                 <div
                   key={sub.id}
-                  className="rounded-lg border p-3 space-y-2"
+                  className="rounded-xl border bg-background/70 p-3 transition-colors hover:bg-muted/30"
                 >
                   {/* 名称 + Token 状态 Badge */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          sub.token_expired ? 'bg-destructive' : 'bg-green-500'
+                        }`}
+                      />
                       <span className="font-semibold truncate text-sm">{sub.name}</span>
                       {renderTokenBadge(sub)}
                     </div>
@@ -427,7 +553,7 @@ export function Dashboard() {
                   </div>
 
                   {/* 自定义配置 / 配置模板状态 Badge */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                     <Badge
                       variant={sub.has_custom_config ? 'secondary' : 'outline'}
                       className="text-xs"
@@ -452,70 +578,99 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* 最近访问日志（时间线样式） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('dashboard.recentLogs')}</CardTitle>
+      {/* 最近访问日志（活动流样式） */}
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                {t('dashboard.recentLogs')}
+              </CardTitle>
+              <CardDescription>{t('dashboard.recentLogsDescription')}</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="success" className="gap-1 text-xs">
+                <CheckCircle2 className="h-3 w-3" />
+                {t('dashboard.allowedCount', { count: recentAllowedCount })}
+              </Badge>
+              <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="gap-1 text-xs">
+                <XCircle className="h-3 w-3" />
+                {t('dashboard.deniedCount', { count: recentDeniedCount })}
+              </Badge>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+                <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
           ) : !stats?.recent_access_logs?.length ? (
-            <p className="text-center text-sm text-muted-foreground py-6">{t('common.noData')}</p>
+            <div className="rounded-xl border border-dashed py-10 text-center">
+              <Activity className="mx-auto h-8 w-8 text-muted-foreground/60" />
+              <p className="mt-3 text-sm font-medium">{t('dashboard.noRecentLogsTitle')}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('dashboard.noRecentLogsDescription')}</p>
+            </div>
           ) : (
-            <div className="relative space-y-0 pl-4">
-              {/* 时间线竖线 */}
-              <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
-
-              {stats.recent_access_logs.slice(0, 10).map((log: AccessLog) => (
-                <div key={log.id} className="relative flex items-start gap-3 pb-4 last:pb-0">
-                  {/* 时间线小点 */}
-                  <div
-                    className={`absolute -left-[9px] mt-1.5 h-3 w-3 rounded-full border-2 border-background ${
-                      log.allowed ? 'bg-green-500' : 'bg-destructive'
-                    }`}
-                  />
-
-                  {/* 日志内容 */}
-                  <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 min-w-0">
-                    {/* IP */}
-                    <span className="font-mono text-sm font-medium">{log.ip}</span>
-
-                    {/* 国家 / 城市 */}
-                    {(log.country || log.city) && (
-                      <span className="text-xs text-muted-foreground">
-                        {[log.country, log.city].filter(Boolean).join(' / ')}
-                      </span>
-                    )}
-
-                    {/* 允许 / 拒绝 Badge */}
-                    {log.allowed ? (
-                      <Badge variant="success" className="flex items-center gap-1 text-xs h-5">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {t('accessLogs.allowedBadge')}
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive" className="flex items-center gap-1 text-xs h-5">
-                        <XCircle className="h-3 w-3" />
-                        {t('accessLogs.deniedBadge')}
-                      </Badge>
-                    )}
-
-                    {/* 拒绝原因 */}
-                    {log.deny_reason && (
-                      <span className="text-xs text-muted-foreground">{log.deny_reason}</span>
-                    )}
-
-                    {/* 时间（右对齐） */}
-                    <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+            <div className="space-y-3">
+              {recentLogs.map((log: AccessLog) => (
+                <article
+                  key={log.id}
+                  className={`rounded-xl border p-4 transition-colors ${
+                    log.allowed
+                      ? 'bg-background/70 hover:bg-green-500/5'
+                      : 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 gap-3">
+                      <div
+                        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                          log.allowed
+                            ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-200'
+                            : 'bg-destructive/15 text-destructive'
+                        }`}
+                      >
+                        {log.allowed ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold">{log.ip}</span>
+                          <Badge variant={log.allowed ? 'success' : 'destructive'} className="h-5 gap-1 text-xs">
+                            {log.allowed ? t('accessLogs.allowedBadge') : t('accessLogs.deniedBadge')}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {log.allowed
+                            ? t('dashboard.accessAllowedDescription')
+                            : t('dashboard.accessDeniedDescription')}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {getLogLocation(log)}
+                          </span>
+                          {log.deny_reason && (
+                            <span className="inline-flex items-center gap-1 text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              {log.deny_reason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <time className="shrink-0 text-xs text-muted-foreground" dateTime={log.created_at}>
                       {formatLogTime(log.created_at)}
-                    </span>
+                    </time>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           )}

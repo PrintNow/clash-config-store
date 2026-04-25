@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, Globe, Bot, Settings2, Link, Settings, FileCode2, BookOpen, Cloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface NavItem {
   path: string
@@ -23,23 +24,28 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   onNavClick?: () => void
+  collapsed?: boolean
+  labelsVisible?: boolean
 }
 
-export function Sidebar({ onNavClick }: SidebarProps) {
+export function Sidebar({ onNavClick, collapsed = false, labelsVisible = !collapsed }: SidebarProps) {
   const { t } = useTranslation()
 
-  return (
-    <nav className="flex flex-col gap-1 p-2">
+  const navContent = (
+    <nav className={cn('flex flex-col gap-1 p-2', collapsed && 'items-center')}>
       {navItems.map((item) => {
         const Icon = item.icon
-        return (
+        const label = t(item.labelKey)
+        const link = (
           <NavLink
             key={item.path}
             to={item.path}
             onClick={onNavClick}
+            aria-label={collapsed ? label : undefined}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center rounded-md text-sm font-medium transition-colors',
+                collapsed ? 'h-10 w-10 justify-center' : 'gap-3 px-3 py-2.5',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -47,10 +53,46 @@ export function Sidebar({ onNavClick }: SidebarProps) {
             }
           >
             <Icon className="h-4 w-4 shrink-0" />
-            <span>{t(item.labelKey)}</span>
+            <span
+              className={cn(
+                'whitespace-nowrap transition-opacity duration-150',
+                collapsed && 'sr-only',
+                !collapsed && (labelsVisible ? 'opacity-100 delay-75' : 'opacity-0')
+              )}
+              aria-hidden={!collapsed && !labelsVisible}
+            >
+              {label}
+            </span>
           </NavLink>
+        )
+
+        if (collapsed) {
+          return (
+            <Tooltip key={item.path}>
+              <TooltipTrigger asChild>
+                <div>{link}</div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={10}>
+                {label}
+              </TooltipContent>
+            </Tooltip>
+          )
+        }
+
+        return (
+          link
         )
       })}
     </nav>
   )
+
+  if (collapsed) {
+    return (
+      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        {navContent}
+      </TooltipProvider>
+    )
+  }
+
+  return navContent
 }

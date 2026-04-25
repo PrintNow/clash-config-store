@@ -61,6 +61,11 @@ const en = {
     profile: 'Profile',
   },
 
+  layout: {
+    collapseSidebar: 'Collapse sidebar',
+    expandSidebar: 'Expand sidebar',
+  },
+
   auth: {
     login: 'Login',
     register: 'Register',
@@ -139,12 +144,24 @@ const en = {
 
   dashboard: {
     title: 'Dashboard',
+    operatorConsole: 'Operator console',
+    systemHealthy: 'Healthy',
+    systemNeedsAttention: 'Needs attention',
     totalProviders: 'Providers',
     totalSubscriptions: 'Subscriptions',
     totalCustomConfigs: 'Custom Configs',
     totalConfigTemplates: 'Config Templates',
     totalRuleProviders: 'Rule Sets',
     recentLogs: 'Recent Access Logs',
+    recentLogsDescription: 'The latest 10 subscription URL visits for checking sources and blocked requests.',
+    recentActivity: 'Recent Activity',
+    recentActivitySummary: 'Allowed {{allowed}} / Denied {{denied}}',
+    allowedCount: 'Allowed {{count}}',
+    deniedCount: 'Denied {{count}}',
+    noRecentLogsTitle: 'No access yet',
+    noRecentLogsDescription: 'Recent activity will appear here after clients access subscription URLs.',
+    accessAllowedDescription: 'Subscription access passed the current restriction rules.',
+    accessDeniedDescription: 'Subscription access was blocked by the current restriction rules.',
     ip: 'IP Address',
     country: 'Country',
     allowed: 'Status',
@@ -152,7 +169,15 @@ const en = {
     time: 'Time',
     subscription: 'Subscription',
     providerStatus: 'Provider Status',
+    providerStatusDescription: 'Watch cache freshness, upstream fetch errors, and sources needing action.',
+    providerAttention: '{{count}} provider(s) need action',
+    providerAllGood: 'Providers available',
     subscriptionHealth: 'Subscription Health',
+    subscriptionHealthDescription: 'Check token validity and config/template bindings.',
+    subscriptionAttention: '{{count}} subscription(s) need action',
+    subscriptionAllGood: 'Subscriptions distributable',
+    needAttention: '{{count}} to review',
+    allClear: 'All clear',
     refreshAll: 'Refresh All Providers',
     refreshAllSuccess: 'All provider refreshes triggered',
     cacheStale: 'Cache Stale',
@@ -168,6 +193,10 @@ const en = {
     hasCustomConfig: 'Has config',
     hasConfigTemplate: 'Has template',
     fetchError: 'Fetch error',
+    unknownLocation: 'Unknown location',
+    relativeJustNow: 'just now',
+    relativeMinutesAgo: '{{count}} minutes ago',
+    relativeHoursAgo: '{{count}} hours ago',
   },
 
   providers: {

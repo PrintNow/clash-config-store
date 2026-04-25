@@ -63,6 +63,11 @@ const zh = {
     profile: '个人资料',
   },
 
+  layout: {
+    collapseSidebar: '收起侧边栏',
+    expandSidebar: '展开侧边栏',
+  },
+
   // 认证
   auth: {
     login: '登录',
@@ -143,12 +148,24 @@ const zh = {
   // 仪表盘
   dashboard: {
     title: '仪表盘',
+    operatorConsole: '运维控制台',
+    systemHealthy: '运行正常',
+    systemNeedsAttention: '需要关注',
     totalProviders: '订阅源',
     totalSubscriptions: '订阅配置',
     totalCustomConfigs: '自定义配置',
     totalConfigTemplates: '配置模板',
     totalRuleProviders: '规则集',
     recentLogs: '最近访问日志',
+    recentLogsDescription: '最近 10 次订阅链接访问记录，用于快速判断来源与拦截情况。',
+    recentActivity: '最近活动',
+    recentActivitySummary: '允许 {{allowed}} / 拒绝 {{denied}}',
+    allowedCount: '允许 {{count}}',
+    deniedCount: '拒绝 {{count}}',
+    noRecentLogsTitle: '暂无访问记录',
+    noRecentLogsDescription: '当订阅链接被客户端访问后，最近活动会显示在这里。',
+    accessAllowedDescription: '订阅访问已通过当前限制规则。',
+    accessDeniedDescription: '订阅访问被当前限制规则拦截。',
     ip: 'IP 地址',
     country: '国家/地区',
     allowed: '状态',
@@ -156,7 +173,15 @@ const zh = {
     time: '时间',
     subscription: '订阅',
     providerStatus: '订阅源状态',
+    providerStatusDescription: '关注缓存刷新、上游获取错误和需要手动处理的源。',
+    providerAttention: '{{count}} 个源需处理',
+    providerAllGood: '订阅源可用',
     subscriptionHealth: '订阅健康',
+    subscriptionHealthDescription: '确认 Token 有效性以及配置、模板绑定情况。',
+    subscriptionAttention: '{{count}} 个订阅需处理',
+    subscriptionAllGood: '订阅可分发',
+    needAttention: '{{count}} 项关注',
+    allClear: '全部正常',
     refreshAll: '一键刷新所有订阅源',
     refreshAllSuccess: '已触发所有订阅源刷新',
     cacheStale: '缓存过期',
@@ -172,6 +197,10 @@ const zh = {
     hasCustomConfig: '已关联配置',
     hasConfigTemplate: '已关联模板',
     fetchError: '获取失败',
+    unknownLocation: '未知地区',
+    relativeJustNow: '刚刚',
+    relativeMinutesAgo: '{{count}} 分钟前',
+    relativeHoursAgo: '{{count}} 小时前',
   },
 
   // 订阅源
