@@ -7,6 +7,9 @@
 Clash Config Store 是一个面向 Mihomo/Clash 的订阅编排与分发平台：  
 把多个上游代理订阅、规则集和自定义配置统一管理，最终生成可直接下发的完整 YAML。
 
+如果在使用、部署或二次开发中遇到疑问、有功能建议，或发现缺陷，欢迎到 [GitHub Issues](https://github.com/PrintNow/clash-config-store/issues)
+讨论与反馈。
+
 ## 这个项目做什么
 
 - 统一管理上游订阅源（Provider），支持缓存、手动刷新、UA 定制
@@ -18,19 +21,17 @@ Clash Config Store 是一个面向 Mihomo/Clash 的订阅编排与分发平台�
 
 ### 界面截图
 
-| 首页 | 托管规则集 |
-|---|---|
+| 首页                            | 托管规则集                                       |
+|-------------------------------|---------------------------------------------|
 | ![首页](./screenshots/home.png) | ![托管规则集](./screenshots/hosted-rule-set.png) |
 
-| 自定义配置 - 代理组 | 自定义配置 - 规则 |
-|---|---|
+| 自定义配置 - 代理组                                                | 自定义配置 - 规则                                          |
+|------------------------------------------------------------|-----------------------------------------------------|
 | ![自定义配置-代理组](./screenshots/custom-config--proxy-group.png) | ![自定义配置-规则](./screenshots/custom-config--rules.png) |
-
 
 | 订阅管理 - 二维码分享                                                        | 规则集库                                                  |
 |---------------------------------------------------------------------|-------------------------------------------------------|
 | ![subscriptions--qrcode.png](screenshots/subscriptions--qrcode.png) | ![rule-providers.png](screenshots/rule-providers.png) |
-
 
 ## 技术栈与结构
 
@@ -49,7 +50,7 @@ docker-compose.example.yml # Compose 示例：默认拉取 Docker Hub 镜像，�
 Dockerfile                 # 多阶段构建镜像
 ```
 
-预构建镜像（Docker Hub，拉取即用）：[`shine09/clash-config-store`](https://hub.docker.com/r/shine09/clash-config-store)
+预构建镜像（Docker Hub，拉取即用）：`[shine09/clash-config-store](https://hub.docker.com/r/shine09/clash-config-store)`
 
 ## 怎么用
 
@@ -92,7 +93,9 @@ docker compose -f compose.local.yml up -d --build
 
 说明：
 
-- 示例 Compose 默认 SQLite（`DB_TYPE=sqlite`）；`image` 默认为 `shine09/clash-config-store:latest`，可按 [Docker Hub 标签](https://hub.docker.com/r/shine09/clash-config-store/tags) 改为固定版本（如 `v1.1.0-beta.1`）以便复现部署
+- 示例 Compose 默认 SQLite（`DB_TYPE=sqlite`）；`image` 默认为 `shine09/clash-config-store:latest`
+  ，可按 [Docker Hub 标签](https://hub.docker.com/r/shine09/clash-config-store/tags) 改为固定版本（如 `v1.1.0-beta.1`
+  ）以便复现部署
 - 如需外部 MySQL/MariaDB，请在 `.env` 设置：
     - `DB_TYPE=mysql`
     - `DB_DSN=<mysql dsn>`
@@ -161,25 +164,32 @@ npm run dev
 
 ## 环境变量（常用）
 
-| 变量                 | 默认值                                       | 说明                     |
-|--------------------|-------------------------------------------|------------------------|
-| `APP_PORT`         | `26406`                                   | 服务监听端口                 |
-| `GIN_MODE`         | `debug`（未设置时）                             | `debug` / `release` / `test`；生产与 Docker Compose 示例为 `release` |
-| `GIN_TRUSTED_PROXIES` | 未设置时为 `127.0.0.1,::1`                  | 逗号分隔的可信代理 IP 或 CIDR，勿使用「信任全部」；反代场景按需扩大网段 |
-| `DB_TYPE`          | `sqlite`                                  | `sqlite` 或 `mysql`     |
-| `DB_DSN`           | `data.db`                                 | SQLite 文件路径或 MySQL DSN |
-| `JWT_SECRET`       | `please-change-this-secret-in-production` | JWT 密钥，生产环境必须修改        |
-| `JWT_EXPIRY_HOURS` | `24`                                      | JWT 有效期（小时）            |
-| `BASE_URL`         | `http://localhost:26406`                  | 用于生成订阅链接               |
-| `GEOIP_PATH`       | 空（自动探测）                                   | GeoLite2 数据库路径，用于地理限制  |
+| 变量                    | 默认值                                       | 说明                                                            |
+|-----------------------|-------------------------------------------|---------------------------------------------------------------|
+| `APP_PORT`            | `26406`                                   | 服务监听端口                                                        |
+| `GIN_MODE`            | `debug`（未设置时）                             | `debug` / `release` / `test`；生产与 Docker Compose 示例为 `release` |
+| `GIN_TRUSTED_PROXIES` | 未设置时为 `127.0.0.1,::1`                     | 逗号分隔的可信代理 IP 或 CIDR，勿使用「信任全部」；反代场景按需扩大网段                      |
+| `DB_TYPE`             | `sqlite`                                  | `sqlite` 或 `mysql`                                            |
+| `DB_DSN`              | `data.db`                                 | SQLite 文件路径或 MySQL DSN                                        |
+| `JWT_SECRET`          | `please-change-this-secret-in-production` | JWT 密钥，生产环境必须修改                                               |
+| `JWT_EXPIRY_HOURS`    | `24`                                      | JWT 有效期（小时）                                                   |
+| `BASE_URL`            | `http://localhost:26406`                  | 用于生成订阅链接                                                      |
+| `GEOIP_PATH`          | 空（自动探测）                                   | GeoLite2 数据库路径，用于地理限制                                         |
 
 ## GeoIP（可选）
 
-用于**订阅访问**场景：按客户端 IP 解析国家/城市，支撑「按国家限制访问」，并在访问日志里记录地理字段。与下发 YAML 里的 `GEOIP,CN,DIRECT` 等**客户端规则**不是同一回事。
+用于**订阅访问**场景：按客户端 IP 解析国家/城市，支撑「按国家限制访问」，并在访问日志里记录地理字段。与下发 YAML 里的
+`GEOIP,CN,DIRECT` 等**客户端规则**不是同一回事。
 
 - **本地 `go run`**：未设置 `GEOIP_PATH` 且不存在默认路径下的库文件时，地理能力关闭（不影响其它功能）。
-- **Docker / Compose**：构建镜像时会下载并放入 `/data/geoip/GeoLite2-City.mmdb`，示例里的 `GEOIP_PATH` 即指向该路径；这与把宿主机 `./data` 挂到容器内 `/data/store`（仅用于 SQLite 数据目录）**互不冲突**。
-- **自建镜像或更新库**：`make geoip` 会把 `GeoLite2-City.mmdb` 下载到 `.docker/geoip/`，供 `make docker-build` 打进镜像；也可自行下载后通过 `GEOIP_PATH` 指向任意路径。
+- **Docker / Compose**：构建镜像时会下载并放入 `/data/geoip/GeoLite2-City.mmdb`，示例里的 `GEOIP_PATH` 即指向该路径；这与把宿主机
+  `./data` 挂到容器内 `/data/store`（仅用于 SQLite 数据目录）**互不冲突**。
+- **自建镜像或更新库**：`make geoip` 会把 `GeoLite2-City.mmdb` 下载到 `.docker/geoip/`，供 `make docker-build`
+  打进镜像；也可自行下载后通过 `GEOIP_PATH` 指向任意路径。
+
+## 许可证
+
+本项目在 [MIT 许可证](LICENSE) 下发布。
 
 ## 免责声明
 
@@ -187,3 +197,4 @@ npm run dev
 - 使用者应自行确保订阅来源、规则内容与分发行为具备合法授权；由此产生的法律风险与责任由使用者承担。
 - 请勿将本项目用于任何未授权访问、攻击、滥用网络资源或其他违法违规用途。
 - 项目默认不提供商业支持、可用性保证或数据完整性担保，生产使用前请自行评估并做好备份、监控与访问控制。
+
