@@ -634,7 +634,9 @@ function SortableRuleRow({
                   {t('customConfigs.ruleNoResolve')}
                 </Label>
                 <p className="text-[11px] leading-snug text-muted-foreground">
-                  {t('customConfigs.ruleNoResolveHint')}
+                  {parsed.type === 'RULE-SET'
+                    ? t('customConfigs.ruleNoResolveHintRuleSet')
+                    : t('customConfigs.ruleNoResolveHint')}
                 </p>
               </div>
             </div>
