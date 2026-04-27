@@ -15,6 +15,8 @@ import { Subscriptions } from '@/pages/Subscriptions'
 import { SubscriptionDetail } from '@/pages/SubscriptionDetail'
 import { AccessLogs } from '@/pages/AccessLogs'
 import { Settings } from '@/pages/Settings'
+import { AdminUsers } from '@/pages/admin/AdminUsers'
+import { AdminSettings } from '@/pages/admin/AdminSettings'
 
 /** 数据路由（支持 useBlocker 等 API） */
 export const router = createBrowserRouter([
@@ -38,6 +40,8 @@ export const router = createBrowserRouter([
       { path: 'subscriptions/:id', element: <SubscriptionDetail /> },
       { path: 'subscriptions/:id/logs', element: <AccessLogs /> },
       { path: 'settings', element: <Settings /> },
+      { path: 'admin/users', element: <AdminUsers /> },
+      { path: 'admin/settings', element: <AdminSettings /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

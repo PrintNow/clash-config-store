@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { AlertCircle } from 'lucide-react'
 import { authApi } from '@/api/auth'
+import { adminApi } from '@/api/admin'
 import { userApi } from '@/api/user'
 import { preloadPublicKey } from '@/api/crypto'
 import { useAuthStore } from '@/store/auth'
@@ -28,6 +29,7 @@ export function Register() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registrationAllowed, setRegistrationAllowed] = useState<boolean | null>(null)
   const [errors, setErrors] = useState<{
     name?: string
     email?: string
@@ -43,9 +45,23 @@ export function Register() {
     })
   }, [t])
 
+  useEffect(() => {
+    let cancelled = false
+    adminApi
+      .getRegistrationStatus()
+      .then((r) => {
+        if (!cancelled) setRegistrationAllowed(r.allowed)
+      })
+      .catch(() => {
+        if (!cancelled) setRegistrationAllowed(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const validate = () => {
     const newErrors: typeof errors = {}
-    if (!name.trim()) newErrors.name = t('auth.nameRequired')
     if (!email.trim()) newErrors.email = t('auth.emailRequired')
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = t('auth.emailInvalid')
     if (!password) newErrors.password = t('auth.passwordRequired')
@@ -64,7 +80,11 @@ export function Register() {
     setLoading(true)
     setErrors({})
     try {
-      const { token } = await authApi.register({ name, email, password })
+      const { token } = await authApi.register({
+        email,
+        password,
+        ...(name.trim() ? { name: name.trim() } : {}),
+      })
       // 先写入 token，再从服务端拉取最新用户信息
       localStorage.setItem('token', token)
       const freshUser = await userApi.getProfile()
@@ -96,7 +116,15 @@ export function Register() {
               <CardDescription>{t('auth.registerSubtitle')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              {registrationAllowed === null ? (
+                <p className="text-muted-foreground text-sm">{t('common.loading')}</p>
+              ) : registrationAllowed === false ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{t('auth.registerClosed')}</AlertDescription>
+                </Alert>
+              ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 {/* 服务端/网络级错误：用 Alert 组件内联展示，不弹 toast */}
                 {errors.form && (
                   <Alert variant="destructive">
@@ -105,21 +133,25 @@ export function Register() {
                   </Alert>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="name">{t('auth.username')}</Label>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="name">
+                    {t('auth.username')}
+                    <span className="text-muted-foreground font-normal">（{t('common.optional')}）</span>
+                  </Label>
                   <Input
                     id="name"
-                    placeholder={t('auth.usernamePlaceholder')}
+                    placeholder={t('auth.usernameOptionalPlaceholder')}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     disabled={loading}
                     className={errors.name ? 'border-destructive' : ''}
                     aria-invalid={!!errors.name}
                   />
+                  <p className="text-muted-foreground text-xs">{t('auth.usernameOptionalHint')}</p>
                   {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="email">{t('auth.email')}</Label>
                   <Input
                     id="email"
@@ -134,7 +166,7 @@ export function Register() {
                   {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="password">{t('auth.password')}</Label>
                   <Input
                     id="password"
@@ -151,7 +183,7 @@ export function Register() {
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
                   <Input
                     id="confirmPassword"
@@ -172,6 +204,7 @@ export function Register() {
                   {loading ? t('common.submitting') : t('auth.registerButton')}
                 </Button>
               </form>
+              )}
 
               <div className="mt-4 text-center text-sm text-muted-foreground">
                 {t('auth.hasAccount')}{' '}

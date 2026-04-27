@@ -27,6 +27,7 @@ func ApplySchema(db *gorm.DB) error {
 	}
 	return db.AutoMigrate(
 		&model.User{},
+		&model.SiteSetting{},
 		&model.UserAgent{},
 		&model.Provider{},
 		&model.ConfigTemplate{},

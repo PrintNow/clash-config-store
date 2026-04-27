@@ -66,6 +66,8 @@ func main() {
 
 	api := r.Group("/api")
 	{
+		api.GET("/public/registration-status", handler.GetRegistrationStatus)
+
 		auth := api.Group("/auth")
 		auth.GET("/public-key", handler.GetPublicKey)
 		auth.POST("/register", handler.Register)
@@ -146,6 +148,17 @@ func main() {
 			sub.GET("/:id/restrictions", handler.ListRestrictions)
 			sub.POST("/:id/restrictions", handler.CreateRestriction)
 			sub.DELETE("/:id/restrictions/:rid", handler.DeleteRestriction)
+
+			// 管理后台（root / admin）
+			adm := protected.Group("/admin")
+			adm.Use(middleware.AdminRequired())
+			adm.GET("/settings", handler.GetSiteSettings)
+			adm.PUT("/settings", handler.UpdateSiteSettings)
+			adm.GET("/users", handler.ListUsers)
+			adm.POST("/users", handler.CreateUser)
+			adm.PUT("/users/:id", handler.UpdateUser)
+			adm.DELETE("/users/:id", handler.DeleteUser)
+			adm.PATCH("/users/:id/role", middleware.RootRequired(), handler.UpdateUserRole)
 		}
 	}
 
