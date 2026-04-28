@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRuleAnalysis,
   canUseMatchType,
+  COMMA_PAYLOAD_RULE_TYPES,
   hasMatchRule,
   insertRule,
   normalizeMatchRuleOrder,
+  normalizeRuleType,
   parseRule,
   parseRulesText,
+  ruleSupportsNoResolve,
   ruleToString,
+  RULE_TYPES,
 } from './index'
 
 describe('rules domain', () => {
@@ -153,7 +157,7 @@ describe('rules domain', () => {
         isLastRule: false,
       })
       expect(result.status).toBe('warning')
-      expect(result.warnings).toContain('MATCH 建议保持在规则列表最后')
+      expect(result.warnings).toContainEqual({ key: 'customConfigs.ruleAnalysis.matchShouldBeLast' })
     })
 
     it('最后一条 MATCH 不报警告', () => {
@@ -165,13 +169,19 @@ describe('rules domain', () => {
     it('未勾选的 RULE-SET 给出警告', () => {
       const result = buildRuleAnalysis('RULE-SET,proxy,PROXY', baseContext)
       expect(result.status).toBe('warning')
-      expect(result.warnings).toContain('规则集 "proxy" 尚未在“规则集引用”中勾选')
+      expect(result.warnings).toContainEqual({
+        key: 'customConfigs.ruleAnalysis.ruleSetNotSelected',
+        params: { name: 'proxy' },
+      })
     })
 
     it('不存在的 RULE-SET 给出错误', () => {
       const result = buildRuleAnalysis('RULE-SET,missing,PROXY', baseContext)
       expect(result.status).toBe('error')
-      expect(result.errors).toContain('规则集 "missing" 不存在')
+      expect(result.errors).toContainEqual({
+        key: 'customConfigs.ruleAnalysis.ruleSetNotFound',
+        params: { name: 'missing' },
+      })
     })
 
     it('缺失目标策略和重复规则会被检测', () => {
@@ -180,20 +190,26 @@ describe('rules domain', () => {
         duplicateCount: 2,
       })
       expect(result.status).toBe('error')
-      expect(result.errors).toContain('缺少目标策略')
-      expect(result.warnings).toContain('存在 2 条完全相同的规则')
+      expect(result.errors).toContainEqual({ key: 'customConfigs.ruleAnalysis.missingTarget' })
+      expect(result.warnings).toContainEqual({
+        key: 'customConfigs.ruleAnalysis.duplicateRules',
+        params: { count: 2 },
+      })
     })
 
     it('不存在的目标策略给出警告', () => {
       const result = buildRuleAnalysis('DOMAIN,a.com,OTHER', baseContext)
       expect(result.status).toBe('warning')
-      expect(result.warnings).toContain('目标策略 "OTHER" 当前不存在于内置策略、代理组或节点中')
+      expect(result.warnings).toContainEqual({
+        key: 'customConfigs.ruleAnalysis.targetNotFound',
+        params: { name: 'OTHER' },
+      })
     })
 
     it('非目标 IP 类规则带 no-resolve 时给出警告', () => {
       const result = buildRuleAnalysis('DOMAIN,a.com,DIRECT,no-resolve', baseContext)
       expect(result.status).toBe('warning')
-      expect(result.warnings.some((w) => w.includes('no-resolve'))).toBe(true)
+      expect(result.warnings.some((w) => w.key === 'customConfigs.ruleAnalysis.noResolveUnsupported')).toBe(true)
     })
 
     it('RULE-SET 带 no-resolve 且已选规则集时不因 no-resolve 产生类型警告', () => {
@@ -204,8 +220,188 @@ describe('rules domain', () => {
       expect(result.status).toBe('valid')
       expect(result.parsed.noResolve).toBe(true)
       expect(
-        result.warnings.some((w) => w.includes('no-resolve') && w.includes('通常仅用于'))
+        result.warnings.some((w) => w.key === 'customConfigs.ruleAnalysis.noResolveUnsupported')
       ).toBe(false)
+    })
+
+    it('空规则字符串报错', () => {
+      const result = buildRuleAnalysis('', baseContext)
+      expect(result.status).toBe('error')
+      expect(result.errors).toContainEqual({ key: 'customConfigs.ruleAnalysis.emptyRule' })
+    })
+
+    it('不支持的规则类型报错', () => {
+      const result = buildRuleAnalysis('BANANA,payload,PROXY', baseContext)
+      expect(result.status).toBe('error')
+      expect(result.errors).toContainEqual({
+        key: 'customConfigs.ruleAnalysis.unsupportedType',
+        params: { type: 'BANANA' },
+      })
+    })
+
+    it('非 MATCH 规则缺少 payload 报错', () => {
+      const result = buildRuleAnalysis('DOMAIN,,DIRECT', baseContext)
+      expect(result.status).toBe('error')
+      expect(result.errors).toContainEqual({ key: 'customConfigs.ruleAnalysis.missingPayload' })
+    })
+
+    it('RULE-SET 已选且存在时无警告', () => {
+      const result = buildRuleAnalysis('RULE-SET,apple,PROXY', {
+        ...baseContext,
+        selectedRuleProviders: new Set(['apple']),
+      })
+      expect(result.status).toBe('valid')
+      expect(result.errors).toEqual([])
+      expect(result.warnings).toEqual([])
+    })
+  })
+
+  describe('normalizeRuleType', () => {
+    it('将小写转换为大写', () => {
+      expect(normalizeRuleType('domain')).toBe('DOMAIN')
+    })
+
+    it('去除首尾空格', () => {
+      expect(normalizeRuleType('  IP-CIDR  ')).toBe('IP-CIDR')
+    })
+
+    it('空字符串返回空', () => {
+      expect(normalizeRuleType('')).toBe('')
+    })
+  })
+
+  describe('ruleSupportsNoResolve', () => {
+    it('GEOIP 支持 no-resolve', () => {
+      expect(ruleSupportsNoResolve('GEOIP')).toBe(true)
+    })
+
+    it('RULE-SET 支持 no-resolve', () => {
+      expect(ruleSupportsNoResolve('RULE-SET')).toBe(true)
+    })
+
+    it('DOMAIN 不支持 no-resolve', () => {
+      expect(ruleSupportsNoResolve('DOMAIN')).toBe(false)
+    })
+
+    it('大小写不敏感', () => {
+      expect(ruleSupportsNoResolve('ip-cidr')).toBe(true)
+    })
+
+    it('SRC-GEOIP 不支持', () => {
+      expect(ruleSupportsNoResolve('SRC-GEOIP')).toBe(false)
+    })
+  })
+
+  describe('insertRule 模板', () => {
+    it('DOMAIN-SUFFIX 模板插入顶部', () => {
+      const result = insertRule(['MATCH,PROXY'], 'DOMAIN-SUFFIX')
+      expect(result.inserted).toBe(true)
+      expect(result.insertIndex).toBe(0)
+      expect(result.rules[0]).toBe('DOMAIN-SUFFIX,example.com,DIRECT')
+    })
+
+    it('RULE-SET 模板插入顶部', () => {
+      const result = insertRule(['MATCH,PROXY'], 'RULE-SET')
+      expect(result.inserted).toBe(true)
+      expect(result.insertIndex).toBe(0)
+      expect(result.rules[0]).toBe('RULE-SET,,DIRECT')
+    })
+  })
+
+  describe('parseRule 边界', () => {
+    it('空字符串返回空类型', () => {
+      const result = parseRule('')
+      expect(result.type).toBe('')
+      expect(result.payload).toBe('')
+    })
+
+    it('仅类型无 payload 和 target', () => {
+      const result = parseRule('DOMAIN')
+      expect(result.type).toBe('DOMAIN')
+      expect(result.target).toBe('')
+    })
+  })
+
+  describe('ruleToString', () => {
+    it('MATCH 规则忽略 payload', () => {
+      expect(ruleToString({ type: 'MATCH', payload: 'ignored', target: 'PROXY' })).toBe(
+        'MATCH,PROXY'
+      )
+    })
+  })
+
+  describe('normalizeMatchRuleOrder', () => {
+    it('多条 MATCH 规则均移到最后', () => {
+      expect(
+        normalizeMatchRuleOrder(['MATCH,A', 'DOMAIN,x.com,DIRECT', 'MATCH,B'])
+      ).toEqual(['DOMAIN,x.com,DIRECT', 'MATCH,A', 'MATCH,B'])
+    })
+  })
+
+  describe('COMMA_PAYLOAD_RULE_TYPES 完整性', () => {
+    it('包含所有 7 种类型', () => {
+      const expected = [
+        'NOT',
+        'OR',
+        'AND',
+        'SUB-RULE',
+        'DOMAIN-REGEX',
+        'PROCESS-NAME-REGEX',
+        'PROCESS-PATH-REGEX',
+      ]
+      for (const type of expected) {
+        expect(COMMA_PAYLOAD_RULE_TYPES.has(type)).toBe(true)
+      }
+      expect(COMMA_PAYLOAD_RULE_TYPES.size).toBe(7)
+    })
+  })
+
+  describe('FINAL 别名', () => {
+    it('parseRule 将 FINAL 解析为 MATCH', () => {
+      const result = parseRule('FINAL,PROXY')
+      expect(result.type).toBe('MATCH')
+      expect(result.target).toBe('PROXY')
+      expect(result.noResolve).toBe(false)
+    })
+
+    it('ruleToString 对 FINAL 类型输出 MATCH', () => {
+      expect(ruleToString({ type: 'FINAL', payload: '', target: 'PROXY' })).toBe('MATCH,PROXY')
+    })
+
+    it('FINAL 忽略 no-resolve（与 MATCH 一致）', () => {
+      const result = parseRule('FINAL,PROXY,no-resolve')
+      expect(result.type).toBe('MATCH')
+      expect(result.noResolve).toBe(false)
+    })
+  })
+
+  describe('RULE_TYPES 完整性', () => {
+    it('包含 36 种规则类型', () => {
+      expect(RULE_TYPES.length).toBe(36)
+    })
+
+    it('包含所有关键 Mihomo 类型', () => {
+      const critical = [
+        'DOMAIN',
+        'DOMAIN-SUFFIX',
+        'DOMAIN-KEYWORD',
+        'GEOSITE',
+        'GEOIP',
+        'IP-CIDR',
+        'IP-CIDR6',
+        'RULE-SET',
+        'MATCH',
+        'PROCESS-NAME',
+        'DST-PORT',
+        'NETWORK',
+        'SUB-RULE',
+        'AND',
+        'OR',
+        'NOT',
+      ]
+      for (const type of critical) {
+        expect(RULE_TYPES).toContain(type)
+      }
     })
   })
 })
