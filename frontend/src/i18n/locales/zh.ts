@@ -305,6 +305,8 @@ const zh = {
     ruleNoResolve: 'no-resolve',
     ruleNoResolveHint:
       '仅适用于 GEOIP、IP-CIDR 等目标 IP 类规则。勾选后写入 ,no-resolve，域名命中该规则时将跳过 DNS 解析以检查目标 IP；若更早的规则已触发解析，仍可能匹配到本规则。',
+    ruleNoResolveHintRuleSet:
+      '对 RULE-SET 可附加 no-resolve。勾选后写入 ,no-resolve，由 Mihomo 在匹配该规则集时按引擎语义处理（与仅 IP 类规则的作用对象不同，详见文档）。',
     ruleTargetHint: '从内置策略、代理组或节点中选择',
     rawRulesMode: '原始文本模式',
     structuredRulesMode: '结构化编辑',

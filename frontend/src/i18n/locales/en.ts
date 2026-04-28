@@ -298,6 +298,8 @@ const en = {
     ruleNoResolve: 'no-resolve',
     ruleNoResolveHint:
       'For GEOIP / IP-CIDR-style destination-IP rules. Appends ,no-resolve so Mihomo skips DNS resolution when checking whether a domain hits this rule. If an earlier rule already resolved DNS, this rule may still match.',
+    ruleNoResolveHintRuleSet:
+      'RULE-SET rules may take no-resolve. When checked, appends ,no-resolve; Mihomo applies it per the rule engine (different from IP-only rules; see docs).',
     ruleTargetHint: 'Choose from built-ins, proxy groups, or proxy nodes',
     rawRulesMode: 'Raw Text Mode',
     structuredRulesMode: 'Structured Mode',

@@ -2,7 +2,7 @@ export interface ParsedRule {
   type: string
   payload: string
   target: string
-  /** 末尾附加 `,no-resolve`（仅对部分目标 IP 类规则有意义） */
+  /** 末尾附加 `,no-resolve`（目标 IP 类与 RULE-SET 等类型可由 Mihomo 支持） */
   noResolve?: boolean
 }
 
@@ -91,13 +91,14 @@ export function normalizeRuleType(type: string): string {
   return type.trim().toUpperCase()
 }
 
-/** Mihomo：域名匹配走目标 IP 类规则时会触发解析；no-resolve 可跳过 DNS 解析 */
+/** Mihomo：目标 IP 类规则在域名场景下会触发解析，no-resolve 可跳过；RULE-SET 亦支持该附加参数 */
 export const NO_RESOLVE_RULE_TYPES = new Set<string>([
   'GEOIP',
   'IP-CIDR',
   'IP-CIDR6',
   'IP-SUFFIX',
   'IP-ASN',
+  'RULE-SET',
 ])
 
 export function ruleSupportsNoResolve(ruleType: string): boolean {

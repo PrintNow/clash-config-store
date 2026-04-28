@@ -57,6 +57,17 @@ describe('rules domain', () => {
       expect(ruleToString(parsed)).toBe('IP-CIDR,10.0.0.0/8,DIRECT,no-resolve')
     })
 
+    it('解析并序列化带 no-resolve 的 RULE-SET 规则', () => {
+      const parsed = parseRule('RULE-SET,apple,PROXY,no-resolve')
+      expect(parsed).toEqual({
+        type: 'RULE-SET',
+        payload: 'apple',
+        target: 'PROXY',
+        noResolve: true,
+      })
+      expect(ruleToString(parsed)).toBe('RULE-SET,apple,PROXY,no-resolve')
+    })
+
     it('MATCH 忽略末尾 no-resolve 标记', () => {
       expect(parseRule('MATCH,PROXY,no-resolve')).toEqual({
         type: 'MATCH',
@@ -183,6 +194,18 @@ describe('rules domain', () => {
       const result = buildRuleAnalysis('DOMAIN,a.com,DIRECT,no-resolve', baseContext)
       expect(result.status).toBe('warning')
       expect(result.warnings.some((w) => w.includes('no-resolve'))).toBe(true)
+    })
+
+    it('RULE-SET 带 no-resolve 且已选规则集时不因 no-resolve 产生类型警告', () => {
+      const result = buildRuleAnalysis('RULE-SET,apple,PROXY,no-resolve', {
+        ...baseContext,
+        selectedRuleProviders: new Set(['apple']),
+      })
+      expect(result.status).toBe('valid')
+      expect(result.parsed.noResolve).toBe(true)
+      expect(
+        result.warnings.some((w) => w.includes('no-resolve') && w.includes('通常仅用于'))
+      ).toBe(false)
     })
   })
 })

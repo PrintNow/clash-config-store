@@ -9,6 +9,7 @@ func TestValidateMihomoRuleLine(t *testing.T) {
 		"MATCH,Proxy",
 		"GEOIP,CN,DIRECT",
 		"RULE-SET,myrules,Proxy",
+		"RULE-SET,myrules,Proxy,no-resolve",
 	}
 	for _, s := range ok {
 		if err := validateMihomoRuleLine(s); err != nil {
