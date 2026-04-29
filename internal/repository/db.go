@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"clash-config-store/internal/applog"
 	"clash-config-store/internal/config"
@@ -10,6 +12,7 @@ import (
 	"clash-config-store/internal/repository/migrations"
 
 	"github.com/glebarez/sqlite"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -44,6 +47,11 @@ func Init(cfg *config.Config) error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	// 幂等补全 site_settings（应对 MySQL DDL 隐式提交、手工删表、备份还原等导致的漂移）
+	if err := migrations.EnsureSiteSettingsSchema(DB); err != nil {
+		return fmt.Errorf("补全 site_settings 表结构失败: %w", err)
+	}
+
 	if err := SeedRuleProviders(DB); err != nil {
 		slog.Warn("规则集预设种子初始化警告", slog.String("component", "db"), slog.Any("err", err))
 	}
@@ -52,8 +60,67 @@ func Init(cfg *config.Config) error {
 		slog.Warn("UA 内置预设种子初始化警告", slog.String("component", "db"), slog.Any("err", err))
 	}
 
+	// 全新部署（用户表无任何行）时写入内置 root，便于首次登录；存量库有用户则跳过
+	if err := SeedDefaultAdminIfEmpty(DB); err != nil {
+		return fmt.Errorf("内置管理员账号初始化失败: %w", err)
+	}
+
+	if err := SeedSiteSettings(DB); err != nil {
+		return fmt.Errorf("站点默认配置初始化失败: %w", err)
+	}
+
 	slog.Info("数据库初始化成功", slog.String("component", "db"), slog.String("db_type", cfg.DBType))
 	return nil
+}
+
+const (
+	defaultAdminEmail    = "admin@local.host"
+	defaultAdminName     = "admin"
+	defaultAdminPassword = "clash-config-store"
+)
+
+// SeedDefaultAdminIfEmpty 仅当 users 表无任何记录时创建内置 root（bcrypt，不经前端 RSA）
+func SeedDefaultAdminIfEmpty(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("SeedDefaultAdminIfEmpty: db 不能为空")
+	}
+	var n int64
+	if err := db.Model(&model.User{}).Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	u := &model.User{
+		Email:        strings.ToLower(defaultAdminEmail),
+		Name:         defaultAdminName,
+		PasswordHash: string(hash),
+		Role:         model.RoleRoot,
+	}
+	return db.Create(u).Error
+}
+
+// SeedSiteSettings 写入默认站点配置（幂等）
+func SeedSiteSettings(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("SeedSiteSettings: db 不能为空")
+	}
+	var existing model.SiteSetting
+	err := db.Where(&model.SiteSetting{Key: model.SettingAllowRegistration}).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return db.Create(&model.SiteSetting{
+		Key:   model.SettingAllowRegistration,
+		Value: "false",
+	}).Error
 }
 
 // MigrateAll 与 migrations.ApplySchema 等价（单测等场景）

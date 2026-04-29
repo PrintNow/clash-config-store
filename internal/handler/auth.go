@@ -12,7 +12,7 @@ import (
 
 type registerRequest struct {
 	Email             string `json:"email" binding:"required,email"`
-	Name              string `json:"name" binding:"required"`
+	Name              string `json:"name"` // 可选，空则服务端从邮箱前缀生成
 	EncryptedPassword string `json:"encrypted_password" binding:"required"`
 }
 

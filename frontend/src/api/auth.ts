@@ -11,13 +11,13 @@ export const authApi = {
   // 注册（密码用 RSA 公钥加密后传输）
   register: async (data: {
     email: string
-    name: string
+    name?: string
     password: string
   }): Promise<AuthResponse> => {
     const encrypted_password = await encryptPassword(data.password)
     const res = await client.post<{ code: number; data: AuthResponse }>('/auth/register', {
       email: data.email,
-      name: data.name,
+      name: data.name?.trim() ?? '',
       encrypted_password,
     })
     return res.data.data

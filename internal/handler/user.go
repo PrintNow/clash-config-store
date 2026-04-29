@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
@@ -42,17 +43,20 @@ func UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// 邮箱唯一性检查
-	if req.Email != "" && req.Email != user.Email {
-		var count int64
-		repository.DB.Model(&model.User{}).
-			Where("email = ? AND id != ?", req.Email, userID).
-			Count(&count)
-		if count > 0 {
-			Fail(c, http.StatusBadRequest, "该邮箱已被使用")
-			return
+	// 邮箱唯一性检查（小写存储）
+	if req.Email != "" {
+		newEmail := strings.ToLower(strings.TrimSpace(req.Email))
+		if newEmail != user.Email {
+			var count int64
+			repository.DB.Model(&model.User{}).
+				Where("email = ? AND id != ?", newEmail, userID).
+				Count(&count)
+			if count > 0 {
+				Fail(c, http.StatusBadRequest, "该邮箱已被使用")
+				return
+			}
+			user.Email = newEmail
 		}
-		user.Email = req.Email
 	}
 
 	if req.Name != "" {
