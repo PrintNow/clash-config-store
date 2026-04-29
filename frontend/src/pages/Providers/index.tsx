@@ -37,13 +37,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-
-interface ProviderFormData {
-  name: string
-  url: string
-  user_agent_id: string
-  cache_ttl: string
-}
+import type { ProviderFormData } from './shared/types'
+import { TrafficCell } from './traffic/TrafficCell'
 
 export function Providers() {
   const { t } = useTranslation()
@@ -177,6 +172,7 @@ export function Providers() {
               <TableHead>{t('providers.providerUrl')}</TableHead>
               <TableHead>{t('providers.userAgent')}</TableHead>
               <TableHead>{t('providers.lastFetched')}</TableHead>
+              <TableHead>{t('providers.traffic')}</TableHead>
               <TableHead className="w-[130px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
@@ -184,14 +180,14 @@ export function Providers() {
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 6 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : providers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <EmptyState
                     title={t('providers.emptyTitle')}
                     description={t('providers.emptyDescription')}
@@ -253,6 +249,14 @@ export function Providers() {
                         {t('providers.neverFetched')}
                       </span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <TrafficCell
+                      upload={p.traffic_upload}
+                      download={p.traffic_download}
+                      total={p.traffic_total}
+                      expireAt={p.traffic_expire_at}
+                    />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">

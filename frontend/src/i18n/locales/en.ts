@@ -215,6 +215,14 @@ const en = {
     cacheTTLPlaceholder: 'Cache TTL in seconds, 0 = no cache',
     emptyTitle: 'Add your first upstream provider',
     emptyDescription: 'Providers supply the real nodes. Later, subscriptions can enable these sources and merge them into the final config.',
+    traffic: 'Traffic',
+    trafficUpload: 'Upload',
+    trafficDownload: 'Download',
+    trafficTotal: 'Total',
+    trafficExpires: 'Expires',
+    trafficExpired: 'Expired',
+    trafficExpiresToday: 'Expires today',
+    trafficDaysLeft: '{{count}} days left',
   },
 
   userAgents: {

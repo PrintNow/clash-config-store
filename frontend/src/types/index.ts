@@ -28,6 +28,11 @@ export interface Provider {
   last_fetched_at?: string
   fetch_error?: string
   user_agent?: UserAgent
+  // 订阅流量信息（从 subscription-userinfo 响应头解析）
+  traffic_upload?: number | null
+  traffic_download?: number | null
+  traffic_total?: number | null
+  traffic_expire_at?: string | null
 }
 
 // 代理节点（结构化）
