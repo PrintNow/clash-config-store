@@ -14,6 +14,12 @@ type Provider struct {
 	CacheTTL      int        `gorm:"default:60" json:"cache_ttl"` // 缓存有效期（分钟）
 	FetchError    string     `json:"fetch_error,omitempty"`       // 最近一次拉取错误信息
 
+	// ── 订阅流量信息（从 subscription-userinfo 响应头解析） ──
+	TrafficUpload   *int64     `json:"traffic_upload"`    // 已上传（字节）
+	TrafficDownload *int64     `json:"traffic_download"`  // 已下载（字节）
+	TrafficTotal    *int64     `json:"traffic_total"`     // 总流量（字节）
+	TrafficExpireAt *time.Time `json:"traffic_expire_at"` // 订阅到期时间
+
 	User      User       `gorm:"foreignKey:UserID" json:"-"`
 	UserAgent *UserAgent `gorm:"foreignKey:UserAgentID" json:"user_agent,omitempty"`
 }

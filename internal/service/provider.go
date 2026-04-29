@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"clash-config-store/internal/model"
@@ -61,6 +63,9 @@ func FetchAndCache(providerID uint) error {
 		return saveProviderError(&p, errMsg)
 	}
 
+	// 解析 subscription-userinfo 响应头（如有）
+	trafficInfo := parseSubscriptionUserinfo(resp.Header.Get("subscription-userinfo"))
+
 	// 最大读取 10MB，防止超大响应占用内存
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
@@ -70,11 +75,21 @@ func FetchAndCache(providerID uint) error {
 	}
 
 	now := time.Now()
-	if err := repository.DB.Model(&p).Updates(map[string]interface{}{
+	updateMap := map[string]interface{}{
 		"cache_content":   string(body),
 		"last_fetched_at": now,
 		"fetch_error":     "",
-	}).Error; err != nil {
+	}
+
+	// 仅当上游返回了流量信息时才更新（保留旧数据，避免临时缺失导致清空）
+	if trafficInfo != nil {
+		updateMap["traffic_upload"] = trafficInfo.Upload
+		updateMap["traffic_download"] = trafficInfo.Download
+		updateMap["traffic_total"] = trafficInfo.Total
+		updateMap["traffic_expire_at"] = trafficInfo.ExpireAt
+	}
+
+	if err := repository.DB.Model(&p).Updates(updateMap).Error; err != nil {
 		return fmt.Errorf("保存缓存失败: %w", err)
 	}
 
@@ -93,4 +108,62 @@ func AsyncRefresh(providerID uint) {
 func saveProviderError(p *model.Provider, errMsg string) error {
 	repository.DB.Model(p).Update("fetch_error", errMsg)
 	return fmt.Errorf("%s", errMsg)
+}
+
+// subscriptionTraffic 解析后的订阅流量信息
+type subscriptionTraffic struct {
+	Upload   *int64
+	Download *int64
+	Total    *int64
+	ExpireAt *time.Time
+}
+
+// parseSubscriptionUserinfo 解析 subscription-userinfo 响应头。
+// 格式: "upload=123; download=456; total=789; expire=1735689600"
+// 返回 nil 表示 header 为空或无有效数据。
+func parseSubscriptionUserinfo(header string) *subscriptionTraffic {
+	if header == "" {
+		return nil
+	}
+
+	result := &subscriptionTraffic{}
+	hasAny := false
+
+	for _, part := range strings.Split(header, ";") {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(kv[0])
+		val := strings.TrimSpace(kv[1])
+
+		switch key {
+		case "upload":
+			if v, err := strconv.ParseInt(val, 10, 64); err == nil {
+				result.Upload = &v
+				hasAny = true
+			}
+		case "download":
+			if v, err := strconv.ParseInt(val, 10, 64); err == nil {
+				result.Download = &v
+				hasAny = true
+			}
+		case "total":
+			if v, err := strconv.ParseInt(val, 10, 64); err == nil {
+				result.Total = &v
+				hasAny = true
+			}
+		case "expire":
+			if v, err := strconv.ParseInt(val, 10, 64); err == nil && v > 0 {
+				t := time.Unix(v, 0)
+				result.ExpireAt = &t
+				hasAny = true
+			}
+		}
+	}
+
+	if !hasAny {
+		return nil
+	}
+	return result
 }

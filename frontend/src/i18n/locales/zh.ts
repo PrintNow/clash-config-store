@@ -220,6 +220,14 @@ const zh = {
     cacheTTLPlaceholder: '缓存有效期（秒），0 表示不缓存',
     emptyTitle: '先添加一个上游订阅源',
     emptyDescription: '订阅源负责提供真实节点。后续创建订阅时，可以勾选这些来源并统一生成最终配置。',
+    traffic: '流量',
+    trafficUpload: '上传',
+    trafficDownload: '下载',
+    trafficTotal: '总量',
+    trafficExpires: '到期',
+    trafficExpired: '已过期',
+    trafficExpiresToday: '今日到期',
+    trafficDaysLeft: '{{count}} 天后到期',
   },
 
   // UA 库

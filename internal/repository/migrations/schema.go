@@ -15,6 +15,24 @@ func init() {
 	})
 }
 
+func init() {
+	register(Migration{
+		Version: 20260429133900,
+		Up:      migrate20260429133900,
+	})
+}
+
+// migrate20260429133900 为 Provider 表新增流量信息字段（subscription-userinfo 解析结果）。
+func migrate20260429133900(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE providers
+		ADD COLUMN traffic_upload    BIGINT       NULL AFTER fetch_error,
+		ADD COLUMN traffic_download  BIGINT       NULL AFTER traffic_upload,
+		ADD COLUMN traffic_total     BIGINT       NULL AFTER traffic_download,
+		ADD COLUMN traffic_expire_at DATETIME(3)  NULL AFTER traffic_total
+	`).Error
+}
+
 func applySchemaUp(db *gorm.DB) error {
 	return ApplySchema(db)
 }
