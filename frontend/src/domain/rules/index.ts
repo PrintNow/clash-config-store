@@ -15,9 +15,14 @@ export interface RuleAnalysis {
   rule: string
   parsed: ParsedRule
   status: 'valid' | 'warning' | 'error'
-  errors: string[]
-  warnings: string[]
+  errors: RuleAnalysisMessage[]
+  warnings: RuleAnalysisMessage[]
   quickFixes: RuleQuickFix[]
+}
+
+export interface RuleAnalysisMessage {
+  key: string
+  params?: Record<string, string | number>
 }
 
 export type RuleQuickFixAction =
@@ -28,7 +33,8 @@ export type RuleQuickFixAction =
 
 export interface RuleQuickFix {
   type: RuleQuickFixAction
-  label: string
+  labelKey: string
+  labelParams?: Record<string, string | number>
 }
 
 export const RULE_TYPES = [
@@ -114,27 +120,28 @@ export function parseRule(rule: string): ParsedRule {
     parts = parts.slice(0, -1)
   }
   const type = normalizeRuleType(parts[0] || '')
-  if (type === 'MATCH') {
+  // Mihomo: FINAL 是 MATCH 的别名（原 Clash 规范）
+  const resolvedType = type === 'FINAL' ? 'MATCH' : type
+  if (resolvedType === 'MATCH') {
     return { type: 'MATCH', payload: '', target: parts[1] || '', noResolve: false }
   }
-  if (COMMA_PAYLOAD_RULE_TYPES.has(type)) {
+  if (COMMA_PAYLOAD_RULE_TYPES.has(resolvedType)) {
     return {
-      type,
+      type: resolvedType,
       payload: parts.slice(1, -1).join(','),
       target: parts.at(-1) || '',
       noResolve,
     }
   }
-  return { type, payload: parts[1] || '', target: parts[2] || '', noResolve }
+  return { type: resolvedType, payload: parts[1] || '', target: parts[2] || '', noResolve }
 }
 
 export function ruleToString(r: ParsedRule): string {
-  const type = normalizeRuleType(r.type)
+  const rawType = r.type.trim().toUpperCase()
+  // Mihomo: FINAL 是 MATCH 的别名，统一输出 MATCH
+  const type = rawType === 'FINAL' ? 'MATCH' : rawType
   const nr = r.noResolve ? ',no-resolve' : ''
   if (type === 'MATCH') return `MATCH,${r.target.trim()}`
-  if (COMMA_PAYLOAD_RULE_TYPES.has(type)) {
-    return `${type},${r.payload.trim()},${r.target.trim()}${nr}`
-  }
   return `${type},${r.payload.trim()},${r.target.trim()}${nr}`
 }
 
@@ -187,50 +194,54 @@ export interface RuleAnalysisContext {
 
 export function buildRuleAnalysis(rule: string, ctx: RuleAnalysisContext): RuleAnalysis {
   const parsed = parseRule(rule)
-  const type = normalizeRuleType(parsed.type)
+  const type = parsed.type
   const payload = parsed.payload.trim()
   const target = parsed.target.trim()
-  const errors: string[] = []
-  const warnings: string[] = []
+  const errors: RuleAnalysisMessage[] = []
+  const warnings: RuleAnalysisMessage[] = []
   const quickFixes: RuleQuickFix[] = []
 
   if (!rule.trim()) {
-    errors.push('空规则不会被保存')
+    errors.push({ key: 'customConfigs.ruleAnalysis.emptyRule' })
   }
   if (!type) {
-    errors.push('缺少规则类型')
+    errors.push({ key: 'customConfigs.ruleAnalysis.missingType' })
   } else if (!RULE_TYPES.includes(type as (typeof RULE_TYPES)[number])) {
-    errors.push(`不支持的规则类型：${type}`)
+    errors.push({ key: 'customConfigs.ruleAnalysis.unsupportedType', params: { type } })
   }
   if (type !== 'MATCH' && !payload) {
-    errors.push('缺少匹配内容')
+    errors.push({ key: 'customConfigs.ruleAnalysis.missingPayload' })
   }
   if (!target) {
-    errors.push(type === 'MATCH' ? 'MATCH 规则必须指定目标策略' : '缺少目标策略')
+    errors.push({
+      key: type === 'MATCH'
+        ? 'customConfigs.ruleAnalysis.matchMissingTarget'
+        : 'customConfigs.ruleAnalysis.missingTarget',
+    })
   }
   if (type === 'RULE-SET' && payload) {
     if (!ctx.availableRuleProviders.has(payload)) {
-      errors.push(`规则集 "${payload}" 不存在`)
-      quickFixes.push({ type: 'go-rule-sets', label: '检查规则集引用' })
+      errors.push({ key: 'customConfigs.ruleAnalysis.ruleSetNotFound', params: { name: payload } })
+      quickFixes.push({ type: 'go-rule-sets', labelKey: 'customConfigs.ruleAnalysis.fixCheckRuleSets' })
     } else if (!ctx.selectedRuleProviders.has(payload)) {
-      warnings.push(`规则集 "${payload}" 尚未在“规则集引用”中勾选`)
-      quickFixes.push({ type: 'go-rule-sets', label: '前往勾选规则集' })
+      warnings.push({ key: 'customConfigs.ruleAnalysis.ruleSetNotSelected', params: { name: payload } })
+      quickFixes.push({ type: 'go-rule-sets', labelKey: 'customConfigs.ruleAnalysis.fixGoSelectRuleSets' })
     }
   }
   if (target && !ctx.availableTargets.has(target)) {
-    warnings.push(`目标策略 "${target}" 当前不存在于内置策略、代理组或节点中`)
-    quickFixes.push({ type: 'go-target-groups', label: '检查代理组' })
-    quickFixes.push({ type: 'go-target-proxies', label: '检查代理节点' })
+    warnings.push({ key: 'customConfigs.ruleAnalysis.targetNotFound', params: { name: target } })
+    quickFixes.push({ type: 'go-target-groups', labelKey: 'customConfigs.ruleAnalysis.fixCheckGroups' })
+    quickFixes.push({ type: 'go-target-proxies', labelKey: 'customConfigs.ruleAnalysis.fixCheckProxies' })
   }
   if (type === 'MATCH' && target && !ctx.isLastRule) {
-    warnings.push('MATCH 建议保持在规则列表最后')
-    quickFixes.push({ type: 'move-match-to-bottom', label: '移到底部' })
+    warnings.push({ key: 'customConfigs.ruleAnalysis.matchShouldBeLast' })
+    quickFixes.push({ type: 'move-match-to-bottom', labelKey: 'customConfigs.ruleAnalysis.fixMoveToBottom' })
   }
   if (parsed.noResolve && !ruleSupportsNoResolve(type)) {
-    warnings.push('no-resolve 通常仅用于 GEOIP / IP-CIDR 等目标 IP 类规则，当前类型可能不会按预期生效')
+    warnings.push({ key: 'customConfigs.ruleAnalysis.noResolveUnsupported' })
   }
   if (ctx.duplicateCount > 1) {
-    warnings.push(`存在 ${ctx.duplicateCount} 条完全相同的规则`)
+    warnings.push({ key: 'customConfigs.ruleAnalysis.duplicateRules', params: { count: ctx.duplicateCount } })
   }
 
   const status = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid'
