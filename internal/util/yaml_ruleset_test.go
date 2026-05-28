@@ -14,7 +14,7 @@ func TestBuildMihomoConfig_RuleProviders(t *testing.T) {
 		{Name: "proxy", Type: "http", URL: "https://example.com/proxy.txt", Behavior: "domain", Format: "text", Interval: 86400},
 	}
 	customRules := []string{"RULE-SET,reject,REJECT", "RULE-SET,proxy,PROXY", "MATCH,DIRECT"}
-	out, err := BuildMihomoConfig("", nil, nil, nil, customRules, "append", providers, nil)
+	out, err := BuildMihomoConfig("", nil, "", nil, nil, customRules, "append", providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ password: test`,
 		},
 		{"name": "office", "type": "socks5", "server": "10.0.0.1", "port": 1080},
 	}
-	out, err := BuildMihomoConfig("", nil, customProxies, nil, nil, "append", nil, nil)
+	out, err := BuildMihomoConfig("", nil, "", customProxies, nil, nil, "append", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ rules:
   - IP-CIDR,10.0.0.0/8,DIRECT
 `
 	customRules := []string{"DOMAIN-SUFFIX,google.com,PROXY"}
-	out, err := BuildMihomoConfig(tmpl, nil, nil, nil, customRules, "prepend", nil, nil)
+	out, err := BuildMihomoConfig(tmpl, nil, "", nil, nil, customRules, "prepend", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ rule-providers:
 	providers := []RuleProviderInput{
 		{Name: "reject", Type: "http", URL: "https://example.com/reject.txt", Behavior: "domain", Interval: 86400},
 	}
-	out, err := BuildMihomoConfig(tmpl, nil, nil, nil, nil, "append", providers, nil)
+	out, err := BuildMihomoConfig(tmpl, nil, "", nil, nil, nil, "append", providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +111,99 @@ rule-providers:
 	rp, _ := cfg["rule-providers"].(map[string]interface{})
 	if len(rp) != 2 {
 		t.Fatalf("期望 2 个 rule-provider（模板 1 + 注入 1），得到 %d: %v", len(rp), rp)
+	}
+}
+
+// TestBuildMihomoConfig_SubscriptionDialerProxy 验证订阅级 dialer-proxy：Provider 节点进 proxy-providers (inline)
+func TestBuildMihomoConfig_SubscriptionDialerProxy(t *testing.T) {
+	providerGroups := []ProviderProxyGroup{
+		{
+			Name: "机场A",
+			Proxies: []interface{}{
+				map[string]interface{}{"name": "[机场A] 香港01", "type": "ss"},
+				map[string]interface{}{"name": "[机场A] 日本01", "type": "ss"},
+			},
+		},
+	}
+	out, err := BuildMihomoConfig("", providerGroups, "中转VPS", nil, nil, nil, "append", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]interface{}
+	if err := yaml.Unmarshal(out, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	// Provider 节点不应进 proxies
+	proxies, _ := cfg["proxies"].([]interface{})
+	if len(proxies) != 0 {
+		t.Fatalf("订阅级 dialer-proxy 时 proxies 应为空，得到 %d 项", len(proxies))
+	}
+
+	// Provider 节点应进 proxy-providers (inline)
+	pp, ok := cfg["proxy-providers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("期望存在 proxy-providers")
+	}
+	provider, ok := pp["机场A"].(map[string]interface{})
+	if !ok {
+		t.Fatal("proxy-providers 中缺少 '机场A'")
+	}
+	if provider["type"] != "inline" {
+		t.Fatalf("proxy-providers 类型期望 inline，得到 %v", provider["type"])
+	}
+	override, _ := provider["override"].(map[string]interface{})
+	if override["dialer-proxy"] != "中转VPS" {
+		t.Fatalf("override.dialer-proxy 期望 '中转VPS'，得到 %v", override["dialer-proxy"])
+	}
+}
+
+// TestBuildMihomoConfig_NodeDialerProxy 验证节点级 dialer-proxy：含 dialer-proxy 字段的自定义节点进 proxy-providers (inline)
+func TestBuildMihomoConfig_NodeDialerProxy(t *testing.T) {
+	customProxies := []map[string]interface{}{
+		{"name": "普通节点", "type": "ss", "server": "1.1.1.1", "port": 443},
+		{"name": "中转节点", "type": "ss", "server": "2.2.2.2", "port": 443, "dialer-proxy": "机场组"},
+	}
+	out, err := BuildMihomoConfig("", nil, "", customProxies, nil, nil, "append", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]interface{}
+	if err := yaml.Unmarshal(out, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	// 普通节点留在 proxies，含 dialer-proxy 的节点不在 proxies 中
+	proxies, _ := cfg["proxies"].([]interface{})
+	if len(proxies) != 1 {
+		t.Fatalf("期望 proxies 中有 1 个节点，得到 %d", len(proxies))
+	}
+	p0, _ := proxies[0].(map[string]interface{})
+	if p0["name"] != "普通节点" {
+		t.Fatalf("proxies[0] 期望 '普通节点'，得到 %v", p0["name"])
+	}
+
+	// 含 dialer-proxy 的节点应在 proxy-providers 中
+	pp, ok := cfg["proxy-providers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("期望存在 proxy-providers")
+	}
+	providerKey := "dialer-机场组"
+	provider, ok := pp[providerKey].(map[string]interface{})
+	if !ok {
+		t.Fatalf("proxy-providers 中缺少 %q", providerKey)
+	}
+	inlineProxies, _ := provider["proxies"].([]interface{})
+	if len(inlineProxies) != 1 {
+		t.Fatalf("inline proxies 期望 1 项，得到 %d", len(inlineProxies))
+	}
+	// dialer-proxy 字段应被从节点中移除
+	inlineNode, _ := inlineProxies[0].(map[string]interface{})
+	if _, has := inlineNode["dialer-proxy"]; has {
+		t.Fatal("inline proxy 中不应保留 dialer-proxy 字段")
+	}
+	if inlineNode["name"] != "中转节点" {
+		t.Fatalf("inline proxy name 期望 '中转节点'，得到 %v", inlineNode["name"])
 	}
 }
 
@@ -138,7 +231,7 @@ func TestBuildMihomoConfig_UseExpand(t *testing.T) {
 		},
 	}
 
-	out, err := BuildMihomoConfig("", nil, nil, customGroups, nil, "append", nil, providerNodes)
+	out, err := BuildMihomoConfig("", nil, "", nil, customGroups, nil, "append", nil, providerNodes)
 	if err != nil {
 		t.Fatal(err)
 	}
