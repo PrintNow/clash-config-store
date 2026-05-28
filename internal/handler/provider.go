@@ -36,10 +36,10 @@ func ListProviders(c *gin.Context) {
 }
 
 type providerRequest struct {
-	Name        string `json:"name" binding:"required"`
-	URL         string `json:"url" binding:"required,url"`
-	UserAgentID *uint  `json:"user_agent_id"`
-	CacheTTL    *int   `json:"cache_ttl"`
+	Name        string  `json:"name" binding:"required"`
+	URL         string  `json:"url" binding:"required,url"`
+	UserAgentID *uint   `json:"user_agent_id"`
+	CacheTTL    *int    `json:"cache_ttl"`
 }
 
 // CreateProvider 创建 Provider

@@ -295,6 +295,7 @@ func PreviewCustomConfig(c *gin.Context) {
 	yamlBytes, err := util.BuildMihomoConfig(
 		"",
 		nil,
+		"", // preview 无订阅级 dialer-proxy
 		cfg.Proxies,
 		cfg.ProxyGroups,
 		cfg.Rules,

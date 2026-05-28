@@ -66,6 +66,7 @@ type subscriptionRequest struct {
 	RuleInsertMode     string     `json:"rule_insert_mode"`
 	ProxyPrefixEnabled bool       `json:"proxy_prefix_enabled"`
 	TokenExpiredAt     *time.Time `json:"token_expired_at"`
+	DialerProxy        *string    `json:"dialer_proxy"`
 }
 
 // CreateSubscription 创建订阅（自动生成 token）
@@ -103,6 +104,9 @@ func CreateSubscription(c *gin.Context) {
 		ConfigTemplateID:   req.ConfigTemplateID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),
 		ProxyPrefixEnabled: req.ProxyPrefixEnabled,
+	}
+	if req.DialerProxy != nil {
+		sub.DialerProxy = *req.DialerProxy
 	}
 
 	if err := repository.DB.Create(sub).Error; err != nil {
@@ -173,6 +177,7 @@ func UpdateSubscription(c *gin.Context) {
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
 	sub.ProxyPrefixEnabled = req.ProxyPrefixEnabled
 	sub.TokenExpiredAt = req.TokenExpiredAt
+	sub.DialerProxy = derefString(req.DialerProxy)
 
 	if err := repository.DB.Save(&sub).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "更新失败")
@@ -374,4 +379,11 @@ func DeleteRestriction(c *gin.Context) {
 		return
 	}
 	OKMsg(c, "删除成功", nil)
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
