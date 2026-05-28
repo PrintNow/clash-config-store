@@ -23,6 +23,7 @@ import {
   Copy,
   RefreshCw,
   PanelRightOpen,
+  Info,
 } from 'lucide-react'
 import {
   DndContext,
@@ -290,6 +291,7 @@ export function CustomConfigDetail() {
   const [proxyDialogOpen, setProxyDialogOpen] = useState(false)
   const [editingProxy, setEditingProxy] = useState<ProxyNode | null>(null)
   const [editingProxyIndex, setEditingProxyIndex] = useState<number>(-1)
+  const [dialerHelpOpen, setDialerHelpOpen] = useState(false)
 
   // 代理组弹窗状态
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
@@ -1190,6 +1192,16 @@ export function CustomConfigDetail() {
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyName')}</th>
                     <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyType')}</th>
+                    <th className="text-left px-4 py-2 font-medium">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                        onClick={() => setDialerHelpOpen(true)}
+                      >
+                        {t('customConfigs.dialerProxy')}
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </th>
                     <th className="w-[132px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
@@ -1203,6 +1215,13 @@ export function CustomConfigDetail() {
                       <td className="px-4 py-2 font-medium whitespace-nowrap">{proxy.name}</td>
                       <td className="px-4 py-2">
                         <Badge variant="secondary">{proxy.type}</Badge>
+                      </td>
+                      <td className="px-4 py-2">
+                        {proxy['dialer-proxy'] ? (
+                          <Badge variant="outline">{String(proxy['dialer-proxy'])}</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-1">
@@ -1863,6 +1882,10 @@ export function CustomConfigDetail() {
       <ProxyDialog
         open={proxyDialogOpen}
         initialNode={editingProxy}
+        dialerProxyNames={[
+          ...proxyNames.filter((n) => n !== editingProxy?.name),
+          ...proxyGroups.map((g) => g.name),
+        ]}
         onClose={() => setProxyDialogOpen(false)}
         onSave={handleSaveProxy}
       />
@@ -1879,6 +1902,38 @@ export function CustomConfigDetail() {
         onClose={() => setGroupDialogOpen(false)}
         onSave={handleSaveGroup}
       />
+
+      {/* ── Dialer Proxy 帮助弹窗 ── */}
+      <Dialog open={dialerHelpOpen} onOpenChange={setDialerHelpOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('customConfigs.dialerProxyHelpTitle')}</DialogTitle>
+            <DialogDescription>{t('customConfigs.dialerProxyHelpDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="space-y-2">
+              <p className="font-medium">{t('customConfigs.dialerProxyHelpHowItWorks')}</p>
+              <p className="text-muted-foreground">{t('customConfigs.dialerProxyHelpExplanation')}</p>
+            </div>
+            <div className="rounded-md bg-muted p-3 font-mono text-xs space-y-1">
+              <p>{t('customConfigs.dialerProxyHelpDiagramLine1')}</p>
+              <p className="text-muted-foreground">{t('customConfigs.dialerProxyHelpDiagramLine2')}</p>
+              <p>{t('customConfigs.dialerProxyHelpDiagramLine3')}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">{t('customConfigs.dialerProxyHelpUseCases')}</p>
+              <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                <li>{t('customConfigs.dialerProxyHelpUseCase1')}</li>
+                <li>{t('customConfigs.dialerProxyHelpUseCase2')}</li>
+                <li>{t('customConfigs.dialerProxyHelpUseCase3')}</li>
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setDialerHelpOpen(false)}>{t('common.confirm')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── YAML 预览 Sheet ── */}
       <ConfigPayloadDiffDialog

@@ -132,6 +132,7 @@ export interface Subscription {
   config_template_id?: number
   rule_insert_mode: 'prepend' | 'append' | 'replace'
   proxy_prefix_enabled: boolean
+  dialer_proxy?: string
   created_at: string
   custom_config?: CustomConfig
   config_template?: ConfigTemplate

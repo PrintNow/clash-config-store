@@ -76,6 +76,7 @@ export function SubscriptionDetail() {
   const [configTemplateId, setConfigTemplateId] = useState<string>('')
   const [ruleInsertMode, setRuleInsertMode] = useState<'prepend' | 'append' | 'replace'>('append')
   const [proxyPrefixEnabled, setProxyPrefixEnabled] = useState(false)
+  const [dialerProxy, setDialerProxy] = useState('')
   const [tokenExpiredAt, setTokenExpiredAt] = useState('')
 
   // 访问限制 Dialog 状态
@@ -122,6 +123,7 @@ export function SubscriptionDetail() {
       )
       setRuleInsertMode(subscription.rule_insert_mode ?? 'append')
       setProxyPrefixEnabled(subscription.proxy_prefix_enabled ?? false)
+      setDialerProxy(subscription.dialer_proxy ?? '')
       setTokenExpiredAt(
         subscription.token_expired_at
           ? new Date(subscription.token_expired_at).toISOString().slice(0, 16)
@@ -178,6 +180,7 @@ export function SubscriptionDetail() {
       config_template_id: configTemplateId ? Number(configTemplateId) : null,
       rule_insert_mode: ruleInsertMode,
       proxy_prefix_enabled: proxyPrefixEnabled,
+      dialer_proxy: dialerProxy,
       token_expired_at: tokenExpiredAt ? new Date(tokenExpiredAt).toISOString() : null,
     })
   }
@@ -574,6 +577,17 @@ export function SubscriptionDetail() {
                   checked={proxyPrefixEnabled}
                   onCheckedChange={setProxyPrefixEnabled}
                 />
+              </div>
+
+              {/* Dialer Proxy（代理链） */}
+              <div className="space-y-2">
+                <Label>{t('subscriptions.dialerProxy')}</Label>
+                <Input
+                  value={dialerProxy}
+                  onChange={(e) => setDialerProxy(e.target.value)}
+                  placeholder={t('subscriptions.dialerProxyPlaceholder')}
+                />
+                <p className="text-xs text-muted-foreground">{t('subscriptions.dialerProxyHint')}</p>
               </div>
             </TabsContent>
 

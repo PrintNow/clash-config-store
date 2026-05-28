@@ -10,6 +10,7 @@ interface SubscriptionPayload {
   rule_insert_mode?: 'prepend' | 'append' | 'replace'
   proxy_prefix_enabled?: boolean
   token_expired_at?: string | null
+  dialer_proxy?: string
 }
 
 interface AccessLogParams {

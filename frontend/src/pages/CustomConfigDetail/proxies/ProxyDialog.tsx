@@ -37,11 +37,12 @@ import {
 export interface ProxyDialogProps {
   open: boolean
   initialNode: ProxyNode | null  // null = 新建
+  dialerProxyNames: string[]     // 可选的 dialer-proxy 目标名称列表（代理节点/组）
   onClose: () => void
   onSave: (node: ProxyNode) => void
 }
 
-export function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogProps) {
+export function ProxyDialog({ open, initialNode, dialerProxyNames, onClose, onSave }: ProxyDialogProps) {
   const { t } = useTranslation()
   const [form, setForm] = useState<ProxyFormState>(defaultProxyForm)
   // 是否显示 YAML 编辑模式
@@ -426,6 +427,23 @@ export function ProxyDialog({ open, initialNode, onClose, onSave }: ProxyDialogP
                   <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>
                 ))}
               </NativeSelect>
+            </div>
+          )}
+
+          {/* dialer-proxy（代理链）- 让当前节点通过其他节点连接 */}
+          {!yamlMode && dialerProxyNames.length > 0 && (
+            <div className="space-y-1">
+              <Label>{t('customConfigs.dialerProxy')} <span className="text-xs text-muted-foreground">({t('common.optional')})</span></Label>
+              <NativeSelect
+                value={form.dialerProxy}
+                onChange={(e) => set('dialerProxy', e.target.value)}
+              >
+                <NativeSelectOption value="">{t('customConfigs.dialerProxyNone')}</NativeSelectOption>
+                {dialerProxyNames.map((name) => (
+                  <NativeSelectOption key={name} value={name}>{name}</NativeSelectOption>
+                ))}
+              </NativeSelect>
+              <p className="text-xs text-muted-foreground">{t('customConfigs.dialerProxyNodeHint')}</p>
             </div>
           )}
 

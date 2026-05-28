@@ -143,6 +143,8 @@ export interface ProxyFormState {
   mtu: string
   // http/socks5
   username: string
+  // dialer-proxy
+  dialerProxy: string
   // 原始 YAML 编辑
   rawYaml: string
 }
@@ -169,6 +171,7 @@ export const defaultProxyForm: ProxyFormState = {
   wgDns: '',
   mtu: '',
   username: '',
+  dialerProxy: '',
   rawYaml: '',
 }
 
@@ -197,6 +200,7 @@ export function proxyNodeToForm(node: ProxyNode): ProxyFormState {
     wgDns: String(node.dns || ''),
     mtu: String(node.mtu || ''),
     username: String(node.username || ''),
+    dialerProxy: String(node['dialer-proxy'] || ''),
     rawYaml: node.__raw__ ? String(node.__raw__) : proxyToYaml(node as Record<string, unknown>),
   }
 }
@@ -212,6 +216,7 @@ export function formToProxyNode(form: ProxyFormState): ProxyNode {
     server: form.server,
     port: parseInt(form.port) || 0,
   }
+  if (form.dialerProxy) base['dialer-proxy'] = form.dialerProxy
   if (form.type === 'ss') {
     base.cipher = form.cipher
     base.password = form.password
