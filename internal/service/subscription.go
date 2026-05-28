@@ -47,8 +47,8 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		repository.DB.Where("id IN ?", providerIDs).Find(&providers)
 	}
 
-	// 收集 provider 代理节点，同时记录每个 provider 的节点名列表（供 use: 展开）
-	providerProxies := make([]interface{}, 0)
+	// 收集 provider 代理节点，按 Provider 分组（支持 dialer-proxy）
+	providerGroups := make([]util.ProviderProxyGroup, 0, len(providers))
 	providerNodeNames := make(map[string][]string) // providerName -> []nodeName（含前缀）
 	for _, p := range providers {
 		if IsCacheStale(&p) {
@@ -61,7 +61,11 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		if sub.ProxyPrefixEnabled {
 			proxies = util.PrefixProxies(proxies, p.Name)
 		}
-		providerProxies = append(providerProxies, proxies...)
+
+		providerGroups = append(providerGroups, util.ProviderProxyGroup{
+			Name:    p.Name,
+			Proxies: proxies,
+		})
 
 		// 提取本 provider 所有节点名，供 proxy-group use: 展开
 		names := make([]string, 0, len(proxies))
@@ -105,7 +109,8 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 
 	yamlBytes, err := util.BuildMihomoConfig(
 		configTemplateContent,
-		providerProxies,
+		providerGroups,
+		sub.DialerProxy,
 		customProxies,
 		customGroups,
 		customRules,

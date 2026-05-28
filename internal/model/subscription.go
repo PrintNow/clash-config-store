@@ -24,6 +24,7 @@ type Subscription struct {
 	ConfigTemplateID   *uint          `json:"config_template_id"`
 	RuleInsertMode     RuleInsertMode `gorm:"default:'prepend'" json:"rule_insert_mode"`
 	ProxyPrefixEnabled bool           `gorm:"default:true" json:"proxy_prefix_enabled"`
+	DialerProxy        string         `json:"dialer_proxy,omitempty"` // 订阅源代理的 dialer-proxy 目标（代理链）
 	// 仅 JSON 输出，由 handler 根据 BASE_URL 填充
 	SubscriptionURL string `gorm:"-" json:"subscription_url,omitempty"`
 	// 仅 JSON 输出，列表接口聚合 access_logs 条数

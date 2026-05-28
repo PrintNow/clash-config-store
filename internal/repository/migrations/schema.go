@@ -13,6 +13,10 @@ func init() {
 		Version: 1,
 		Up:      applySchemaUp,
 	})
+	register(Migration{
+		Version: 2,
+		Up:      applySchemaUp, // 添加 Subscription.DialerProxy 字段（订阅级代理链支持）
+	})
 }
 
 func applySchemaUp(db *gorm.DB) error {

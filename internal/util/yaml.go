@@ -20,6 +20,12 @@ type RuleProviderInput struct {
 	Interval int
 }
 
+// ProviderProxyGroup 描述一个 Provider 的代理组
+type ProviderProxyGroup struct {
+	Name    string        // Provider 名称（用作 proxy-provider 键名）
+	Proxies []interface{} // 该 Provider 下的代理节点列表
+}
+
 // ParseProxiesFromContent 从订阅内容中解析 proxies 列表
 func ParseProxiesFromContent(content string) ([]interface{}, error) {
 	if content == "" {
@@ -100,7 +106,8 @@ func ExpandCustomProxies(proxies []map[string]interface{}) []interface{} {
 // BuildMihomoConfig 构建完整的 mihomo 配置
 //
 // configTemplateContent: ConfigTemplate.Content（YAML 文本，顶层字段）
-// providerProxies:       来自订阅源的代理节点（已处理前缀）
+// providerGroups:        按 Provider 分组的代理节点
+// subscriptionDialerProxy: 订阅级别的 dialer-proxy 目标（为空表示不设置）
 // customProxies:         CustomConfig.Proxies（结构化，含 custom 类型）
 // customGroups:          CustomConfig.ProxyGroups（结构化）
 // customRules:           CustomConfig.Rules（字符串列表）
@@ -109,7 +116,8 @@ func ExpandCustomProxies(proxies []map[string]interface{}) []interface{} {
 // providerNodeNames:     订阅源名称 → 该源的节点名列表（用于展开 use: 字段）
 func BuildMihomoConfig(
 	configTemplateContent string,
-	providerProxies []interface{},
+	providerGroups []ProviderProxyGroup,
+	subscriptionDialerProxy string,
 	customProxies []map[string]interface{},
 	customGroups []map[string]interface{},
 	customRules []string,
@@ -134,12 +142,64 @@ func BuildMihomoConfig(
 	setDefault(cfg, "mode", "rule")
 	setDefault(cfg, "log-level", "info")
 
-	// 合并所有代理节点：provider 节点 + 自定义节点
+	// 合并所有代理节点：provider 节点（无订阅级 dialer-proxy）+ 自定义节点（无 dialer-proxy）
+	// 带 dialer-proxy 的节点将被放入 proxy-providers (inline)
+	normalProxies := make([]interface{}, 0)
+
+	for _, pg := range providerGroups {
+		if subscriptionDialerProxy == "" {
+			normalProxies = append(normalProxies, pg.Proxies...)
+		}
+	}
+
 	expandedCustom := ExpandCustomProxies(customProxies)
-	allProxies := make([]interface{}, 0, len(providerProxies)+len(expandedCustom))
-	allProxies = append(allProxies, providerProxies...)
-	allProxies = append(allProxies, expandedCustom...)
-	cfg["proxies"] = allProxies
+	// 将自定义节点也分为普通和带 dialer-proxy 两组
+	normalCustom, dialerCustom := splitProxiesByDialer(expandedCustom)
+	normalProxies = append(normalProxies, normalCustom...)
+	cfg["proxies"] = normalProxies
+
+	// 构建 dialer-proxy 的 proxy-providers
+	dialerProviders := make(map[string]interface{})
+
+	// 订阅级 dialer-proxy：所有 Provider 代理节点统一使用该 dialer-proxy
+	if subscriptionDialerProxy != "" {
+		for _, pg := range providerGroups {
+			if len(pg.Proxies) > 0 {
+				dialerProviders[pg.Name] = map[string]interface{}{
+					"type":    "inline",
+					"proxies": pg.Proxies,
+					"override": map[string]interface{}{
+						"dialer-proxy": subscriptionDialerProxy,
+					},
+				}
+			}
+		}
+	}
+
+	// 为有 dialer-proxy 的自定义节点构建 inline proxy-provider
+	customDialerGroups := groupProxiesByDialerTarget(dialerCustom)
+	for target, proxies := range customDialerGroups {
+		key := fmt.Sprintf("dialer-%s", target)
+		dialerProviders[key] = map[string]interface{}{
+			"type":    "inline",
+			"proxies": proxies,
+			"override": map[string]interface{}{
+				"dialer-proxy": target,
+			},
+		}
+	}
+
+	// 合并 dialer proxy-providers 到 cfg（与模板中已有的 proxy-providers 合并）
+	if len(dialerProviders) > 0 {
+		if raw, ok := cfg["proxy-providers"]; ok {
+			if existing, ok := raw.(map[string]interface{}); ok {
+				for k, v := range existing {
+					dialerProviders[k] = v
+				}
+			}
+		}
+		cfg["proxy-providers"] = dialerProviders
+	}
 
 	// 写入 proxy-groups，并将 use: [providerName] 展开为具体节点名
 	if len(customGroups) > 0 {
@@ -353,4 +413,44 @@ func setDefault(m map[string]interface{}, key string, value interface{}) {
 	if _, exists := m[key]; !exists {
 		m[key] = value
 	}
+}
+
+// splitProxiesByDialer 将代理节点按是否含有 dialer-proxy 字段分为两组
+func splitProxiesByDialer(proxies []interface{}) (normal []interface{}, withDialer []interface{}) {
+	for _, p := range proxies {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			normal = append(normal, p)
+			continue
+		}
+		if dp, exists := pm["dialer-proxy"]; exists && dp != "" {
+			withDialer = append(withDialer, p)
+		} else {
+			normal = append(normal, p)
+		}
+	}
+	return
+}
+
+// groupProxiesByDialerTarget 将带 dialer-proxy 的代理按目标值分组
+func groupProxiesByDialerTarget(proxies []interface{}) map[string][]interface{} {
+	groups := make(map[string][]interface{})
+	for _, p := range proxies {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		target, _ := pm["dialer-proxy"].(string)
+		if target != "" {
+			// 移除代理中的 dialer-proxy 字段（由 proxy-provider override 设置）
+			cleaned := make(map[string]interface{}, len(pm))
+			for k, v := range pm {
+				if k != "dialer-proxy" {
+					cleaned[k] = v
+				}
+			}
+			groups[target] = append(groups[target], cleaned)
+		}
+	}
+	return groups
 }
