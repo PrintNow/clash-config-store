@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import yaml from 'js-yaml'
 import {
   DndContext,
   closestCorners,
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -33,8 +35,25 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select'
-import { X, GripVertical } from 'lucide-react'
+import { X, GripVertical, Code2, FormInput } from 'lucide-react'
 import { sortableInstantReorder, BUILTIN_PROXIES } from '../shared/constants'
+
+function groupToYaml(group: Partial<ProxyGroup> & { name: string; type: string }): string {
+  return yaml.dump(group, { indent: 2, lineWidth: -1 })
+}
+
+function formToGroupObject(form: GroupFormState): Record<string, unknown> {
+  const g: Record<string, unknown> = { name: form.name, type: form.type }
+  if (form.proxies.length > 0) g.proxies = form.proxies
+  if (form.useProviders.length > 0) g.use = form.useProviders
+  if (form.type === 'url-test' || form.type === 'fallback' || form.type === 'load-balance') {
+    g.url = form.url
+    g.interval = parseInt(form.interval) || 300
+    g.tolerance = parseInt(form.tolerance) || 50
+  }
+  if (form.type === 'load-balance') g.strategy = form.strategy
+  return g
+}
 
 export interface ProviderItem {
   name: string
@@ -142,17 +161,41 @@ function SortableGroupMemberRow({ id, name, onRemove }: SortableGroupMemberRowPr
 export function ProxyGroupDialog({
   open, initialGroup, proxyNames, groupNames, providerNames, providerItems, onClose, onSave,
 }: ProxyGroupDialogProps) {
-  // 构建统一的 provider 列表（优先使用 providerItems，否则从 providerNames 推导）
   const resolvedProviderItems: ProviderItem[] = providerItems
     ?? providerNames.map((name) => ({ name, type: 'http' as const }))
   const { t } = useTranslation()
   const [form, setForm] = useState<GroupFormState>(defaultGroupForm)
+  const [yamlMode, setYamlMode] = useState(false)
+  const [yamlText, setYamlText] = useState('')
+  const [yamlError, setYamlError] = useState('')
 
   useEffect(() => {
     if (open) {
-      setForm(initialGroup ? groupToForm(initialGroup) : defaultGroupForm)
+      const f = initialGroup ? groupToForm(initialGroup) : defaultGroupForm
+      setForm(f)
+      setYamlMode(false)
+      setYamlText('')
+      setYamlError('')
     }
   }, [open, initialGroup])
+
+  const switchToYaml = () => {
+    setYamlText(groupToYaml(formToGroupObject(form) as Parameters<typeof groupToYaml>[0]))
+    setYamlError('')
+    setYamlMode(true)
+  }
+
+  const switchToForm = () => {
+    try {
+      const parsed = yaml.load(yamlText) as Record<string, unknown>
+      if (!parsed || typeof parsed !== 'object') throw new Error('无效的 YAML')
+      setForm(groupToForm(parsed as ProxyGroup))
+      setYamlError('')
+      setYamlMode(false)
+    } catch (e) {
+      setYamlError('YAML 解析失败: ' + (e as Error).message)
+    }
+  }
 
   const set = <K extends keyof GroupFormState>(key: K, val: GroupFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }))
@@ -199,11 +242,21 @@ export function ProxyGroupDialog({
   }
 
   const handleSave = () => {
+    if (yamlMode) {
+      try {
+        const parsed = yaml.load(yamlText) as Record<string, unknown>
+        if (!parsed || typeof parsed !== 'object') throw new Error('无效的 YAML')
+        if (!parsed.name || !parsed.type) throw new Error('缺少 name 或 type 字段')
+        onSave(parsed as ProxyGroup)
+      } catch (e) {
+        setYamlError('YAML 解析失败: ' + (e as Error).message)
+      }
+      return
+    }
     if (!form.name.trim()) {
       toast.error(t('customConfigs.groupName') + ' ' + t('common.required'))
       return
     }
-
     const group: ProxyGroup = {
       name: form.name,
       type: form.type,
@@ -237,11 +290,41 @@ export function ProxyGroupDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {initialGroup ? t('customConfigs.editProxyGroup') : t('customConfigs.addProxyGroup')}
-            </DialogTitle>
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle>
+                {initialGroup ? t('customConfigs.editProxyGroup') : t('customConfigs.addProxyGroup')}
+              </DialogTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={yamlMode ? switchToForm : switchToYaml}
+              >
+                {yamlMode
+                  ? <><FormInput className="h-3 w-3" /> 表单模式</>
+                  : <><Code2 className="h-3 w-3" /> YAML 模式</>
+                }
+              </Button>
+            </div>
           </DialogHeader>
 
+          {yamlMode ? (
+            <div className="space-y-2 py-2">
+              {yamlError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {yamlError}
+                </div>
+              )}
+              <Textarea
+                value={yamlText}
+                onChange={(e) => { setYamlText(e.target.value); setYamlError('') }}
+                className="min-h-[320px] font-mono text-xs"
+                spellCheck={false}
+              />
+              <p className="text-xs text-muted-foreground">直接编辑代理组 YAML，保存时自动解析。</p>
+            </div>
+          ) : (
           <div className="space-y-4 py-2">
             {/* 名称 */}
             <div className="space-y-1">
@@ -385,6 +468,7 @@ export function ProxyGroupDialog({
             </div>
           )}
           </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
