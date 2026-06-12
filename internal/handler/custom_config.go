@@ -23,6 +23,9 @@ func ListCustomConfigs(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
+	for i := range configs {
+		normalizeCustomConfig(&configs[i])
+	}
 	OK(c, configs)
 }
 
@@ -61,6 +64,7 @@ func CreateCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             req.Name,
+		Proxies:          []map[string]interface{}{},
 		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
 		Rules:            nullSliceStrings(req.Rules),
 		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
@@ -103,6 +107,7 @@ func CloneCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "克隆失败")
 		return
 	}
+	normalizeCustomConfig(clone)
 	OK(c, clone)
 }
 
@@ -120,6 +125,7 @@ func GetCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusNotFound, "配置不存在或无权限")
 		return
 	}
+	normalizeCustomConfig(&cfg)
 	OK(c, cfg)
 }
 
@@ -160,6 +166,7 @@ func UpdateCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
+	normalizeCustomConfig(&cfg)
 	OK(c, cfg)
 }
 
@@ -249,6 +256,7 @@ func ImportCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             createReq.Name,
+		Proxies:          []map[string]interface{}{},
 		ProxyGroups:      createReq.ProxyGroups,
 		Rules:            createReq.Rules,
 		RuleProviderIDs:  createReq.RuleProviderIDs,
@@ -324,6 +332,15 @@ func validateCustomConfigRequest(userID uint, req *customConfigRequest) error {
 		return err
 	}
 	return nil
+}
+
+// normalizeCustomConfig 将所有 nil 切片字段替换为空切片，避免 JSON 输出 null
+func normalizeCustomConfig(cfg *model.CustomConfig) {
+	cfg.Proxies = nullSliceMaps(cfg.Proxies)
+	cfg.ProxyGroups = nullSliceMaps(cfg.ProxyGroups)
+	cfg.Rules = nullSliceStrings(cfg.Rules)
+	cfg.RuleProviderIDs = nullSliceUints(cfg.RuleProviderIDs)
+	cfg.HostedRuleSetIDs = nullSliceUints(cfg.HostedRuleSetIDs)
 }
 
 // nullSliceMaps 将 nil 切片统一为空切片，避免 JSON 输出 null
