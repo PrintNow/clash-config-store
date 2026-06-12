@@ -1,5 +1,5 @@
 import client from './client'
-import type { CustomConfig, CustomConfigTransferPayload, ProxyNode, ProxyGroup } from '@/types'
+import type { CustomConfig, CustomConfigTransferPayload, ProxyGroup } from '@/types'
 
 export const customConfigsApi = {
   list: async (): Promise<CustomConfig[]> => {
@@ -14,7 +14,6 @@ export const customConfigsApi = {
 
   create: async (data: {
     name: string
-    proxies?: ProxyNode[]
     proxy_groups?: ProxyGroup[]
     rules?: string[]
     rule_provider_ids?: number[]
@@ -28,7 +27,6 @@ export const customConfigsApi = {
     id: number,
     data: {
       name: string
-      proxies?: ProxyNode[]
       proxy_groups?: ProxyGroup[]
       rules?: string[]
       rule_provider_ids?: number[]

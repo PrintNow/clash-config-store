@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { CalendarClock, Check, Copy, Plus, QrCode, Server, Settings, Trash2 } from 'lucide-react'
+import { CalendarClock, Check, Copy, Plus, QrCode, Server, Settings, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
-import type { Subscription } from '@/types'
+import type { Subscription, SubscriptionComponents } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,8 +27,89 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/EmptyState'
+// SubscriptionComponentsPanel uses Skeleton above
 import { SubscriptionShareDialog } from '@/components/subscriptions/SubscriptionShareDialog'
 import { subscriptionPublicUrl } from '@/lib/subscription-url'
+
+function SubscriptionComponentsPanel({ subscriptionId }: { subscriptionId: number }) {
+  const { t } = useTranslation()
+
+  const { data: components, isLoading } = useQuery<SubscriptionComponents>({
+    queryKey: ['subscription-components', subscriptionId],
+    queryFn: () => subscriptionsApi.getComponents(subscriptionId),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-1">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground mb-2">{t('subscriptions.components')}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {/* 节点源 */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{t('subscriptions.componentProviders')}</p>
+          {!components || components.providers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t('subscriptions.componentsNoProviders')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {components.providers.map((p) => (
+                <Badge key={p.id} variant="secondary" className="text-xs">{p.name}</Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 自定义配置 */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{t('subscriptions.componentConfig')}</p>
+          {!components || !components.custom_config ? (
+            <p className="text-xs text-muted-foreground">{t('subscriptions.componentsNoConfig')}</p>
+          ) : (
+            <Badge variant="outline" className="text-xs">{components.custom_config.name}</Badge>
+          )}
+        </div>
+
+        {/* 规则集 */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{t('subscriptions.componentRuleSets')}</p>
+          {!components || components.rule_sets.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t('common.noData')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {components.rule_sets.slice(0, 5).map((rs) => (
+                <Badge key={rs.id} variant="outline" className="text-xs">{rs.name}</Badge>
+              ))}
+              {components.rule_sets.length > 5 && (
+                <Badge variant="outline" className="text-xs">+{components.rule_sets.length - 5}</Badge>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 配置模板 */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{t('subscriptions.componentTemplate')}</p>
+          {!components || !components.template ? (
+            <p className="text-xs text-muted-foreground">{t('subscriptions.componentsNoTemplate')}</p>
+          ) : (
+            <Badge variant="outline" className="text-xs">{components.template.name}</Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function Subscriptions() {
   const { t } = useTranslation()
@@ -42,6 +123,7 @@ export function Subscriptions() {
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
   const [nameError, setNameError] = useState('')
+  const [expandedComponents, setExpandedComponents] = useState<number | null>(null)
 
   // 访问次数随 /sub 拉取变化；全局 staleTime 30s 会导致与仪表盘「最近访问」不一致，此处单独置 0
   const { data: subscriptions = [], isLoading } = useQuery({
@@ -102,6 +184,10 @@ export function Subscriptions() {
     } catch {
       toast.error(t('common.error'))
     }
+  }
+
+  const toggleComponents = (subId: number) => {
+    setExpandedComponents((prev) => (prev === subId ? null : subId))
   }
 
   // Token 显示：仅显示前 8 位
@@ -185,7 +271,9 @@ export function Subscriptions() {
               subscriptions.map((sub) => {
                 const copied = copiedId === sub.id
 
+                const isExpanded = expandedComponents === sub.id
                 return (
+                  <>
                   <TableRow key={sub.id}>
                     <TableCell className="align-top">
                       <div className="space-y-2 py-1">
@@ -214,6 +302,14 @@ export function Subscriptions() {
                               count: sub.enabled_provider_ids.length,
                             })}
                           </span>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+                            onClick={() => toggleComponents(sub.id)}
+                          >
+                            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {t('subscriptions.components')}
+                          </button>
                         </div>
                       </div>
                     </TableCell>
@@ -294,6 +390,14 @@ export function Subscriptions() {
                       </div>
                     </TableCell>
                   </TableRow>
+                  {isExpanded && (
+                    <TableRow key={`${sub.id}-components`}>
+                      <TableCell colSpan={5} className="bg-muted/20 px-6 py-3">
+                        <SubscriptionComponentsPanel subscriptionId={sub.id} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </>
                 )
               })
             )}

@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	domsub "clash-config-store/internal/domain/subscription"
@@ -341,6 +343,103 @@ func CreateRestriction(c *gin.Context) {
 		return
 	}
 	OK(c, restriction)
+}
+
+// GetSubscriptionComponents 获取订阅的组成要素（节点源、自定义配置、规则集、模板）
+func GetSubscriptionComponents(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	var sub model.Subscription
+	if err := repository.DB.
+		Preload("CustomConfig").
+		Preload("ConfigTemplate").
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&sub).Error; err != nil {
+		Fail(c, http.StatusNotFound, "订阅不存在")
+		return
+	}
+
+	// 节点源
+	var providerIDs []uint
+	_ = json.Unmarshal([]byte(sub.EnabledProviderIDs), &providerIDs)
+	var providers []model.Provider
+	if len(providerIDs) > 0 {
+		repository.DB.Where("id IN ?", providerIDs).Find(&providers)
+	}
+	if providers == nil {
+		providers = []model.Provider{}
+	}
+
+	// 从 custom_config.rules 推断规则集
+	var inferredRuleSets []UnifiedRuleSet
+	if sub.CustomConfig != nil {
+		ruleSetNames := extractRuleSetNames(sub.CustomConfig.Rules)
+		if len(ruleSetNames) > 0 {
+			// 先查 rule_providers
+			var rps []model.RuleProvider
+			repository.DB.Where("name IN ? AND (user_id = ? OR is_preset = ?)", ruleSetNames, userID, true).Find(&rps)
+			for _, rp := range rps {
+				inferredRuleSets = append(inferredRuleSets, UnifiedRuleSet{
+					ID:         rp.ID,
+					Name:       rp.Name,
+					SourceType: "external",
+					Behavior:   rp.Behavior,
+					Format:     rp.Format,
+					URL:        rp.URL,
+					IsPreset:   rp.IsPreset,
+					PresetTag:  rp.PresetTag,
+				})
+			}
+			// 再查 hosted_rule_sets
+			var hrss []model.HostedRuleSet
+			repository.DB.Where("name IN ? AND user_id = ?", ruleSetNames, userID).Find(&hrss)
+			for _, hrs := range hrss {
+				inferredRuleSets = append(inferredRuleSets, UnifiedRuleSet{
+					ID:         hrs.ID,
+					Name:       hrs.Name,
+					SourceType: "hosted",
+					Behavior:   hrs.Behavior,
+					Format:     hrs.Format,
+					HrsURL:     util.RuleSetPublicURL(hrs.Token, hrs.Name),
+				})
+			}
+		}
+	}
+	if inferredRuleSets == nil {
+		inferredRuleSets = []UnifiedRuleSet{}
+	}
+
+	type Components struct {
+		Providers    []model.Provider      `json:"providers"`
+		CustomConfig *model.CustomConfig   `json:"custom_config"`
+		RuleSets     []UnifiedRuleSet      `json:"rule_sets"`
+		Template     *model.ConfigTemplate `json:"template"`
+	}
+
+	OK(c, Components{
+		Providers:    providers,
+		CustomConfig: sub.CustomConfig,
+		RuleSets:     inferredRuleSets,
+		Template:     sub.ConfigTemplate,
+	})
+}
+
+// extractRuleSetNames 从规则列表中提取 RULE-SET 引用的规则集名称
+func extractRuleSetNames(rules []string) []string {
+	names := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, rule := range rules {
+		parts := strings.SplitN(rule, ",", 3)
+		if len(parts) >= 2 && strings.ToUpper(parts[0]) == "RULE-SET" {
+			name := strings.TrimSpace(parts[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 // DeleteRestriction 删除指定访问限制规则

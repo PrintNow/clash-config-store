@@ -36,12 +36,18 @@ import {
 import { X, GripVertical } from 'lucide-react'
 import { sortableInstantReorder, BUILTIN_PROXIES } from '../shared/constants'
 
+export interface ProviderItem {
+  name: string
+  type: 'http' | 'inline'
+}
+
 export interface ProxyGroupDialogProps {
   open: boolean
   initialGroup: ProxyGroup | null
   proxyNames: string[]    // 所有代理节点名称
   groupNames: string[]    // 其他代理组名称（排除自身）
-  providerNames: string[] // 可供 use: 引用的订阅源名称
+  providerNames: string[] // 可供 use: 引用的订阅源名称（兼容旧接口）
+  providerItems?: ProviderItem[] // 带类型信息的订阅源（优先使用）
   onClose: () => void
   onSave: (group: ProxyGroup) => void
 }
@@ -134,8 +140,11 @@ function SortableGroupMemberRow({ id, name, onRemove }: SortableGroupMemberRowPr
 }
 
 export function ProxyGroupDialog({
-  open, initialGroup, proxyNames, groupNames, providerNames, onClose, onSave,
+  open, initialGroup, proxyNames, groupNames, providerNames, providerItems, onClose, onSave,
 }: ProxyGroupDialogProps) {
+  // 构建统一的 provider 列表（优先使用 providerItems，否则从 providerNames 推导）
+  const resolvedProviderItems: ProviderItem[] = providerItems
+    ?? providerNames.map((name) => ({ name, type: 'http' as const }))
   const { t } = useTranslation()
   const [form, setForm] = useState<GroupFormState>(defaultGroupForm)
 
@@ -313,20 +322,25 @@ export function ProxyGroupDialog({
           {/* 引用订阅源（复选框多选） */}
           <div className="space-y-1">
             <Label>{t('customConfigs.groupUse')}</Label>
-            {providerNames.length === 0 ? (
+            {resolvedProviderItems.length === 0 ? (
               <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
                 {t('subscriptions.noProviders')}
               </p>
             ) : (
               <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
-                {providerNames.map((pName) => (
-                  <div key={pName} className="flex items-center gap-2">
+                {resolvedProviderItems.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2">
                     <Checkbox
-                      id={`use-${pName}`}
-                      checked={form.useProviders.includes(pName)}
-                      onCheckedChange={() => toggleProvider(pName)}
+                      id={`use-${item.name}`}
+                      checked={form.useProviders.includes(item.name)}
+                      onCheckedChange={() => toggleProvider(item.name)}
                     />
-                    <label htmlFor={`use-${pName}`} className="text-sm cursor-pointer">{pName}</label>
+                    <label htmlFor={`use-${item.name}`} className="text-sm cursor-pointer flex items-center gap-1.5">
+                      {item.name}
+                      {item.type === 'inline' && (
+                        <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">(inline)</span>
+                      )}
+                    </label>
                   </div>
                 ))}
               </div>

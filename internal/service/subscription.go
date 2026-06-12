@@ -51,12 +51,22 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	providerProxies := make([]interface{}, 0)
 	providerNodeNames := make(map[string][]string) // providerName -> []nodeName（含前缀）
 	for _, p := range providers {
-		if IsCacheStale(&p) {
-			AsyncRefresh(p.ID)
-		}
-		proxies, err := util.ParseProxiesFromContent(p.CacheContent)
-		if err != nil || proxies == nil {
-			continue
+		var proxies []interface{}
+		if p.Type == model.ProviderTypeInline {
+			// inline provider 直接读 Payload
+			for _, node := range p.Payload {
+				proxies = append(proxies, node)
+			}
+		} else {
+			// http provider 从缓存读取
+			if IsCacheStale(&p) {
+				AsyncRefresh(p.ID)
+			}
+			var err error
+			proxies, err = util.ParseProxiesFromContent(p.CacheContent)
+			if err != nil || proxies == nil {
+				continue
+			}
 		}
 		if sub.ProxyPrefixEnabled {
 			proxies = util.PrefixProxies(proxies, p.Name)
@@ -76,14 +86,12 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	}
 
 	// 读取 CustomConfig 结构化数据
-	var customProxies []map[string]interface{}
 	var customGroups []map[string]interface{}
 	var customRules []string
 	var ruleProviderInputs []util.RuleProviderInput
 	var err error
 
 	if sub.CustomConfig != nil {
-		customProxies = sub.CustomConfig.Proxies
 		customGroups = sub.CustomConfig.ProxyGroups
 		customRules = sub.CustomConfig.Rules
 
@@ -106,7 +114,7 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	yamlBytes, err := util.BuildMihomoConfig(
 		configTemplateContent,
 		providerProxies,
-		customProxies,
+		nil,
 		customGroups,
 		customRules,
 		string(sub.RuleInsertMode),

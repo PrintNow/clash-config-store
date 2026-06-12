@@ -22,12 +22,20 @@ export interface Provider {
   id: number
   user_id: number
   name: string
-  url: string
+  type: 'http' | 'inline'
+  // http 类型字段
+  url?: string
   user_agent_id?: number
   cache_ttl: number
   last_fetched_at?: string
   fetch_error?: string
   user_agent?: UserAgent
+  filter?: string
+  exclude_filter?: string
+  prefix?: string
+  suffix?: string
+  // inline 类型字段
+  payload?: Record<string, unknown>[]
 }
 
 // 代理节点（结构化）
@@ -76,6 +84,33 @@ export interface HostedRuleSet {
   updated_at: string
 }
 
+// 统一规则集类型（外部订阅 + 托管）
+export interface RuleSet {
+  id: number
+  name: string
+  source_type: 'external' | 'hosted'
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text' | 'mrs'
+  // external 字段
+  url?: string
+  interval?: number
+  is_preset?: boolean
+  preset_tag?: string
+  // hosted 字段
+  token?: string
+  hrs_url?: string
+  content?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface SubscriptionComponents {
+  providers: Provider[]
+  custom_config: CustomConfig | null
+  rule_sets: RuleSet[]
+  template: ConfigTemplate | null
+}
+
 // 规则集库条目
 export interface RuleProvider {
   id: number
@@ -109,7 +144,6 @@ export interface CustomConfig {
 
 export interface CustomConfigTransferPayload {
   name: string
-  proxies: ProxyNode[]
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]

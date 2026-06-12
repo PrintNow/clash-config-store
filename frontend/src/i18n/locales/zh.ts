@@ -51,16 +51,20 @@ const zh = {
   nav: {
     brandName: 'Clash Config Store',
     dashboard: '仪表盘',
-    providers: '订阅源',
+    providers: '节点源',
     userAgents: 'UA 库',
     customConfigs: '自定义配置',
     subscriptions: '订阅管理',
     configTemplates: '配置模板',
     ruleProviders: '规则集库',
     hostedRuleSets: '托管规则集',
+    ruleSets: '规则集',
     settings: '设置',
     logout: '退出登录',
     profile: '个人资料',
+    groupSource: '来源素材',
+    groupOrchestration: '配置编排',
+    groupPublish: '发布',
   },
 
   layout: {
@@ -196,14 +200,14 @@ const zh = {
     relativeHoursAgo: '{{count}} 小时前',
   },
 
-  // 订阅源
+  // 节点源
   providers: {
-    title: '订阅源管理',
-    addProvider: '添加订阅源',
-    editProvider: '编辑订阅源',
-    deleteProvider: '删除订阅源',
-    deleteConfirm: '确定要删除该订阅源吗？',
-    providerName: '订阅源名称',
+    title: '节点源管理',
+    addProvider: '添加节点源',
+    editProvider: '编辑节点源',
+    deleteProvider: '删除节点源',
+    deleteConfirm: '确定要删除该节点源吗？',
+    providerName: '节点源名称',
     providerUrl: '订阅 URL',
     userAgent: 'User-Agent',
     cacheTTL: '缓存 TTL（秒）',
@@ -215,11 +219,19 @@ const zh = {
     neverFetched: '从未获取',
     selectUA: '选择 UA（可选）',
     noUA: '不使用 UA',
-    namePlaceholder: '请输入订阅源名称',
+    namePlaceholder: '请输入节点源名称',
     urlPlaceholder: '请输入订阅 URL',
     cacheTTLPlaceholder: '缓存有效期（秒），0 表示不缓存',
-    emptyTitle: '先添加一个上游订阅源',
-    emptyDescription: '订阅源负责提供真实节点。后续创建订阅时，可以勾选这些来源并统一生成最终配置。',
+    emptyTitle: '先添加一个节点源',
+    emptyDescription: '节点源负责提供真实节点。后续创建订阅时，可以勾选这些来源并统一生成最终配置。',
+    typeHttp: 'HTTP 订阅',
+    typeInline: '私有节点',
+    selectType: '选择类型',
+    inlineNodes: '私有节点',
+    editNodes: '编辑节点',
+    nodeCount: '{{count}} 个节点',
+    addNode: '添加节点',
+    editNode: '编辑节点',
   },
 
   // UA 库
@@ -450,6 +462,24 @@ const zh = {
     contentHint: '此处配置将作为订阅的顶层基础配置，proxies/proxy-groups/rules 由自定义配置提供，无需在此定义',
   },
 
+  // 规则集（合并路由）
+  ruleSets: {
+    title: '规则集',
+    addRuleSet: '添加规则集',
+    editRuleSet: '编辑规则集',
+    deleteRuleSet: '删除规则集',
+    deleteConfirm: '确认删除规则集',
+    tabAll: '全部',
+    tabExternal: '订阅规则集',
+    tabHosted: '私有规则集',
+    typeExternal: '订阅',
+    typeHosted: '私有',
+    sourceUrl: '规则集 URL',
+    ruleContent: '规则内容',
+    emptyTitle: '暂无规则集',
+    emptyDescription: '添加订阅规则集或创建私有规则集',
+  },
+
   // 规则集库
   ruleProviders: {
     title: '规则集库',
@@ -559,10 +589,18 @@ const zh = {
     proxyPrefixOff: '未启用',
     emptyTitle: '创建一个可分发的订阅',
     emptyDescription: '订阅会把订阅源、自定义配置和模板组合成最终 YAML，并生成可复制或扫码导入的链接。',
-    noProvidersTitle: '还没有可启用的订阅源',
-    noProvidersDescription: '先添加上游订阅源，再回到这里勾选需要参与生成的节点来源。',
+    noProvidersTitle: '还没有可启用的节点源',
+    noProvidersDescription: '先添加节点源，再回到这里勾选需要参与生成的节点来源。',
     noCustomConfigsTitle: '还没有自定义配置',
     noCustomConfigsDescription: '自定义配置用于管理代理组和规则。可以从示例配置开始，再回到这里绑定。',
+    components: '组成要素',
+    componentProviders: '节点源',
+    componentConfig: '自定义配置',
+    componentRuleSets: '规则集',
+    componentTemplate: '配置模板',
+    componentsNoProviders: '未选择节点源',
+    componentsNoConfig: '未绑定配置',
+    componentsNoTemplate: '未绑定模板',
   },
 
   // 访问日志

@@ -29,7 +29,6 @@ func ListCustomConfigs(c *gin.Context) {
 // customConfigRequest 创建/更新自定义配置的请求体
 type customConfigRequest struct {
 	Name             string                   `json:"name" binding:"required"`
-	Proxies          []map[string]interface{} `json:"proxies"`
 	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
 	Rules            []string                 `json:"rules"`
 	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
@@ -38,7 +37,6 @@ type customConfigRequest struct {
 
 type customConfigTransferPayload struct {
 	Name             string                   `json:"name"`
-	Proxies          []map[string]interface{} `json:"proxies"`
 	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
 	Rules            []string                 `json:"rules"`
 	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
@@ -63,7 +61,6 @@ func CreateCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             req.Name,
-		Proxies:          nullSliceMaps(req.Proxies),
 		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
 		Rules:            nullSliceStrings(req.Rules),
 		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
@@ -154,7 +151,6 @@ func UpdateCustomConfig(c *gin.Context) {
 	req.RuleProviderIDs, req.HostedRuleSetIDs, _ = normalizeCustomConfigRuleSetRefs(userID, req.RuleProviderIDs, req.HostedRuleSetIDs)
 
 	cfg.Name = req.Name
-	cfg.Proxies = nullSliceMaps(req.Proxies)
 	cfg.ProxyGroups = nullSliceMaps(req.ProxyGroups)
 	cfg.Rules = nullSliceStrings(req.Rules)
 	cfg.RuleProviderIDs = nullSliceUints(req.RuleProviderIDs)
@@ -206,7 +202,6 @@ func ExportCustomConfig(c *gin.Context) {
 
 	payload := customConfigTransferPayload{
 		Name:             cfg.Name,
-		Proxies:          nullSliceMaps(cfg.Proxies),
 		ProxyGroups:      nullSliceMaps(cfg.ProxyGroups),
 		Rules:            nullSliceStrings(cfg.Rules),
 		RuleProviderIDs:  nullSliceUints(cfg.RuleProviderIDs),
@@ -240,7 +235,6 @@ func ImportCustomConfig(c *gin.Context) {
 
 	createReq := customConfigRequest{
 		Name:             uniqueCustomConfigName(userID, req.Name),
-		Proxies:          nullSliceMaps(req.Proxies),
 		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
 		Rules:            nullSliceStrings(req.Rules),
 		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
@@ -255,7 +249,6 @@ func ImportCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             createReq.Name,
-		Proxies:          createReq.Proxies,
 		ProxyGroups:      createReq.ProxyGroups,
 		Rules:            createReq.Rules,
 		RuleProviderIDs:  createReq.RuleProviderIDs,
@@ -312,16 +305,6 @@ func PreviewCustomConfig(c *gin.Context) {
 
 // validateCustomConfigRequest 校验自定义配置请求
 func validateCustomConfigRequest(userID uint, req *customConfigRequest) error {
-	for i, p := range req.Proxies {
-		name, _ := p["name"].(string)
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("proxies[%d] 缺少非空 name", i)
-		}
-		typ, _ := p["type"].(string)
-		if strings.TrimSpace(typ) == "" {
-			return fmt.Errorf("proxies[%d] 缺少非空 type", i)
-		}
-	}
 	for i, g := range req.ProxyGroups {
 		name, _ := g["name"].(string)
 		if strings.TrimSpace(name) == "" {

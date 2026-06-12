@@ -1,6 +1,6 @@
 import client from './client'
 import { withParsedEnabledProviderIds } from '@/domain/subscription/enabledProviderIds'
-import type { Subscription, AccessRestriction, AccessLog } from '@/types'
+import type { Subscription, AccessRestriction, AccessLog, SubscriptionComponents } from '@/types'
 
 interface SubscriptionPayload {
   name?: string
@@ -100,5 +100,10 @@ export const subscriptionsApi = {
 
   deleteRestriction: async (subscriptionId: number, restrictionId: number): Promise<void> => {
     await client.delete(`/subscriptions/${subscriptionId}/restrictions/${restrictionId}`)
+  },
+
+  getComponents: async (id: number): Promise<SubscriptionComponents> => {
+    const res = await client.get<{ code: number; data: SubscriptionComponents }>(`/subscriptions/${id}/components`)
+    return res.data.data
   },
 }

@@ -13,10 +13,13 @@ import (
 
 // IsCacheStale 判断 Provider 缓存是否已过期
 func IsCacheStale(p *model.Provider) bool {
+	if p.Type == model.ProviderTypeInline {
+		return false
+	}
 	if p.LastFetchedAt == nil {
 		return true
 	}
-	ttl := time.Duration(p.CacheTTL) * time.Minute
+	ttl := time.Duration(p.CacheTTL) * time.Second
 	return time.Since(*p.LastFetchedAt) > ttl
 }
 
@@ -25,6 +28,11 @@ func FetchAndCache(providerID uint) error {
 	var p model.Provider
 	if err := repository.DB.Preload("UserAgent").First(&p, providerID).Error; err != nil {
 		return fmt.Errorf("查询 Provider 失败: %w", err)
+	}
+
+	// inline provider 无需 HTTP 拉取
+	if p.Type == model.ProviderTypeInline {
+		return nil
 	}
 
 	// 确定使用的 User-Agent

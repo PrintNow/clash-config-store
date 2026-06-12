@@ -54,13 +54,12 @@ export function remapRuleIndexAfterMove(
 /** 用于脏检查与提交的 payload 形状 */
 export type CustomConfigDraftPayload = Pick<
   CustomConfig,
-  'name' | 'proxies' | 'proxy_groups' | 'rules' | 'rule_provider_ids' | 'hosted_rule_set_ids'
+  'name' | 'proxy_groups' | 'rules' | 'rule_provider_ids' | 'hosted_rule_set_ids'
 >
 
 export function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
   return {
     name: c.name,
-    proxies: c.proxies || [],
     proxy_groups: c.proxy_groups || [],
     rules: c.rules || [],
     rule_provider_ids: c.rule_provider_ids || [],
@@ -117,12 +116,12 @@ export const BUILTIN_PROXIES = ['DIRECT', 'REJECT']
 // ─────────────────────────────────────────────
 
 // 自定义配置详情页 Tab，与 URL ?tab= 同步以便刷新保留
-export const CONFIG_DETAIL_TABS = ['proxies', 'proxyGroups', 'rules', 'ruleSets'] as const
+export const CONFIG_DETAIL_TABS = ['proxyGroups', 'rules', 'ruleSets', 'yamlEdit'] as const
 export type ConfigDetailTab = (typeof CONFIG_DETAIL_TABS)[number]
 
 export function parseConfigDetailTab(raw: string | null): ConfigDetailTab {
   if (raw && (CONFIG_DETAIL_TABS as readonly string[]).includes(raw)) {
     return raw as ConfigDetailTab
   }
-  return 'proxies'
+  return 'proxyGroups'
 }

@@ -97,6 +97,11 @@ func main() {
 			prov.PUT("/:id", handler.UpdateProvider)
 			prov.DELETE("/:id", handler.DeleteProvider)
 			prov.POST("/:id/refresh", handler.RefreshProvider)
+			// inline provider 节点管理
+			prov.GET("/:id/nodes", handler.GetProviderNodes)
+			prov.POST("/:id/nodes", handler.AddProviderNode)
+			prov.PUT("/:id/nodes/:nodeIndex", handler.UpdateProviderNode)
+			prov.DELETE("/:id/nodes/:nodeIndex", handler.DeleteProviderNode)
 
 			// 配置模板管理
 			ct := protected.Group("/config-templates")
@@ -134,6 +139,13 @@ func main() {
 			cc.GET("/:id/export", handler.ExportCustomConfig)
 			cc.GET("/:id/preview", handler.PreviewCustomConfig)
 
+			// 统一规则集 API
+			rs := protected.Group("/rule-sets")
+			rs.GET("", handler.ListRuleSets)
+			rs.POST("", handler.CreateRuleSet)
+			rs.PUT("/:id", handler.UpdateRuleSet)
+			rs.DELETE("/:id", handler.DeleteRuleSet)
+
 			// 订阅管理
 			sub := protected.Group("/subscriptions")
 			sub.GET("", handler.ListSubscriptions)
@@ -146,6 +158,7 @@ func main() {
 			sub.GET("/:id/restrictions", handler.ListRestrictions)
 			sub.POST("/:id/restrictions", handler.CreateRestriction)
 			sub.DELETE("/:id/restrictions/:rid", handler.DeleteRestriction)
+			sub.GET("/:id/components", handler.GetSubscriptionComponents)
 		}
 	}
 

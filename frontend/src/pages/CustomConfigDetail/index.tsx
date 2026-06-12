@@ -4,6 +4,7 @@ import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import yaml from 'js-yaml'
 import {
   ArrowLeft,
   Plus,
@@ -44,7 +45,7 @@ import { customConfigsApi } from '@/api/custom-configs'
 import { ruleProvidersApi } from '@/api/rule-providers'
 import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
 import { providersApi } from '@/api/providers'
-import type { ProxyNode, ProxyGroup } from '@/types'
+import type { ProxyGroup } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -69,13 +70,13 @@ import { ConfigPayloadDiffDialog } from '@/components/ConfigPayloadDiffDialog'
 import { cn } from '@/lib/utils'
 import { useRegisterContextSaveBar } from '@/store/context-save-bar'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
+import type { ParsedRule } from '@/domain/rules'
 import {
   buildRuleAnalysis,
   canUseMatchType,
   hasMatchRule as hasMatchRuleInList,
   insertRule,
   parseRule,
-  type ParsedRule,
   parseRulesText,
   type RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
@@ -87,12 +88,7 @@ import {
 import { getRuleTypeMeta } from './rules/RuleTypeMeta'
 import { RuleStatusIndicator } from './rules/RuleStatusIndicator'
 import { SortableRuleRow } from './rules/SortableRuleRow'
-import { ProxyDialog } from './proxies/ProxyDialog'
 import { ProxyGroupDialog } from './proxies/ProxyGroupDialog'
-import {
-  makeUniqueDuplicateProxyName,
-  buildDuplicatedProxyNode,
-} from './proxies/proxy-form'
 import {
   SORTABLE_TABLE_LAYOUT,
   sortableInstantReorder,
@@ -109,6 +105,14 @@ import {
   type CustomConfigDraftPayload,
 } from './shared/constants'
 
+
+function draftToYamlText(obj: object): string {
+  try {
+    return yaml.dump(obj, { lineWidth: -1, quotingType: '"', forceQuotes: false })
+  } catch {
+    return JSON.stringify(obj, null, 2)
+  }
+}
 
 function buildRuleSaveChecklist(
   finalRules: string[],
@@ -258,10 +262,18 @@ export function CustomConfigDetail() {
 
   const handleDetailTabChange = (value: string) => {
     const next = parseConfigDetailTab(value)
+    if (next === 'yamlEdit') {
+      const draft = {
+        'proxy-groups': proxyGroups,
+        rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      }
+      setYamlEditContent(draftToYamlText(draft))
+      setYamlEditError('')
+    }
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev)
-        if (next === 'proxies') {
+        if (next === 'proxyGroups') {
           p.delete('tab')
         } else {
           p.set('tab', next)
@@ -276,8 +288,6 @@ export function CustomConfigDetail() {
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState('')
 
-  // 代理节点列表
-  const [proxies, setProxies] = useState<ProxyNode[]>([])
   // 代理组列表
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
   // 规则列表（字符串数组）
@@ -286,10 +296,9 @@ export function CustomConfigDetail() {
   const [ruleProviderIds, setRuleProviderIds] = useState<number[]>([])
   const [hostedRuleSetIds, setHostedRuleSetIds] = useState<number[]>([])
 
-  // 代理节点弹窗状态
-  const [proxyDialogOpen, setProxyDialogOpen] = useState(false)
-  const [editingProxy, setEditingProxy] = useState<ProxyNode | null>(null)
-  const [editingProxyIndex, setEditingProxyIndex] = useState<number>(-1)
+  // YAML 编辑 tab 状态
+  const [yamlEditContent, setYamlEditContent] = useState('')
+  const [yamlEditError, setYamlEditError] = useState('')
 
   // 代理组弹窗状态
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
@@ -338,13 +347,13 @@ export function CustomConfigDetail() {
     queryFn: providersApi.list,
   })
   const providerNames = allProviders.map((p) => p.name)
+  const providerItems = allProviders.map((p) => ({ name: p.name, type: p.type }))
 
   // 从服务端同步到表单：仅在「配置 id / 服务端版本」变化时执行，避免 React Query refetch
   // 返回新对象引用时误重置草稿，导致 isDirty 恒为 false、Context Save Bar 不出现。
   useEffect(() => {
     if (!config) return
     setName(config.name)
-    setProxies(config.proxies || [])
     setProxyGroups(config.proxy_groups || [])
     setRules(config.rules || [])
     setRulesText((config.rules || []).join('\n'))
@@ -378,7 +387,6 @@ export function CustomConfigDetail() {
     const saved = savedPayloadFromConfig(config)
     const draft: CustomConfigDraftPayload = {
       name,
-      proxies,
       proxy_groups: proxyGroups,
       rules: rulesFromDraft(rulesTextMode, rulesText, rules),
       rule_provider_ids: ruleProviderIds,
@@ -388,7 +396,6 @@ export function CustomConfigDetail() {
   }, [
     config,
     name,
-    proxies,
     proxyGroups,
     rules,
     ruleProviderIds,
@@ -400,7 +407,6 @@ export function CustomConfigDetail() {
   const handleDiscard = useCallback(() => {
     if (!config) return
     setName(config.name)
-    setProxies(config.proxies || [])
     setProxyGroups(config.proxy_groups || [])
     setRules(config.rules || [])
     setRulesText((config.rules || []).join('\n'))
@@ -419,13 +425,12 @@ export function CustomConfigDetail() {
   const draftPayload = useMemo(
     (): CustomConfigDraftPayload => ({
       name,
-      proxies,
       proxy_groups: proxyGroups,
       rules: rulesFromDraft(rulesTextMode, rulesText, rules),
       rule_provider_ids: ruleProviderIds,
       hosted_rule_set_ids: hostedRuleSetIds,
     }),
-    [name, proxies, proxyGroups, rules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
+    [name, proxyGroups, rules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
   )
 
   // ── YAML 预览 ──
@@ -455,71 +460,6 @@ export function CustomConfigDetail() {
     }
   }
 
-  // ── 代理节点操作 ──
-  const openAddProxy = () => {
-    setEditingProxy(null)
-    setEditingProxyIndex(-1)
-    setProxyDialogOpen(true)
-  }
-
-  const openEditProxy = (node: ProxyNode, idx: number) => {
-    setEditingProxy(node)
-    setEditingProxyIndex(idx)
-    setProxyDialogOpen(true)
-  }
-
-  const handleSaveProxy = (node: ProxyNode) => {
-    const newName = node.name.trim()
-    if (editingProxyIndex >= 0) {
-      const oldName = editingProxy?.name.trim() ?? ''
-      const renaming = oldName !== '' && oldName !== newName
-      if (renaming) {
-        if (
-          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
-            kind: 'proxy',
-            index: editingProxyIndex,
-          })
-        ) {
-          toast.error(t('customConfigs.renameConflict'))
-          return
-        }
-        const { proxyGroups: pg, rules: r, rulesText: rt, replaceCount } = renameProxyOrGroupRefs(
-          oldName,
-          newName,
-          { proxyGroups, rules, rulesText, rulesTextMode }
-        )
-        setProxyGroups(pg)
-        setRules(r)
-        setRulesText(rt)
-        if (replaceCount > 0) {
-          toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
-        }
-      }
-      setProxies((prev) => prev.map((p, i) => (i === editingProxyIndex ? node : p)))
-    } else {
-      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
-        toast.error(t('customConfigs.renameConflict'))
-        return
-      }
-      setProxies((prev) => [...prev, node])
-    }
-    setProxyDialogOpen(false)
-  }
-
-  const handleDeleteProxy = (idx: number) => {
-    setProxies((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleDuplicateProxy = (idx: number) => {
-    const proxy = proxies[idx]
-    if (!proxy) return
-    const suffix = t('customConfigs.proxyCopySuffix')
-    const newName = makeUniqueDuplicateProxyName(proxy.name, suffix, proxies, proxyGroups)
-    const node = buildDuplicatedProxyNode(proxy, newName)
-    setProxies((prev) => [...prev.slice(0, idx + 1), node, ...prev.slice(idx + 1)])
-    toast.success(t('customConfigs.proxyDuplicated'))
-  }
-
   // ── 代理组操作 ──
   const openAddGroup = () => {
     setEditingGroup(null)
@@ -540,7 +480,7 @@ export function CustomConfigDetail() {
       const renaming = oldName !== '' && oldName !== newName
       if (renaming) {
         if (
-          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
+          hasProxyOrGroupNameConflict(newName, [], proxyGroups, {
             kind: 'group',
             index: editingGroupIndex,
           })
@@ -563,7 +503,7 @@ export function CustomConfigDetail() {
         setProxyGroups((prev) => prev.map((g, i) => (i === editingGroupIndex ? group : g)))
       }
     } else {
-      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
+      if (hasProxyOrGroupNameConflict(newName, [], proxyGroups)) {
         toast.error(t('customConfigs.renameConflict'))
         return
       }
@@ -726,7 +666,7 @@ export function CustomConfigDetail() {
       return
     }
     if (action === 'go-target-proxies') {
-      handleDetailTabChange('proxies')
+      handleDetailTabChange('proxyGroups')
     }
   }
 
@@ -777,8 +717,6 @@ export function CustomConfigDetail() {
     ))
   }
 
-  // 所有代理节点名称（供代理组选择使用）
-  const proxyNames = proxies.map((p) => p.name)
   const selectedRuleProviderNames = useMemo(() => new Set<string>([
     ...allRuleProviders.filter((rp) => ruleProviderIds.includes(rp.id)).map((rp) => rp.name),
     ...allHostedRuleSets.filter((rs) => hostedRuleSetIds.includes(rs.id)).map((rs) => rs.name),
@@ -791,9 +729,8 @@ export function CustomConfigDetail() {
     () => new Set([
       ...BUILTIN_PROXIES,
       ...proxyGroups.map((g) => g.name),
-      ...proxies.map((p) => p.name),
     ]),
-    [proxyGroups, proxies]
+    [proxyGroups]
   )
   const parsedRulesText = useMemo(() => parseRulesText(rulesText), [rulesText])
   const currentRuleStrings = rulesTextMode ? parsedRulesText.rules : rules
@@ -883,8 +820,7 @@ export function CustomConfigDetail() {
   const targetOptionGroups = useMemo<RuleTargetOptionGroup[]>(() => ([
     { key: 'builtin', label: t('customConfigs.targetBuiltin'), values: BUILTIN_PROXIES },
     { key: 'groups', label: t('customConfigs.targetProxyGroups'), values: proxyGroups.map((g) => g.name) },
-    { key: 'proxies', label: t('customConfigs.targetProxies'), values: proxies.map((p) => p.name) },
-  ]), [proxyGroups, proxies, t])
+  ]), [proxyGroups, t])
   const visibleRuleCount = filteredRuleListItems.length
   const hasActiveFilters = ruleSearch.trim() !== '' || ruleFilter !== 'all' || showOnlyIssues
   const saveHealth = buildRuleSaveChecklist(rulesFromDraft(rulesTextMode, rulesText, rules), currentRuleStrings, ruleListItems)
@@ -926,7 +862,6 @@ export function CustomConfigDetail() {
     setLastValidationState(issues)
     updateMutation.mutate({
       name,
-      proxies,
       proxy_groups: proxyGroups,
       rules: finalRules,
       rule_provider_ids: ruleProviderIds,
@@ -942,11 +877,31 @@ export function CustomConfigDetail() {
     t,
     updateMutation,
     name,
-    proxies,
     proxyGroups,
     ruleProviderIds,
     hostedRuleSetIds,
   ])
+
+  const handleApplyYamlEdit = useCallback(() => {
+    try {
+      const parsed = yaml.load(yamlEditContent) as Record<string, unknown>
+      if (!parsed || typeof parsed !== 'object') {
+        setYamlEditError('YAML 解析结果不是对象')
+        return
+      }
+      const newGroups = (parsed['proxy-groups'] as ProxyGroup[]) || []
+      const newRules = (parsed['rules'] as string[]) || []
+      setProxyGroups(newGroups)
+      setRules(newRules)
+      setRulesText(newRules.join('\n'))
+      setYamlEditError('')
+      toast.success('已从 YAML 导入配置')
+      handleDetailTabChange('proxyGroups')
+    } catch (e) {
+      setYamlEditError('YAML 解析失败: ' + (e as Error).message)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yamlEditContent])
 
   const saveBarExtraActions = useMemo(
     () =>
@@ -1129,12 +1084,6 @@ export function CustomConfigDetail() {
       <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
         <div className="overflow-x-auto pb-0.5">
           <TabsList className="h-9 gap-0.5 p-0.5">
-            <TabsTrigger value="proxies">
-              {t('customConfigs.tabProxies')}
-              {proxies.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxies.length}</Badge>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="proxyGroups">
               {t('customConfigs.tabProxyGroups')}
               {proxyGroups.length > 0 && (
@@ -1155,6 +1104,9 @@ export function CustomConfigDetail() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="yamlEdit">
+              YAML 编辑
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1170,80 +1122,7 @@ export function CustomConfigDetail() {
           </div>
         </div>
 
-        {/* ── Tab 1: 代理节点 ── */}
-        <TabsContent value="proxies" className="space-y-3 mt-3">
-          <div className="flex justify-end">
-            <Button onClick={openAddProxy}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('customConfigs.addProxy')}
-            </Button>
-          </div>
-
-          {proxies.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
-              {t('common.noData')}
-            </div>
-          ) : (
-            <div className="border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyName')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyType')}</th>
-                    <th className="w-[132px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proxies.map((proxy, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => openEditProxy(proxy, idx)}
-                    >
-                      <td className="px-4 py-2 font-medium whitespace-nowrap">{proxy.name}</td>
-                      <td className="px-4 py-2">
-                        <Badge variant="secondary">{proxy.type}</Badge>
-                      </td>
-                      <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openEditProxy(proxy, idx)}
-                            aria-label={t('customConfigs.editProxy')}
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleDuplicateProxy(idx)}
-                            aria-label={t('customConfigs.duplicateProxy')}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDeleteProxy(idx)}
-                            aria-label={t('customConfigs.deleteProxy')}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Tab 2: 代理组 ── */}
+        {/* ── Tab 1: 代理组 ── */}
         <TabsContent value="proxyGroups" className="space-y-3 mt-3">
           <div className="flex justify-end">
             <Button onClick={openAddGroup}>
@@ -1722,15 +1601,14 @@ export function CustomConfigDetail() {
                           referencedTargets.map((name) => {
                             const isBuiltin = BUILTIN_PROXIES.includes(name)
                             const isGroup = proxyGroups.some((group) => group.name === name)
-                            const isProxy = proxies.some((proxy) => proxy.name === name)
                             return (
                               <button
                                 key={name}
                                 type="button"
-                                onClick={() => handleDetailTabChange(isProxy ? 'proxies' : 'proxyGroups')}
+                                onClick={() => handleDetailTabChange('proxyGroups')}
                                 className={cn(
                                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                                  !isBuiltin && !isGroup && !isProxy && 'border-destructive/40 text-destructive'
+                                  !isBuiltin && !isGroup && 'border-destructive/40 text-destructive'
                                 )}
                               >
                                 {name}
@@ -1738,9 +1616,7 @@ export function CustomConfigDetail() {
                                   ? ` · ${t('customConfigs.targetBuiltin')}`
                                   : isGroup
                                     ? ` · ${t('customConfigs.targetProxyGroups')}`
-                                    : isProxy
-                                      ? ` · ${t('customConfigs.targetProxies')}`
-                                      : ` · ${t('customConfigs.ruleTargetMissing')}`}
+                                    : ` · ${t('customConfigs.ruleTargetMissing')}`}
                               </button>
                             )
                           })
@@ -1857,25 +1733,58 @@ export function CustomConfigDetail() {
             </>
           )}
         </TabsContent>
-      </Tabs>
 
-      {/* ── 代理节点编辑弹窗 ── */}
-      <ProxyDialog
-        open={proxyDialogOpen}
-        initialNode={editingProxy}
-        onClose={() => setProxyDialogOpen(false)}
-        onSave={handleSaveProxy}
-      />
+        {/* ── Tab 5: YAML 编辑 ── */}
+        <TabsContent value="yamlEdit" className="space-y-3 mt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              编辑代理组和规则，点击"应用"后更新配置。
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const draft = {
+                    'proxy-groups': proxyGroups,
+                    rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+                  }
+                  setYamlEditContent(draftToYamlText(draft))
+                  setYamlEditError('')
+                }}
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                重置
+              </Button>
+              <Button size="sm" onClick={handleApplyYamlEdit}>
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                应用到配置
+              </Button>
+            </div>
+          </div>
+          {yamlEditError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {yamlEditError}
+            </div>
+          )}
+          <YamlEditor
+            value={yamlEditContent}
+            onChange={setYamlEditContent}
+            minHeight="480px"
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* ── 代理组编辑弹窗 ── */}
       <ProxyGroupDialog
         open={groupDialogOpen}
         initialGroup={editingGroup}
-        proxyNames={proxyNames}
+        proxyNames={[]}
         groupNames={proxyGroups
           .map((g) => g.name)
           .filter((_, i) => i !== editingGroupIndex)}
         providerNames={providerNames}
+        providerItems={providerItems}
         onClose={() => setGroupDialogOpen(false)}
         onSave={handleSaveGroup}
       />

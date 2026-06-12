@@ -11,6 +11,7 @@ import { ConfigTemplates } from '@/pages/ConfigTemplates'
 import { ConfigTemplateDetail } from '@/pages/ConfigTemplateDetail'
 import { RuleProviders } from '@/pages/RuleProviders'
 import { HostedRuleSets } from '@/pages/HostedRuleSets'
+import { RuleSets } from '@/pages/RuleSets'
 import { Subscriptions } from '@/pages/Subscriptions'
 import { SubscriptionDetail } from '@/pages/SubscriptionDetail'
 import { AccessLogs } from '@/pages/AccessLogs'
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: 'config-templates/:id', element: <ConfigTemplateDetail /> },
       { path: 'rule-providers', element: <RuleProviders /> },
       { path: 'hosted-rule-sets', element: <HostedRuleSets /> },
+      { path: 'rule-sets', element: <RuleSets /> },
       { path: 'subscriptions', element: <Subscriptions /> },
       { path: 'subscriptions/:id', element: <SubscriptionDetail /> },
       { path: 'subscriptions/:id/logs', element: <AccessLogs /> },

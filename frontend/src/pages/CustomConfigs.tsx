@@ -103,7 +103,6 @@ export function CustomConfigs() {
     }
     createMutation.mutate({
       name: newName,
-      proxies: [],
       proxy_groups: [],
       rules: [],
       rule_provider_ids: [],
@@ -128,7 +127,6 @@ export function CustomConfigs() {
         return null
       }
       if (
-        !Array.isArray(parsed.proxies) ||
         !Array.isArray(parsed.proxy_groups) ||
         !Array.isArray(parsed.rules) ||
         !Array.isArray(parsed.rule_provider_ids) ||
@@ -140,7 +138,6 @@ export function CustomConfigs() {
       setImportError('')
       return {
         name: parsed.name,
-        proxies: parsed.proxies,
         proxy_groups: parsed.proxy_groups,
         rules: parsed.rules,
         rule_provider_ids: parsed.rule_provider_ids,
@@ -161,7 +158,6 @@ export function CustomConfigs() {
   const handleImportSample = () => {
     const payload: CustomConfigTransferPayload = {
       name: t('customConfigs.sampleName'),
-      proxies: [],
       proxy_groups: [
         {
           name: 'PROXY',
