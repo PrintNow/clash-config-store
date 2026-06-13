@@ -170,7 +170,7 @@ function SortableProxyGroupRow({
       )}
       onClick={() => onEdit(group, idx)}
     >
-      <td className="px-1 py-2 w-[28px]" onClick={(e) => e.stopPropagation()}>
+      <td className="hidden md:table-cell px-1 py-1.5 w-[28px]" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
@@ -180,15 +180,19 @@ function SortableProxyGroupRow({
           <GripVertical className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="px-4 py-2 font-medium">{group.name}</td>
-      <td className="px-4 py-2">
-        <Badge variant="outline">{group.type}</Badge>
+      <td className="px-3 py-1.5 font-medium text-sm">{group.name}</td>
+      <td className="hidden sm:table-cell px-3 py-1.5">
+        <Badge variant="outline" className="text-xs">{group.type}</Badge>
       </td>
-      <td className="px-4 py-2 text-muted-foreground text-xs">
+      <td className="hidden lg:table-cell px-3 py-1.5 text-muted-foreground text-xs">
         {(group.proxies || []).slice(0, 3).join(', ')}
         {(group.proxies || []).length > 3 && ` +${(group.proxies || []).length - 3}`}
       </td>
-      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+      {/* 移动端紧凑信息列 */}
+      <td className="sm:hidden px-3 py-1.5">
+        <Badge variant="outline" className="text-xs">{group.type}</Badge>
+      </td>
+      <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">
           <Button
             variant="ghost"
@@ -516,9 +520,10 @@ export function CustomConfigDetail() {
     setProxyGroups((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  // ── DnD 传感器 ──
+  // ── DnD 传感器（移动端禁用拖拽） ──
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   const sensors = useSensors(useSensor(PointerSensor, {
-    activationConstraint: { distance: 5 },
+    activationConstraint: { distance: isMobile ? Infinity : 5 },
   }))
 
   const toggleRuleRow = useCallback((sourceIndex: number) => {
@@ -972,21 +977,21 @@ export function CustomConfigDetail() {
 
   return (
     <>
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* ── 顶部操作栏 ── */}
-      <div className="rounded-xl border bg-background/95 p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-2.5">
+      <div className="rounded-xl border bg-background/95 p-2.5 shadow-sm">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="-ml-1 mt-0.5"
+              className="-ml-1 mt-0.5 h-8 w-8"
               onClick={() => navigate('/custom-configs')}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -1016,9 +1021,9 @@ export function CustomConfigDetail() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <h1
-                    className="text-xl font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
+                    className="text-lg font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
                     title={t('customConfigs.clickToEditTitle')}
                     onClick={() => setEditingName(true)}
                   >
@@ -1036,7 +1041,7 @@ export function CustomConfigDetail() {
                 </div>
               )}
               {/* 固定一行高度，避免切到「规则」tab 时徽章出现导致整块变高、右侧按钮上下漂移 */}
-              <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+              <div className="flex min-h-5 flex-wrap items-center gap-1.5">
                 {activeTab === 'rules' && (
                   <Badge
                     variant="outline"
@@ -1083,7 +1088,7 @@ export function CustomConfigDetail() {
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
       <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
         <div className="overflow-x-auto pb-0.5">
-          <TabsList className="h-9 gap-0.5 p-0.5">
+          <TabsList className="h-8 gap-0.5 p-0.5">
             <TabsTrigger value="proxyGroups">
               {t('customConfigs.tabProxyGroups')}
               {proxyGroups.length > 0 && (
@@ -1110,29 +1115,28 @@ export function CustomConfigDetail() {
           </TabsList>
         </div>
 
-        <div className="mt-3 rounded-lg border bg-muted/20 p-3">
-          <div className="flex items-start gap-2">
-            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t('customConfigs.detailGuideTitle')}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {t('customConfigs.detailGuideDescription')}
-              </p>
-            </div>
+        <div className="mt-2 rounded-lg border bg-muted/20 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground/80">{t('customConfigs.detailGuideTitle')}</span>
+              {' · '}
+              {t('customConfigs.detailGuideDescription')}
+            </p>
           </div>
         </div>
 
         {/* ── Tab 1: 代理组 ── */}
-        <TabsContent value="proxyGroups" className="space-y-3 mt-3">
+        <TabsContent value="proxyGroups" className="space-y-2.5 mt-2.5">
           <div className="flex justify-end">
-            <Button onClick={openAddGroup}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button size="sm" onClick={openAddGroup}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               {t('customConfigs.addProxyGroup')}
             </Button>
           </div>
 
           {proxyGroups.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
+            <div className="text-center py-10 text-muted-foreground text-sm border rounded-lg">
               {t('common.noData')}
             </div>
           ) : (
@@ -1140,11 +1144,13 @@ export function CustomConfigDetail() {
               <table className={SORTABLE_TABLE_LAYOUT}>
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="w-[28px] px-1 py-2" aria-hidden />
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupName')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupType')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupProxies')}</th>
-                    <th className="w-[100px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
+                    <th className="hidden md:table-cell w-[28px] px-1 py-1.5" aria-hidden />
+                    <th className="text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupName')}</th>
+                    <th className="hidden sm:table-cell text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupType')}</th>
+                    <th className="hidden lg:table-cell text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupProxies')}</th>
+                    {/* 移动端类型列占位 */}
+                    <th className="sm:hidden text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupType')}</th>
+                    <th className="w-[88px] px-3 py-1.5 text-sm font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <DndContext
@@ -1176,7 +1182,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 3: 规则 ── */}
-        <TabsContent value="rules" className="space-y-3 mt-2.5">
+        <TabsContent value="rules" className="space-y-2.5 mt-2.5">
           <TooltipProvider delayDuration={300}>
           <div className="space-y-3">
             <div className="space-y-3">
@@ -1327,49 +1333,49 @@ export function CustomConfigDetail() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-muted/20"
                   onClick={() => {
                     setRuleFilter('all')
                     setShowOnlyIssues(false)
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.total}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{ruleStats.total}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-muted/20"
                   onClick={() => setRuleFilter('rule-set')}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.selectedRuleSets}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{ruleStats.selectedRuleSets}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-amber-50"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-amber-50"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-amber-600 dark:text-amber-300">
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-amber-600 dark:text-amber-300">
                     {ruleStats.warnings}
                   </p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-destructive/5"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-destructive/5"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-destructive">{ruleStats.errors}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-destructive">{ruleStats.errors}</p>
                 </button>
               </div>
 

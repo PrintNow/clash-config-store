@@ -210,3 +210,33 @@ export interface PagedResponse<T> {
   page: number
   page_size: number
 }
+
+// 外部规则集（rule-providers）
+export interface RuleProvider {
+  id: number
+  user_id: number | null
+  name: string
+  type: 'http' | 'file'
+  url: string
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text' | 'mrs'
+  interval: number
+  is_preset: boolean
+  preset_tag: string
+  created_at: string
+}
+
+// 自托管规则集（hosted-rule-sets）
+export interface HostedRuleSet {
+  id: number
+  user_id: number
+  name: string
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text'
+  content: string
+  content_sha256: string
+  token: string
+  url: string
+  created_at: string
+  updated_at: string
+}

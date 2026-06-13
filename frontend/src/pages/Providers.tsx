@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/EmptyState'
 import {
@@ -132,10 +133,10 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-3 py-1">
             <div className="flex justify-end">
               <Button size="sm" onClick={openAddNode}>
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 {t('providers.addNode')}
               </Button>
             </div>
@@ -143,11 +144,11 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
             {isLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
+                  <Skeleton key={i} className="h-10 w-full" />
                 ))}
               </div>
             ) : nodes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm border rounded-lg">
+              <div className="text-center py-6 text-muted-foreground text-sm border rounded-lg">
                 {t('common.noData')}
               </div>
             ) : (
@@ -442,17 +443,64 @@ export function Providers() {
     )
   }
 
+  const renderActionButtons = (p: Provider) => (
+    <div className="flex items-center gap-1">
+      {p.type === 'inline' ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setNodesDialogProvider(p)}
+          title={t('providers.editNodes')}
+        >
+          <Server className="h-4 w-4" />
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => handleRefresh(p)}
+          disabled={refreshingId === p.id}
+          title={t('common.refresh')}
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshingId === p.id ? 'animate-spin' : ''}`}
+          />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => openEditDialog(p)}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        onClick={() => { setDeletingProvider(p); setDeleteDialogOpen(true) }}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 标题区 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('providers.title')}</h1>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
+        <h1 className="text-xl font-semibold">{t('providers.title')}</h1>
+        <Button size="sm" onClick={openCreateDialog}>
+          <Plus className="mr-1.5 h-4 w-4" />
           {t('providers.addProvider')}
         </Button>
       </div>
 
-      <div className="rounded-lg border">
+      {/* 桌面端表格 */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -460,7 +508,7 @@ export function Providers() {
               <TableHead>{t('common.type')}</TableHead>
               <TableHead>{t('providers.providerUrl')}</TableHead>
               <TableHead>{t('providers.lastFetched')}</TableHead>
-              <TableHead className="w-[130px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[120px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -480,7 +528,7 @@ export function Providers() {
                     description={t('providers.emptyDescription')}
                     actions={(
                       <Button size="sm" onClick={openCreateDialog}>
-                        <Plus className="mr-2 h-4 w-4" />
+                        <Plus className="mr-1.5 h-4 w-4" />
                         {t('providers.addProvider')}
                       </Button>
                     )}
@@ -540,51 +588,75 @@ export function Providers() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      {p.type === 'inline' ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setNodesDialogProvider(p)}
-                          title={t('providers.editNodes')}
-                        >
-                          <Server className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRefresh(p)}
-                          disabled={refreshingId === p.id}
-                          title={t('common.refresh')}
-                        >
-                          <RefreshCw
-                            className={`h-4 w-4 ${refreshingId === p.id ? 'animate-spin' : ''}`}
-                          />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(p)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => { setDeletingProvider(p); setDeleteDialogOpen(true) }}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {renderActionButtons(p)}
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* 移动端卡片列表 */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-3 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-48" />
+              </CardContent>
+            </Card>
+          ))
+        ) : providers.length === 0 ? (
+          <EmptyState
+            title={t('providers.emptyTitle')}
+            description={t('providers.emptyDescription')}
+            actions={(
+              <Button size="sm" onClick={openCreateDialog}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                {t('providers.addProvider')}
+              </Button>
+            )}
+          />
+        ) : (
+          providers.map((p) => (
+            <Card key={p.id}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{p.name}</span>
+                      {renderProviderTypeBadge(p)}
+                    </div>
+                    {p.type === 'inline' ? (
+                      renderInlineNodeTags(p)
+                    ) : (
+                      <p className="font-mono text-xs text-muted-foreground truncate">{p.url}</p>
+                    )}
+                    {p.type === 'http' && (
+                      <div className="text-xs text-muted-foreground">
+                        {p.fetch_error ? (
+                          <span className="text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {t('providers.fetchError')}
+                          </span>
+                        ) : p.last_fetched_at ? (
+                          new Date(p.last_fetched_at).toLocaleString()
+                        ) : (
+                          t('providers.neverFetched')
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    {renderActionButtons(p)}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* 创建/编辑 Dialog */}

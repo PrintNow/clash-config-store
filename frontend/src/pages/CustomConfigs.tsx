@@ -9,6 +9,7 @@ import type { CustomConfig, CustomConfigTransferPayload } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -61,7 +62,6 @@ export function CustomConfigs() {
       queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
       toast.success(t('common.success'))
       setCreateDialogOpen(false)
-      // 创建后直接跳转到详情页
       navigate(`/custom-configs/${data.id}`)
     },
   })
@@ -229,13 +229,47 @@ export function CustomConfigs() {
     return t('customConfigs.relativeDaysAgo', { count: diffDays })
   }
 
+  const ConfigDropdownMenu = ({ config }: { config: CustomConfig }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => navigate(`/custom-configs/${config.id}`)}>
+          <ExternalLink className="mr-2 h-4 w-4" />
+          {t('common.detail')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => cloneMutation.mutate(config.id)}>
+          <Copy className="mr-2 h-4 w-4" />
+          {t('customConfigs.cloneConfig')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleExport(config)}>
+          <Download className="mr-2 h-4 w-4" />
+          {t('customConfigs.exportConfig')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => openDeleteDialog(config)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          {t('common.delete')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{t('customConfigs.title')}</h1>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-4">
+      {/* 页面标题栏 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{t('customConfigs.title')}</h1>
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => {
               setImportDialogOpen(true)
               setImportText('')
@@ -243,24 +277,25 @@ export function CustomConfigs() {
               setImportError('')
             }}
           >
-            <Upload className="mr-2 h-4 w-4" />
+            <Upload className="mr-1.5 h-4 w-4" />
             {t('customConfigs.importConfig')}
           </Button>
-          <Button onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button size="sm" onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}>
+            <Plus className="mr-1.5 h-4 w-4" />
             {t('customConfigs.addConfig')}
           </Button>
         </div>
       </div>
 
-      <div className="rounded-lg border">
+      {/* 桌面端表格（sm+） */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
               <TableHead>{t('customConfigs.updatedAt')}</TableHead>
-              <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[60px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -269,11 +304,11 @@ export function CustomConfigs() {
                 <TableRow key={i}>
                   <TableCell>
                     <Skeleton className="h-5 w-32" />
-                    <Skeleton className="mt-2 h-4 w-44" />
+                    <Skeleton className="mt-1.5 h-4 w-44" />
                   </TableCell>
                   <TableCell><Skeleton className="h-5 w-36" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : configs.length === 0 ? (
@@ -313,60 +348,101 @@ export function CustomConfigs() {
                       {config.name}
                       <ExternalLink className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {t('customConfigs.statsSummary', {
-                        proxies: config.proxies.length,
+                        proxies: (config as unknown as { proxies?: unknown[] }).proxies?.length ?? 0,
                         groups: config.proxy_groups.length,
                         rules: config.rules.length,
                         ruleSets: config.rule_provider_ids.length + config.hosted_rule_set_ids.length,
                       })}
                     </p>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {formatDateTime(config.created_at)}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    <div>{formatDateTime(config.updated_at)}</div>
+                    <div className="whitespace-nowrap">{formatDateTime(config.updated_at)}</div>
                     <div className="text-xs text-muted-foreground">
                       {formatRelativeTime(config.updated_at)}
                     </div>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/custom-configs/${config.id}`)}>
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          {t('common.detail')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => cloneMutation.mutate(config.id)}>
-                          <Copy className="mr-2 h-4 w-4" />
-                          {t('customConfigs.cloneConfig')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleExport(config)}>
-                          <Download className="mr-2 h-4 w-4" />
-                          {t('customConfigs.exportConfig')}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => openDeleteDialog(config)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          {t('common.delete')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <ConfigDropdownMenu config={config} />
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* 移动端卡片列表（sm以下） */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-32" />
+              </CardContent>
+            </Card>
+          ))
+        ) : configs.length === 0 ? (
+          <EmptyState
+            title={t('customConfigs.emptyTitle')}
+            description={t('customConfigs.emptyDescription')}
+            actions={(
+              <>
+                <Button size="sm" onClick={handleImportSample} disabled={importMutation.isPending}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {importMutation.isPending ? t('common.submitting') : t('customConfigs.importSample')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setNewName(''); setNameError(''); setCreateDialogOpen(true) }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t('customConfigs.addConfig')}
+                </Button>
+              </>
+            )}
+          />
+        ) : (
+          configs.map((config) => (
+            <Card
+              key={config.id}
+              className="cursor-pointer active:bg-muted/50 transition-colors"
+              onClick={() => navigate(`/custom-configs/${config.id}`)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-primary flex items-center gap-1">
+                      <span className="truncate">{config.name}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('customConfigs.statsSummary', {
+                        proxies: (config as unknown as { proxies?: unknown[] }).proxies?.length ?? 0,
+                        groups: config.proxy_groups.length,
+                        rules: config.rules.length,
+                        ruleSets: config.rule_provider_ids.length + config.hosted_rule_set_ids.length,
+                      })}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatRelativeTime(config.updated_at)}
+                    </p>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <ConfigDropdownMenu config={config} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* 创建规则集 Dialog */}

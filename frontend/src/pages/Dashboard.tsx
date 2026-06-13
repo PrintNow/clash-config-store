@@ -36,11 +36,8 @@ export function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // 已复制状态，用于显示复制反馈（key: subscription id）
   const [copiedId, setCopiedId] = useState<number | null>(null)
-  // 正在刷新中的 provider id 集合
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
-  // null 表示按当前账号状态决定默认展开/收起
   const [onboardingOpen, setOnboardingOpen] = useState<boolean | null>(null)
 
   const { data: stats, isLoading } = useQuery({
@@ -48,14 +45,12 @@ export function Dashboard() {
     queryFn: dashboardApi.getStats,
   })
 
-  // 仪表盘展示最新访问日志后，使订阅列表上的 access_log_count 缓存失效，避免长期显示 0
   useEffect(() => {
     if (stats) {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
     }
   }, [stats, queryClient])
 
-  // 一键刷新所有订阅源
   const refreshAllMutation = useMutation({
     mutationFn: dashboardApi.refreshAllProviders,
     onSuccess: () => {
@@ -67,7 +62,6 @@ export function Dashboard() {
     },
   })
 
-  // 刷新单个 provider 并 invalidate 仪表盘数据
   const handleRefreshProvider = async (id: number) => {
     setRefreshingIds((prev) => new Set(prev).add(id))
     try {
@@ -84,7 +78,6 @@ export function Dashboard() {
     }
   }
 
-  // 复制订阅链接
   const handleCopyLink = (sub: SubscriptionHealth) => {
     navigator.clipboard.writeText(sub.subscription_url).then(() => {
       setCopiedId(sub.id)
@@ -93,7 +86,6 @@ export function Dashboard() {
     })
   }
 
-  // 统计数字卡片配置
   const statCards = [
     {
       key: 'providers',
@@ -178,7 +170,6 @@ export function Dashboard() {
   const staleProviderCount = stats?.providers?.filter((provider) => provider.cache_stale || provider.fetch_error).length ?? 0
   const expiringSubscriptionCount = stats?.subscriptions?.filter((sub) => sub.token_expired).length ?? 0
 
-  // 渲染 provider 缓存状态 Badge
   const renderCacheBadge = (provider: ProviderStatus) => {
     if (provider.cache_stale) {
       return (
@@ -194,7 +185,6 @@ export function Dashboard() {
     )
   }
 
-  // 渲染 token 过期状态 Badge
   const renderTokenBadge = (sub: SubscriptionHealth) => {
     if (sub.token_expired) {
       return (
@@ -217,7 +207,6 @@ export function Dashboard() {
     )
   }
 
-  // 格式化访问日志时间
   const formatLogTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
@@ -236,69 +225,70 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 顶部操作区 */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-bold tracking-tight">{t('dashboard.title')}</h1>
         <Button
           onClick={() => refreshAllMutation.mutate()}
           disabled={refreshAllMutation.isPending}
-          className="w-fit gap-2 shadow-sm"
+          size="sm"
+          className="gap-1.5"
         >
-          <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
-          {t('dashboard.refreshAll')}
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">{t('dashboard.refreshAll')}</span>
         </Button>
       </div>
 
+      {/* Onboarding 引导卡片（可折叠） */}
       {showOnboardingGuide && (
         <Card className="border-primary/20 bg-muted/20">
-          <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-base">{t('onboarding.dashboardTitle')}</CardTitle>
-                  <Badge variant={hasMissingOnboardingStep ? 'outline' : 'success'} className="text-xs">
-                    {t('onboarding.progress', {
-                      done: completedOnboardingSteps,
-                      total: onboardingSteps.length,
-                    })}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{t('onboarding.dashboardDescription')}</p>
+          <CardHeader className="py-3 px-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CardTitle className="text-sm font-semibold">{t('onboarding.dashboardTitle')}</CardTitle>
+                <Badge variant={hasMissingOnboardingStep ? 'outline' : 'success'} className="text-xs shrink-0">
+                  {t('onboarding.progress', {
+                    done: completedOnboardingSteps,
+                    total: onboardingSteps.length,
+                  })}
+                </Badge>
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="w-fit gap-1"
+                className="h-7 px-2 gap-1 shrink-0"
                 onClick={() => setOnboardingOpen((open) => !(open ?? hasMissingOnboardingStep))}
               >
-                {isOnboardingOpen ? t('onboarding.collapse') : t('onboarding.expand')}
-                <ChevronDown className={`h-4 w-4 transition-transform ${isOnboardingOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOnboardingOpen ? 'rotate-180' : ''}`} />
               </Button>
             </div>
+            {!isOnboardingOpen && (
+              <p className="text-xs text-muted-foreground mt-0.5">{t('onboarding.dashboardDescription')}</p>
+            )}
           </CardHeader>
           {isOnboardingOpen && (
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-3">
+            <CardContent className="px-4 pb-3 pt-0">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {onboardingSteps.map((step, index) => (
                   <button
                     key={step.path}
                     type="button"
                     onClick={() => navigate(step.path)}
-                    className="rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50"
+                    className="rounded-lg border bg-background p-2.5 text-left transition-colors hover:bg-muted/50"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={step.done ? 'success' : 'outline'} className="h-5 px-1.5 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant={step.done ? 'success' : 'outline'} className="h-4 px-1 text-xs shrink-0">
                             {step.done ? t('onboarding.done') : index + 1}
                           </Badge>
-                          <p className="text-sm font-medium">{step.title}</p>
+                          <p className="text-xs font-medium truncate">{step.title}</p>
                         </div>
-                        <p className="text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{step.description}</p>
                       </div>
-                      <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
                     </div>
                   </button>
                 ))}
@@ -308,28 +298,28 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* 核心资源指标 */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {/* 核心资源指标：移动端2列，桌面5列 */}
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
         {statCards.map((card) => {
           const Icon = card.icon
           return (
             <button
               key={card.key}
               type="button"
-              className="group rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+              className="group rounded-xl border bg-card p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
               onClick={() => navigate(card.path)}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-muted-foreground">{card.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{card.title}</p>
                   {isLoading ? (
-                    <Skeleton className="mt-3 h-8 w-14" />
+                    <Skeleton className="mt-2 h-7 w-10" />
                   ) : (
-                    <p className="mt-2 text-3xl font-bold tracking-tight">{card.value}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight">{card.value}</p>
                   )}
                 </div>
-                <div className={`rounded-lg p-2 transition-transform group-hover:scale-105 ${card.bg}`}>
-                  <Icon className={`h-4 w-4 ${card.color}`} />
+                <div className={`rounded-lg p-1.5 transition-transform group-hover:scale-105 ${card.bg}`}>
+                  <Icon className={`h-3.5 w-3.5 ${card.color}`} />
                 </div>
               </div>
             </button>
@@ -337,77 +327,72 @@ export function Dashboard() {
         })}
       </div>
 
-      {/* 两列布局：左列 Provider 状态，右列订阅健康 */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* 两列布局：Provider 状态 + 订阅健康 */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* 左列：订阅源状态 */}
         <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/20 pb-4">
-            <div className="flex items-center justify-between gap-3">
+          <CardHeader className="border-b bg-muted/20 py-3 px-4">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Server className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <Server className="h-3.5 w-3.5 text-muted-foreground" />
                   {t('dashboard.providerStatus')}
                 </CardTitle>
-                <CardDescription>{t('dashboard.providerStatusDescription')}</CardDescription>
+                <CardDescription className="text-xs mt-0.5">{t('dashboard.providerStatusDescription')}</CardDescription>
               </div>
-              <Badge variant={staleProviderCount > 0 ? 'warning' : 'success'} className="shrink-0">
+              <Badge variant={staleProviderCount > 0 ? 'warning' : 'success'} className="shrink-0 text-xs">
                 {staleProviderCount > 0
                   ? t('dashboard.needAttention', { count: staleProviderCount })
                   : t('dashboard.allClear')}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3 p-4">
+          <CardContent className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-14 w-full" />
               ))
             ) : !stats?.providers?.length ? (
-              <p className="text-center text-sm text-muted-foreground py-6">{t('common.noData')}</p>
+              <p className="text-center text-sm text-muted-foreground py-4">{t('common.noData')}</p>
             ) : (
               stats.providers.map((provider: ProviderStatus) => (
                 <div
                   key={provider.id}
-                  className="rounded-xl border bg-background/70 p-3 transition-colors hover:bg-muted/30"
+                  className="rounded-lg border bg-background/70 p-2.5 transition-colors hover:bg-muted/30"
                 >
-                  {/* 名称 + 缓存状态 Badge + 刷新按钮 */}
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                           provider.cache_stale || provider.fetch_error ? 'bg-yellow-500' : 'bg-green-500'
                         }`}
                       />
-                      <span className="font-semibold truncate text-sm">{provider.name}</span>
+                      <span className="font-medium truncate text-sm">{provider.name}</span>
                       {renderCacheBadge(provider)}
                     </div>
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 shrink-0"
+                      className="h-6 w-6 p-0 shrink-0"
                       disabled={refreshingIds.has(provider.id)}
                       onClick={() => handleRefreshProvider(provider.id)}
                     >
                       <RefreshCw
-                        className={`h-3.5 w-3.5 ${refreshingIds.has(provider.id) ? 'animate-spin' : ''}`}
+                        className={`h-3 w-3 ${refreshingIds.has(provider.id) ? 'animate-spin' : ''}`}
                       />
                     </Button>
                   </div>
-
-                  {/* 最后刷新时间 */}
-                  <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>
+                  <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span className="truncate">
                       {t('dashboard.lastFetched')}：
                       {provider.last_fetched_at
                         ? new Date(provider.last_fetched_at).toLocaleString()
                         : t('dashboard.neverFetched')}
                     </span>
                   </div>
-
-                  {/* 错误提示 */}
                   {provider.fetch_error && (
-                    <div className="flex items-start gap-1 text-xs text-destructive">
+                    <div className="mt-1 flex items-start gap-1 text-xs text-destructive">
                       <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                       <span className="break-all">{provider.fetch_error}</span>
                     </div>
@@ -420,66 +405,62 @@ export function Dashboard() {
 
         {/* 右列：订阅健康 */}
         <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/20 pb-4">
-            <div className="flex items-center justify-between gap-3">
+          <CardHeader className="border-b bg-muted/20 py-3 px-4">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Wifi className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <Wifi className="h-3.5 w-3.5 text-muted-foreground" />
                   {t('dashboard.subscriptionHealth')}
                 </CardTitle>
-                <CardDescription>{t('dashboard.subscriptionHealthDescription')}</CardDescription>
+                <CardDescription className="text-xs mt-0.5">{t('dashboard.subscriptionHealthDescription')}</CardDescription>
               </div>
-              <Badge variant={expiringSubscriptionCount > 0 ? 'warning' : 'success'} className="shrink-0">
+              <Badge variant={expiringSubscriptionCount > 0 ? 'warning' : 'success'} className="shrink-0 text-xs">
                 {expiringSubscriptionCount > 0
                   ? t('dashboard.needAttention', { count: expiringSubscriptionCount })
                   : t('dashboard.allClear')}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3 p-4">
+          <CardContent className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-14 w-full" />
               ))
             ) : !stats?.subscriptions?.length ? (
-              <p className="text-center text-sm text-muted-foreground py-6">{t('common.noData')}</p>
+              <p className="text-center text-sm text-muted-foreground py-4">{t('common.noData')}</p>
             ) : (
               stats.subscriptions.map((sub: SubscriptionHealth) => (
                 <div
                   key={sub.id}
-                  className="rounded-xl border bg-background/70 p-3 transition-colors hover:bg-muted/30"
+                  className="rounded-lg border bg-background/70 p-2.5 transition-colors hover:bg-muted/30"
                 >
-                  {/* 名称 + Token 状态 Badge */}
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                           sub.token_expired ? 'bg-destructive' : 'bg-green-500'
                         }`}
                       />
-                      <span className="font-semibold truncate text-sm">{sub.name}</span>
+                      <span className="font-medium truncate text-sm">{sub.name}</span>
                       {renderTokenBadge(sub)}
                     </div>
-                    {/* 复制订阅链接按钮 */}
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 shrink-0"
+                      className="h-6 w-6 p-0 shrink-0"
                       onClick={() => handleCopyLink(sub)}
                     >
                       {copiedId === sub.id ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <CheckCircle2 className="h-3 w-3 text-green-500" />
                       ) : (
-                        <Copy className="h-3.5 w-3.5" />
+                        <Copy className="h-3 w-3" />
                       )}
                     </Button>
                   </div>
-
-                  {/* 自定义配置 / 配置模板状态 Badge */}
-                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                     <Badge
                       variant={sub.has_custom_config ? 'secondary' : 'outline'}
-                      className="text-xs"
+                      className="text-xs h-4 px-1"
                     >
                       {sub.has_custom_config
                         ? t('dashboard.hasCustomConfig')
@@ -487,7 +468,7 @@ export function Dashboard() {
                     </Badge>
                     <Badge
                       variant={sub.has_config_template ? 'secondary' : 'outline'}
-                      className="text-xs"
+                      className="text-xs h-4 px-1"
                     >
                       {sub.has_config_template
                         ? t('dashboard.hasConfigTemplate')
@@ -501,19 +482,19 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* 最近访问日志（活动流样式） */}
+      {/* 最近访问日志 */}
       <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/20">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <CardHeader className="border-b bg-muted/20 py-3 px-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="flex items-center gap-1.5 text-sm">
+                <Activity className="h-3.5 w-3.5 text-muted-foreground" />
                 {t('dashboard.recentLogs')}
               </CardTitle>
-              <CardDescription>{t('dashboard.recentLogsDescription')}</CardDescription>
+              <CardDescription className="text-xs mt-0.5">{t('dashboard.recentLogsDescription')}</CardDescription>
             </div>
             <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="success" className="cursor-help gap-1 text-xs">
@@ -536,37 +517,39 @@ export function Dashboard() {
             </TooltipProvider>
           </div>
         </CardHeader>
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-11 w-full" />
+                <Skeleton key={i} className="h-9 w-full" />
               ))}
             </div>
           ) : !stats?.recent_access_logs?.length ? (
-            <div className="rounded-xl border border-dashed py-10 text-center">
-              <Activity className="mx-auto h-8 w-8 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">{t('dashboard.noRecentLogsTitle')}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{t('dashboard.noRecentLogsDescription')}</p>
+            <div className="rounded-xl border border-dashed py-8 text-center">
+              <Activity className="mx-auto h-7 w-7 text-muted-foreground/60" />
+              <p className="mt-2 text-sm font-medium">{t('dashboard.noRecentLogsTitle')}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t('dashboard.noRecentLogsDescription')}</p>
             </div>
           ) : (
             <div className="divide-y rounded-xl border">
               {recentLogs.map((log: AccessLog) => (
                 <div
                   key={log.id}
-                  className={`flex min-w-0 items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                  className={`flex min-w-0 items-center gap-2 px-3 py-2 text-sm transition-colors ${
                     log.allowed
                       ? 'bg-background/70 hover:bg-green-500/5'
                       : 'bg-destructive/5 hover:bg-destructive/10'
                   }`}
                 >
                   <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                       log.allowed ? 'bg-green-500' : 'bg-destructive'
                     }`}
                   />
-                  <span className="w-28 shrink-0 font-mono font-semibold">{log.ip}</span>
-                  <span className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
+                  {/* IP：移动端显示，桌面端固定宽度 */}
+                  <span className="w-24 shrink-0 font-mono text-xs font-semibold truncate">{log.ip}</span>
+                  {/* 地理位置：移动端隐藏 */}
+                  <span className="hidden sm:inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span className="truncate">{getLogLocation(log)}</span>
                     {log.deny_reason && (
@@ -576,7 +559,14 @@ export function Dashboard() {
                       </>
                     )}
                   </span>
-                  <time className="shrink-0 text-xs text-muted-foreground" dateTime={log.created_at}>
+                  {/* 移动端：拒绝原因简要 */}
+                  {log.deny_reason && (
+                    <span className="sm:hidden flex-1 truncate text-xs text-destructive">{log.deny_reason}</span>
+                  )}
+                  {!log.deny_reason && (
+                    <span className="sm:hidden flex-1" />
+                  )}
+                  <time className="shrink-0 text-xs text-muted-foreground whitespace-nowrap" dateTime={log.created_at}>
                     {formatLogTime(log.created_at)}
                   </time>
                 </div>

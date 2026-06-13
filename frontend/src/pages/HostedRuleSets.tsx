@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   NativeSelect,
   NativeSelectOption,
@@ -165,22 +166,25 @@ export function HostedRuleSets() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('hostedRuleSets.title')}</h1>
+    <div className="space-y-4">
+      {/* 标题区 */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{t('hostedRuleSets.title')}</h1>
         <div className="flex items-center gap-2">
-          <Button variant="destructive" onClick={() => setResetDialogOpen(true)} disabled={items.length === 0}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            {t('hostedRuleSets.resetAllTokens')}
+          <Button variant="destructive" size="sm" onClick={() => setResetDialogOpen(true)} disabled={items.length === 0}>
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('hostedRuleSets.resetAllTokens')}</span>
+            <span className="sm:hidden">{t('common.reset') || 'Reset'}</span>
           </Button>
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-1.5 h-4 w-4" />
             {t('hostedRuleSets.add')}
           </Button>
         </div>
       </div>
 
-      <div className="rounded-lg border">
+      {/* 桌面端表格 */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -189,7 +193,7 @@ export function HostedRuleSets() {
               <TableHead>{t('ruleProviders.providerFormat')}</TableHead>
               <TableHead className="w-[260px]">{t('hostedRuleSets.url')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[140px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[120px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -227,17 +231,17 @@ export function HostedRuleSets() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => copyUrl(it)} disabled={!it.url} aria-label={t('common.copy')}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.url} aria-label={t('common.copy')}>
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label={t('common.edit')}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)} aria-label={t('common.edit')}>
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeleteTarget(it)}
-                        className="text-destructive hover:text-destructive"
                         aria-label={t('common.delete')}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -251,6 +255,61 @@ export function HostedRuleSets() {
         </Table>
       </div>
 
+      {/* 移动端卡片列表 */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-3 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+            </Card>
+          ))
+        ) : items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noData')}</p>
+        ) : (
+          items.map((it) => (
+            <Card key={it.id}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{it.name}</span>
+                      <BehaviorBadge behavior={it.behavior} t={t} />
+                      <FormatBadge format={it.format} t={t} />
+                    </div>
+                    {it.url && (
+                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.url}</code>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(it.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.url}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(it)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* 创建/编辑弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-[720px]">
           <form
@@ -325,6 +384,7 @@ export function HostedRuleSets() {
         </DialogContent>
       </Dialog>
 
+      {/* 删除确认弹窗 */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -340,6 +400,7 @@ export function HostedRuleSets() {
         </DialogContent>
       </Dialog>
 
+      {/* 重置 Token 确认弹窗 */}
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>

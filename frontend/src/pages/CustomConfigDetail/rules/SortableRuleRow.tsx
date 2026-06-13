@@ -83,7 +83,7 @@ export function SortableRuleRow({
         className="flex cursor-pointer items-center gap-1.5 border-b border-border/60 px-2 py-1.5"
         onClick={() => onToggle(sourceIndex)}
       >
-        <div className="flex items-center gap-1 self-stretch">
+        <div className="hidden md:flex items-center gap-1 self-stretch">
           <button
             type="button"
             className={cn(

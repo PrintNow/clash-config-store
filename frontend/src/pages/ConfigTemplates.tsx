@@ -9,6 +9,7 @@ import type { ConfigTemplate } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,6 @@ export function ConfigTemplates() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingTemplate, setDeletingTemplate] = useState<ConfigTemplate | null>(null)
 
-  // 新建表单状态
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [nameError, setNameError] = useState('')
@@ -51,7 +51,6 @@ export function ConfigTemplates() {
       queryClient.invalidateQueries({ queryKey: ['config-templates'] })
       toast.success(t('common.success'))
       setCreateDialogOpen(false)
-      // 创建后直接跳转到详情页
       navigate(`/config-templates/${data.id}`)
     },
     onError: () => {
@@ -96,25 +95,25 @@ export function ConfigTemplates() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 + 新建按钮 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('configTemplates.title')}</h1>
-        <Button onClick={handleOpenCreate}>
-          <Plus className="mr-2 h-4 w-4" />
+    <div className="space-y-4">
+      {/* 页面标题栏 */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{t('configTemplates.title')}</h1>
+        <Button size="sm" onClick={handleOpenCreate}>
+          <Plus className="mr-1.5 h-4 w-4" />
           {t('configTemplates.addTemplate')}
         </Button>
       </div>
 
-      {/* 模板列表表格 */}
-      <div className="rounded-lg border">
+      {/* 桌面端表格（sm+） */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('common.description')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[80px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[60px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -124,7 +123,7 @@ export function ConfigTemplates() {
                   <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : templates.length === 0 ? (
@@ -136,7 +135,6 @@ export function ConfigTemplates() {
             ) : (
               templates.map((template) => (
                 <TableRow key={template.id}>
-                  {/* 名称，可点击跳转详情 */}
                   <TableCell>
                     <button
                       className="font-medium text-primary hover:underline flex items-center gap-1.5"
@@ -149,7 +147,7 @@ export function ConfigTemplates() {
                   <TableCell className="text-sm text-muted-foreground max-w-[260px] truncate">
                     {template.description || '—'}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(template.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
@@ -167,6 +165,55 @@ export function ConfigTemplates() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* 移动端卡片列表（sm以下） */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-32" />
+              </CardContent>
+            </Card>
+          ))
+        ) : templates.length === 0 ? (
+          <div className="text-center py-8 text-sm text-muted-foreground">{t('common.noData')}</div>
+        ) : (
+          templates.map((template) => (
+            <Card
+              key={template.id}
+              className="cursor-pointer active:bg-muted/50 transition-colors"
+              onClick={() => navigate(`/config-templates/${template.id}`)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-primary flex items-center gap-1.5">
+                      <FileCode2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{template.name}</span>
+                    </div>
+                    {template.description && (
+                      <p className="mt-1 text-xs text-muted-foreground truncate">{template.description}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(template.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-destructive hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); openDeleteDialog(template) }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* 新建模板 Dialog */}

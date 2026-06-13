@@ -7,6 +7,7 @@ import { ruleSetsApi } from '@/api/rule-sets'
 import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
@@ -174,26 +175,42 @@ export function RuleSets() {
   const renderTable = (items: RuleSet[]) => {
     if (isLoading) {
       return (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('common.name')}</TableHead>
-              <TableHead>{t('common.type')}</TableHead>
-              <TableHead>Behavior</TableHead>
-              <TableHead>Format</TableHead>
-              <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <TableRow key={i}>
-                {Array.from({ length: 5 }).map((_, j) => (
-                  <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
+        <>
+          {/* 桌面端骨架 */}
+          <div className="hidden sm:block rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('common.name')}</TableHead>
+                  <TableHead>{t('common.type')}</TableHead>
+                  <TableHead>Behavior</TableHead>
+                  <TableHead>Format</TableHead>
+                  <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
+                    ))}
+                  </TableRow>
                 ))}
-              </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+          {/* 移动端骨架 */}
+          <div className="block sm:hidden space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-3 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                </CardContent>
+              </Card>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+        </>
       )
     }
 
@@ -204,7 +221,7 @@ export function RuleSets() {
           description={t('ruleSets.emptyDescription')}
           actions={
             <Button size="sm" onClick={openCreateDialog}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1.5 h-4 w-4" />
               {t('ruleSets.addRuleSet')}
             </Button>
           }
@@ -213,33 +230,77 @@ export function RuleSets() {
     }
 
     return (
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('common.name')}</TableHead>
-              <TableHead>{t('common.type')}</TableHead>
-              <TableHead>Behavior</TableHead>
-              <TableHead>Format</TableHead>
-              <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((rs) => (
-              <TableRow key={rs.id}>
-                <TableCell className="font-medium">{rs.name}</TableCell>
-                <TableCell>{renderSourceTypeBadge(rs)}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{rs.behavior}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{rs.format}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
+      <>
+        {/* 桌面端表格 */}
+        <div className="hidden sm:block rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('common.name')}</TableHead>
+                <TableHead>{t('common.type')}</TableHead>
+                <TableHead>Behavior</TableHead>
+                <TableHead>Format</TableHead>
+                <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((rs) => (
+                <TableRow key={rs.id}>
+                  <TableCell className="font-medium">{rs.name}</TableCell>
+                  <TableCell>{renderSourceTypeBadge(rs)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{rs.behavior}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{rs.format}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEditDialog(rs)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* 移动端卡片列表 */}
+        <div className="block sm:hidden space-y-2">
+          {items.map((rs) => (
+            <Card key={rs.id}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{rs.name}</span>
+                      {renderSourceTypeBadge(rs)}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{rs.behavior}</Badge>
+                      <Badge variant="secondary" className="text-xs">{rs.format}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       onClick={() => openEditDialog(rs)}
                     >
                       <Pencil className="h-4 w-4" />
@@ -247,27 +308,28 @@ export function RuleSets() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
-                      className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 标题区 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('ruleSets.title')}</h1>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
+        <h1 className="text-xl font-semibold">{t('ruleSets.title')}</h1>
+        <Button size="sm" onClick={openCreateDialog}>
+          <Plus className="mr-1.5 h-4 w-4" />
           {t('ruleSets.addRuleSet')}
         </Button>
       </div>
@@ -298,13 +360,13 @@ export function RuleSets() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-4">
+        <TabsContent value="all" className="mt-3">
           {renderTable(filteredRuleSets)}
         </TabsContent>
-        <TabsContent value="external" className="mt-4">
+        <TabsContent value="external" className="mt-3">
           {renderTable(filteredRuleSets)}
         </TabsContent>
-        <TabsContent value="hosted" className="mt-4">
+        <TabsContent value="hosted" className="mt-3">
           {renderTable(filteredRuleSets)}
         </TabsContent>
       </Tabs>

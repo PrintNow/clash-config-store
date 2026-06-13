@@ -138,7 +138,7 @@ function SortableGroupMemberRow({ id, name, onRemove }: SortableGroupMemberRowPr
     >
       <button
         type="button"
-        className="flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        className="hidden md:flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
@@ -281,7 +281,7 @@ export function ProxyGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[95vh] overflow-y-auto sm:max-h-[85vh]">
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {

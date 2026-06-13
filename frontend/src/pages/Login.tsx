@@ -65,32 +65,32 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="flex flex-1 flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <BrandLogo className="mb-4 h-14 w-14 rounded-xl shadow-sm" title="" />
-            <h1 className="text-2xl font-bold">{t('nav.brandName')}</h1>
+    <div className="flex min-h-screen flex-col bg-muted/30">
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm">
+          {/* 品牌 Logo */}
+          <div className="flex flex-col items-center mb-6">
+            <BrandLogo className="mb-3 h-12 w-12 rounded-xl shadow-sm" title="" />
+            <h1 className="text-xl font-bold tracking-tight">{t('nav.brandName')}</h1>
           </div>
 
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl">{t('auth.loginTitle')}</CardTitle>
-              <CardDescription>{t('auth.loginSubtitle')}</CardDescription>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-4 px-5 pt-5 space-y-0.5">
+              <CardTitle className="text-lg">{t('auth.loginTitle')}</CardTitle>
+              <CardDescription className="text-xs">{t('auth.loginSubtitle')}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+            <CardContent className="px-5 pb-5">
+              <form onSubmit={handleSubmit} className="space-y-3">
                 {/* 服务端/网络级错误：用 Alert 组件内联展示，不弹 toast */}
                 {errors.form && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="py-2">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.form}</AlertDescription>
+                    <AlertDescription className="text-xs">{errors.form}</AlertDescription>
                   </Alert>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">{t('auth.email')}</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="email" className="text-sm">{t('auth.email')}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -98,16 +98,16 @@ export function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
-                    className={errors.email ? 'border-destructive' : ''}
+                    className={`h-9 text-sm ${errors.email ? 'border-destructive' : ''}`}
                     aria-invalid={!!errors.email}
                   />
                   {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email}</p>
+                    <p className="text-xs text-destructive">{errors.email}</p>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password">{t('auth.password')}</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="password" className="text-sm">{t('auth.password')}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -115,25 +115,25 @@ export function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
-                    className={errors.password ? 'border-destructive' : ''}
+                    className={`h-9 text-sm ${errors.password ? 'border-destructive' : ''}`}
                     aria-invalid={!!errors.password}
                   />
                   {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password}</p>
+                    <p className="text-xs text-destructive">{errors.password}</p>
                   )}
                 </div>
 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full h-9" disabled={loading}>
                   {loading ? t('common.submitting') : t('auth.loginButton')}
                 </Button>
               </form>
 
-              <div className="mt-4 text-center text-sm text-muted-foreground">
+              <p className="mt-4 text-center text-xs text-muted-foreground">
                 {t('auth.noAccount')}{' '}
-                <Link to="/register" className="text-primary hover:underline">
+                <Link to="/register" className="text-primary hover:underline font-medium">
                   {t('auth.goRegister')}
                 </Link>
-              </div>
+              </p>
             </CardContent>
           </Card>
         </div>

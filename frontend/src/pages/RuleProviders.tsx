@@ -24,13 +24,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const emptyForm = {
   name: '',
@@ -145,43 +145,45 @@ export function RuleProviders() {
   const isFormValid = form.name.trim() !== '' && (form.type === 'file' || form.url.trim() !== '')
 
   const renderSkeleton = () => (
-    <div className="space-y-3 p-4">
+    <div className="space-y-2">
       {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
     </div>
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* 标题区 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('ruleProviders.title')}</h1>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
+        <h1 className="text-xl font-semibold">{t('ruleProviders.title')}</h1>
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="mr-1.5 h-4 w-4" />
           {t('ruleProviders.addProvider')}
         </Button>
       </div>
 
-      <section className="space-y-4">
+      {/* 预设 Provider 区块 */}
+      <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">{t('ruleProviders.loyalsoldierSection')}</h2>
+          <Shield className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">{t('ruleProviders.loyalsoldierSection')}</h2>
         </div>
         <Separator />
 
         {isLoading ? renderSkeleton() : presetProviders.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">{t('common.noData')}</p>
+          <p className="py-3 text-sm text-muted-foreground">{t('common.noData')}</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {presetProviders.map((provider) => (
               <Card key={provider.id} className="border-muted">
-                <CardHeader className="px-4 pb-2 pt-4">
+                <CardHeader className="px-3 pb-1.5 pt-3">
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-sm font-semibold leading-tight break-all">{provider.name}</CardTitle>
                     <Badge variant="destructive" className="shrink-0 text-xs">{t('ruleProviders.presetBadge')}</Badge>
                   </div>
                   {provider.preset_tag && <p className="mt-1 text-xs text-muted-foreground">{provider.preset_tag}</p>}
                 </CardHeader>
-                <CardContent className="space-y-2 px-4 pb-4">
-                  <div className="flex flex-wrap items-center gap-2">
+                <CardContent className="space-y-1.5 px-3 pb-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <BehaviorBadge behavior={provider.behavior} t={t} />
                     <FormatBadge format={provider.format} t={t} />
                     <Badge variant="outline" className="text-xs">
@@ -202,60 +204,106 @@ export function RuleProviders() {
         )}
       </section>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">{t('ruleProviders.customSection')}</h2>
+      {/* 自定义 Provider 区块 */}
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">{t('ruleProviders.customSection')}</h2>
         <Separator />
 
         {isLoading ? renderSkeleton() : customProviders.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">{t('common.noData')}</p>
+          <p className="py-3 text-sm text-muted-foreground">{t('common.noData')}</p>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('ruleProviders.providerName')}</TableHead>
-                  <TableHead>{t('ruleProviders.providerType')}</TableHead>
-                  <TableHead>{t('ruleProviders.providerBehavior')}</TableHead>
-                  <TableHead>{t('ruleProviders.providerFormat')}</TableHead>
-                  <TableHead>{t('ruleProviders.providerUrl')}</TableHead>
-                  <TableHead>{t('ruleProviders.providerInterval')}</TableHead>
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customProviders.map((provider) => (
-                  <TableRow key={provider.id}>
-                    <TableCell className="font-medium">{provider.name}</TableCell>
-                    <TableCell>{provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}</TableCell>
-                    <TableCell><BehaviorBadge behavior={provider.behavior} t={t} /></TableCell>
-                    <TableCell><FormatBadge format={provider.format} t={t} /></TableCell>
-                    <TableCell className="max-w-[200px]">
-                      {provider.url ? (
-                        <a href={provider.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-blue-500 hover:underline">
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{provider.url}</span>
-                        </a>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{provider.interval}s</TableCell>
-                    <TableCell className="space-x-1 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(provider)} title={t('common.edit')}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(provider)} title={t('common.delete')}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
+          <>
+            {/* 桌面端表格 */}
+            <div className="hidden sm:block rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('ruleProviders.providerName')}</TableHead>
+                    <TableHead>{t('ruleProviders.providerType')}</TableHead>
+                    <TableHead>{t('ruleProviders.providerBehavior')}</TableHead>
+                    <TableHead>{t('ruleProviders.providerFormat')}</TableHead>
+                    <TableHead>{t('ruleProviders.providerUrl')}</TableHead>
+                    <TableHead>{t('ruleProviders.providerInterval')}</TableHead>
+                    <TableHead className="text-right">{t('common.actions')}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {customProviders.map((provider) => (
+                    <TableRow key={provider.id}>
+                      <TableCell className="font-medium">{provider.name}</TableCell>
+                      <TableCell>{provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}</TableCell>
+                      <TableCell><BehaviorBadge behavior={provider.behavior} t={t} /></TableCell>
+                      <TableCell><FormatBadge format={provider.format} t={t} /></TableCell>
+                      <TableCell className="max-w-[200px]">
+                        {provider.url ? (
+                          <a href={provider.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-blue-500 hover:underline">
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{provider.url}</span>
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{provider.interval}s</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(provider)} title={t('common.edit')}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget(provider)} title={t('common.delete')}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* 移动端卡片 */}
+            <div className="block sm:hidden space-y-2">
+              {customProviders.map((provider) => (
+                <Card key={provider.id}>
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{provider.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <BehaviorBadge behavior={provider.behavior} t={t} />
+                          <FormatBadge format={provider.format} t={t} />
+                          <span className="text-xs text-muted-foreground">{provider.interval}s</span>
+                        </div>
+                        {provider.url && (
+                          <a href={provider.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-500 hover:underline truncate">
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{provider.url}</span>
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(provider)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget(provider)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
       </section>
 
+      {/* 创建/编辑弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-[480px]">
           <form
@@ -345,6 +393,7 @@ export function RuleProviders() {
         </DialogContent>
       </Dialog>
 
+      {/* 删除确认弹窗 */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>

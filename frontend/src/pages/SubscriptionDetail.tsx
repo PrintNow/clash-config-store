@@ -66,11 +66,9 @@ export function SubscriptionDetail() {
   const queryClient = useQueryClient()
   const subId = Number(id)
 
-  // 内联名称编辑状态
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState('')
 
-  // 表单字段状态
   const [enabledProviderIds, setEnabledProviderIds] = useState<number[]>([])
   const [customConfigId, setCustomConfigId] = useState<string>('')
   const [configTemplateId, setConfigTemplateId] = useState<string>('')
@@ -78,7 +76,6 @@ export function SubscriptionDetail() {
   const [proxyPrefixEnabled, setProxyPrefixEnabled] = useState(false)
   const [tokenExpiredAt, setTokenExpiredAt] = useState('')
 
-  // 访问限制 Dialog 状态
   const [restrictionDialogOpen, setRestrictionDialogOpen] = useState(false)
   const [restrictionForm, setRestrictionForm] = useState<RestrictionForm>({
     type: 'ip',
@@ -86,7 +83,6 @@ export function SubscriptionDetail() {
     mode: 'deny',
   })
 
-  // 一次性拉取订阅 + 访问限制
   const { data: detailData, isLoading } = useQuery({
     queryKey: ['subscriptions', subId, 'detail'],
     queryFn: () => subscriptionsApi.getWithRestrictions(subId),
@@ -111,7 +107,6 @@ export function SubscriptionDetail() {
     queryFn: configTemplatesApi.list,
   })
 
-  // 订阅数据加载后初始化表单
   useEffect(() => {
     if (subscription) {
       setName(subscription.name)
@@ -130,7 +125,6 @@ export function SubscriptionDetail() {
     }
   }, [subscription])
 
-  // 保存全部字段
   const updateMutation = useMutation({
     mutationFn: (data: Parameters<typeof subscriptionsApi.update>[1]) =>
       subscriptionsApi.update(subId, data),
@@ -169,7 +163,6 @@ export function SubscriptionDetail() {
     },
   })
 
-  // 保存所有字段变更
   const handleSave = () => {
     updateMutation.mutate({
       name,
@@ -182,7 +175,6 @@ export function SubscriptionDetail() {
     })
   }
 
-  // 仅保存名称（内联编辑）
   const handleNameSave = () => {
     if (name.trim()) {
       updateMutation.mutate({ name: name.trim() })
@@ -211,12 +203,9 @@ export function SubscriptionDetail() {
     return map[type] ?? type
   }
 
-  // 当前选中的自定义配置对象（用于显示摘要）
   const selectedCustomConfig = customConfigs.find((c) => String(c.id) === customConfigId)
-  // 当前选中的配置模板对象
   const selectedTemplate = configTemplates.find((t) => String(t.id) === configTemplateId)
 
-  // 计算自定义配置里 proxy-groups use: 引用了哪些 Provider 名称
   const referencedProviderNames: string[] = (() => {
     if (!selectedCustomConfig?.proxy_groups) return []
     const names = new Set<string>()
@@ -229,13 +218,11 @@ export function SubscriptionDetail() {
     return [...names]
   })()
 
-  // 找出"被引用但未在本订阅启用"的 Provider
   const unenabledReferencedProviders = referencedProviderNames.filter((name) => {
     const provider = providers.find((p) => p.name === name)
     return provider && !enabledProviderIds.includes(provider.id)
   })
 
-  // 一键启用引用中未启用的 Provider
   const handleEnableReferenced = () => {
     const idsToAdd = referencedProviderNames
       .map((name) => providers.find((p) => p.name === name)?.id)
@@ -245,7 +232,7 @@ export function SubscriptionDetail() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-28 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -260,22 +247,20 @@ export function SubscriptionDetail() {
   const subscriptionUrl = subscriptionPublicUrl(subscription)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ───── 顶部操作栏 ───── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          {/* 返回按钮 */}
-          <Button variant="ghost" size="icon" onClick={() => navigate('/subscriptions')}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => navigate('/subscriptions')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
-          {/* 内联名称编辑 */}
           {editingName ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-9 text-lg font-bold w-64"
+                className="h-8 text-base font-semibold w-48 sm:w-64"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleNameSave()
                   if (e.key === 'Escape') {
@@ -285,12 +270,13 @@ export function SubscriptionDetail() {
                 }}
                 autoFocus
               />
-              <Button size="icon" variant="ghost" onClick={handleNameSave}>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleNameSave}>
                 <Check className="h-4 w-4" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
+                className="h-8 w-8"
                 onClick={() => {
                   setName(subscription.name)
                   setEditingName(false)
@@ -300,12 +286,12 @@ export function SubscriptionDetail() {
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-2xl font-bold truncate">{subscription.name}</h1>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="text-xl font-semibold truncate">{subscription.name}</h1>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 shrink-0"
+                className="h-6 w-6 shrink-0"
                 onClick={() => setEditingName(true)}
               >
                 <Pencil className="h-3 w-3" />
@@ -315,14 +301,12 @@ export function SubscriptionDetail() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* 查看访问日志 */}
-          <Button variant="outline" onClick={() => navigate(`/subscriptions/${subId}/logs`)}>
-            <ExternalLink className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => navigate(`/subscriptions/${subId}/logs`)}>
+            <ExternalLink className="mr-1.5 h-4 w-4" />
             {t('subscriptions.viewLogs')}
           </Button>
-          {/* 保存所有配置 */}
-          <Button onClick={handleSave} disabled={updateMutation.isPending}>
-            <Save className="mr-2 h-4 w-4" />
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+            <Save className="mr-1.5 h-4 w-4" />
             {updateMutation.isPending ? t('common.saving') : t('common.save')}
           </Button>
         </div>
@@ -330,40 +314,41 @@ export function SubscriptionDetail() {
 
       {/* ───── 订阅链接展示区 ───── */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('subscriptions.subscriptionUrl')}</CardTitle>
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {t('subscriptions.subscriptionUrl')}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* 订阅 URL 大框 */}
+        <CardContent className="space-y-3 px-4 pb-4">
           <div
             className="flex items-center gap-2 cursor-pointer group"
             onClick={handleCopyUrl}
             title={t('subscriptions.copySuccess')}
           >
-            <code className="flex-1 text-sm bg-muted px-3 py-3 rounded-md break-all font-mono group-hover:bg-muted/80 transition-colors">
+            <code className="flex-1 text-xs sm:text-sm bg-muted px-3 py-2 rounded-md break-all font-mono group-hover:bg-muted/80 transition-colors">
               {subscriptionUrl}
             </code>
-            <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); handleCopyUrl() }}>
+            <Button variant="outline" size="icon" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleCopyUrl() }}>
               <Copy className="h-4 w-4" />
             </Button>
           </div>
 
           <Separator />
 
-          {/* Token 过期时间 + 重新生成 */}
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            <div className="space-y-2 flex-1">
-              <Label>{t('subscriptions.tokenExpiredAt')}</Label>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="space-y-1.5 flex-1">
+              <Label className="text-xs">{t('subscriptions.tokenExpiredAt')}</Label>
               <Input
                 type="datetime-local"
                 value={tokenExpiredAt}
                 onChange={(e) => setTokenExpiredAt(e.target.value)}
-                className="w-full sm:w-64"
+                className="w-full sm:w-60 h-8 text-sm"
               />
               <p className="text-xs text-muted-foreground">{t('subscriptions.noExpiry')}</p>
             </div>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => {
                 if (confirm(t('subscriptions.regenerateConfirm'))) {
                   regenerateTokenMutation.mutate()
@@ -372,7 +357,7 @@ export function SubscriptionDetail() {
               disabled={regenerateTokenMutation.isPending}
             >
               <RefreshCw
-                className={`mr-2 h-4 w-4 ${regenerateTokenMutation.isPending ? 'animate-spin' : ''}`}
+                className={`mr-1.5 h-4 w-4 ${regenerateTokenMutation.isPending ? 'animate-spin' : ''}`}
               />
               {t('subscriptions.regenerateToken')}
             </Button>
@@ -382,25 +367,24 @@ export function SubscriptionDetail() {
 
       {/* ───── 主配置 Tabs ───── */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 px-4 pb-4">
           <Tabs defaultValue="providers">
-            <TabsList className="mb-6 w-full sm:w-auto">
-              <TabsTrigger value="providers">{t('subscriptions.tabProviders')}</TabsTrigger>
-              <TabsTrigger value="config">{t('subscriptions.tabConfig')}</TabsTrigger>
-              <TabsTrigger value="template">{t('subscriptions.tabTemplate')}</TabsTrigger>
-              <TabsTrigger value="restrictions">{t('subscriptions.tabRestrictions')}</TabsTrigger>
+            <TabsList className="mb-4 w-full sm:w-auto">
+              <TabsTrigger value="providers" className="text-xs sm:text-sm">{t('subscriptions.tabProviders')}</TabsTrigger>
+              <TabsTrigger value="config" className="text-xs sm:text-sm">{t('subscriptions.tabConfig')}</TabsTrigger>
+              <TabsTrigger value="template" className="text-xs sm:text-sm">{t('subscriptions.tabTemplate')}</TabsTrigger>
+              <TabsTrigger value="restrictions" className="text-xs sm:text-sm">{t('subscriptions.tabRestrictions')}</TabsTrigger>
             </TabsList>
 
             {/* Tab 1：订阅源 */}
-            <TabsContent value="providers" className="space-y-4">
-              <div className="space-y-1">
-                <Label>{t('subscriptions.enabledProviders')}</Label>
+            <TabsContent value="providers" className="space-y-3">
+              <div className="space-y-0.5">
+                <Label className="text-sm">{t('subscriptions.enabledProviders')}</Label>
                 <p className="text-xs text-muted-foreground">
                   勾选后点击右上角「保存」生效。代理组中通过「引用订阅源」使用的 Provider 必须在此启用。
                 </p>
               </div>
 
-              {/* 检测到引用未启用的快捷提示 */}
               {unenabledReferencedProviders.length > 0 && (
                 <div className="flex items-center justify-between rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
                   <p className="text-xs text-amber-800 dark:text-amber-300">
@@ -429,7 +413,7 @@ export function SubscriptionDetail() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-1 max-h-80 overflow-y-auto rounded-md border p-2">
+                <div className="space-y-0.5 max-h-72 overflow-y-auto rounded-md border p-1.5">
                   {providers.map((p) => (
                     <div
                       key={p.id}
@@ -468,9 +452,8 @@ export function SubscriptionDetail() {
             </TabsContent>
 
             {/* Tab 2：自定义配置 */}
-            <TabsContent value="config" className="space-y-6">
-              {/* 选择自定义配置 */}
-              <div className="space-y-2">
+            <TabsContent value="config" className="space-y-4">
+              <div className="space-y-1.5">
                 <Label>{t('subscriptions.customConfig')}</Label>
                 <NativeSelect
                   value={customConfigId || '__none__'}
@@ -503,16 +486,15 @@ export function SubscriptionDetail() {
                 </div>
               )}
 
-              {/* 已选配置摘要信息 */}
               {selectedCustomConfig && (
-                <div className="rounded-md border bg-muted/40 p-4 space-y-2">
+                <div className="rounded-md border bg-muted/40 p-3 space-y-2">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
                     {selectedCustomConfig.name}
                   </p>
                   <div className="flex gap-4 text-xs text-muted-foreground">
                     <span>
-                      {t('customConfigs.tabProxies')}：{selectedCustomConfig.proxies?.length ?? 0}
+                      {t('customConfigs.tabProxies')}：{(selectedCustomConfig as unknown as { proxies?: unknown[] }).proxies?.length ?? 0}
                     </span>
                     <span>
                       {t('customConfigs.tabProxyGroups')}：{selectedCustomConfig.proxy_groups?.length ?? 0}
@@ -522,9 +504,8 @@ export function SubscriptionDetail() {
                     </span>
                   </div>
 
-                  {/* 引用了订阅源但未启用的警告 */}
                   {unenabledReferencedProviders.length > 0 && (
-                    <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
+                    <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
                       <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                         <span>⚠️</span>
                         以下订阅源被代理组引用，但尚未在「订阅源」Tab 中启用，生成的 YAML 将缺少这些节点：
@@ -551,8 +532,7 @@ export function SubscriptionDetail() {
 
               <Separator />
 
-              {/* 规则插入模式 */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label>{t('subscriptions.ruleInsertMode')}</Label>
                 <NativeSelect
                   value={ruleInsertMode}
@@ -564,9 +544,8 @@ export function SubscriptionDetail() {
                 </NativeSelect>
               </div>
 
-              {/* 节点前缀 Switch */}
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div className="space-y-1">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
                   <p className="text-sm font-medium">{t('subscriptions.proxyPrefixEnabled')}</p>
                   <p className="text-xs text-muted-foreground">{t('subscriptions.proxyPrefixDesc')}</p>
                 </div>
@@ -578,15 +557,13 @@ export function SubscriptionDetail() {
             </TabsContent>
 
             {/* Tab 3：配置模板 */}
-            <TabsContent value="template" className="space-y-6">
-              {/* 提示说明 */}
+            <TabsContent value="template" className="space-y-4">
               <div className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
                 <Info className="h-4 w-4 mt-0.5 shrink-0" />
                 <p>{t('configTemplates.contentHint')}</p>
               </div>
 
-              {/* 选择配置模板 */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label>{t('subscriptions.configTemplate')}</Label>
                 <NativeSelect
                   value={configTemplateId || '__none__'}
@@ -601,9 +578,8 @@ export function SubscriptionDetail() {
                 </NativeSelect>
               </div>
 
-              {/* 已选模板摘要 */}
               {selectedTemplate && (
-                <div className="rounded-md border bg-muted/40 p-4 space-y-2">
+                <div className="rounded-md border bg-muted/40 p-3 space-y-1">
                   <p className="text-sm font-medium">{selectedTemplate.name}</p>
                   {selectedTemplate.description && (
                     <p className="text-xs text-muted-foreground">{selectedTemplate.description}</p>
@@ -613,15 +589,16 @@ export function SubscriptionDetail() {
             </TabsContent>
 
             {/* Tab 4：访问限制 */}
-            <TabsContent value="restrictions" className="space-y-4">
+            <TabsContent value="restrictions" className="space-y-3">
               <div className="flex justify-end">
                 <Button
+                  size="sm"
                   onClick={() => {
                     setRestrictionForm({ type: 'ip', value: '', mode: 'deny' })
                     setRestrictionDialogOpen(true)
                   }}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-1.5 h-4 w-4" />
                   {t('subscriptions.addRestriction')}
                 </Button>
               </div>
@@ -631,42 +608,73 @@ export function SubscriptionDetail() {
                   {t('common.noData')}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('subscriptions.restrictionType')}</TableHead>
-                      <TableHead>{t('subscriptions.restrictionValue')}</TableHead>
-                      <TableHead>{t('subscriptions.restrictionMode')}</TableHead>
-                      <TableHead className="w-[60px]">{t('common.actions')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* 桌面端表格 */}
+                  <div className="hidden sm:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('subscriptions.restrictionType')}</TableHead>
+                          <TableHead>{t('subscriptions.restrictionValue')}</TableHead>
+                          <TableHead>{t('subscriptions.restrictionMode')}</TableHead>
+                          <TableHead className="w-[60px]">{t('common.actions')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {restrictions.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell>
+                              <Badge variant="secondary">{getTypeLabel(r.type)}</Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{r.value}</TableCell>
+                            <TableCell>
+                              <Badge variant={r.mode === 'allow' ? 'success' : 'destructive'}>
+                                {r.mode === 'allow' ? t('subscriptions.allow') : t('subscriptions.deny')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => deleteRestrictionMutation.mutate(r.id)}
+                                disabled={deleteRestrictionMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* 移动端卡片 */}
+                  <div className="block sm:hidden space-y-2">
                     {restrictions.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <Badge variant="secondary">{getTypeLabel(r.type)}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{r.value}</TableCell>
-                        <TableCell>
-                          <Badge variant={r.mode === 'allow' ? 'success' : 'destructive'}>
-                            {r.mode === 'allow' ? t('subscriptions.allow') : t('subscriptions.deny')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => deleteRestrictionMutation.mutate(r.id)}
-                            disabled={deleteRestrictionMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                      <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge variant="secondary" className="text-xs">{getTypeLabel(r.type)}</Badge>
+                            <Badge variant={r.mode === 'allow' ? 'success' : 'destructive'} className="text-xs">
+                              {r.mode === 'allow' ? t('subscriptions.allow') : t('subscriptions.deny')}
+                            </Badge>
+                          </div>
+                          <p className="font-mono text-sm truncate">{r.value}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive"
+                          onClick={() => deleteRestrictionMutation.mutate(r.id)}
+                          disabled={deleteRestrictionMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                </>
               )}
             </TabsContent>
           </Tabs>
@@ -689,7 +697,6 @@ export function SubscriptionDetail() {
               <DialogTitle>{t('subscriptions.addRestriction')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              {/* 限制类型 */}
               <div className="space-y-2">
                 <Label>{t('subscriptions.restrictionType')}</Label>
                 <NativeSelect
@@ -705,42 +712,40 @@ export function SubscriptionDetail() {
                   <NativeSelectOption value="cidr">{t('subscriptions.typeCIDR')}</NativeSelectOption>
                   <NativeSelectOption value="country">{t('subscriptions.typeCountry')}</NativeSelectOption>
                 </NativeSelect>
-            </div>
+              </div>
 
-            {/* 限制值 */}
-            <div className="space-y-2">
-              <Label>{t('subscriptions.restrictionValue')}</Label>
-              <Input
-                placeholder={
-                  restrictionForm.type === 'ip'
-                    ? '192.168.1.1'
-                    : restrictionForm.type === 'cidr'
-                      ? '192.168.1.0/24'
-                      : 'CN'
-                }
-                value={restrictionForm.value}
-                onChange={(e) =>
-                  setRestrictionForm((prev) => ({ ...prev, value: e.target.value }))
-                }
-              />
-            </div>
+              <div className="space-y-2">
+                <Label>{t('subscriptions.restrictionValue')}</Label>
+                <Input
+                  placeholder={
+                    restrictionForm.type === 'ip'
+                      ? '192.168.1.1'
+                      : restrictionForm.type === 'cidr'
+                        ? '192.168.1.0/24'
+                        : 'CN'
+                  }
+                  value={restrictionForm.value}
+                  onChange={(e) =>
+                    setRestrictionForm((prev) => ({ ...prev, value: e.target.value }))
+                  }
+                />
+              </div>
 
-            {/* 限制模式 */}
-            <div className="space-y-2">
-              <Label>{t('subscriptions.restrictionMode')}</Label>
-              <NativeSelect
-                value={restrictionForm.mode}
-                onChange={(e) =>
-                  setRestrictionForm((prev) => ({
-                    ...prev,
-                    mode: e.target.value as RestrictionForm['mode'],
-                  }))
-                }
-              >
-                <NativeSelectOption value="allow">{t('subscriptions.allow')}</NativeSelectOption>
-                <NativeSelectOption value="deny">{t('subscriptions.deny')}</NativeSelectOption>
-              </NativeSelect>
-            </div>
+              <div className="space-y-2">
+                <Label>{t('subscriptions.restrictionMode')}</Label>
+                <NativeSelect
+                  value={restrictionForm.mode}
+                  onChange={(e) =>
+                    setRestrictionForm((prev) => ({
+                      ...prev,
+                      mode: e.target.value as RestrictionForm['mode'],
+                    }))
+                  }
+                >
+                  <NativeSelectOption value="allow">{t('subscriptions.allow')}</NativeSelectOption>
+                  <NativeSelectOption value="deny">{t('subscriptions.deny')}</NativeSelectOption>
+                </NativeSelect>
+              </div>
             </div>
 
             <DialogFooter>
