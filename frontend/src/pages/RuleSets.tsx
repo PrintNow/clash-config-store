@@ -91,7 +91,8 @@ export function RuleSets() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: ruleSetsApi.delete,
+    mutationFn: ({ id, sourceType }: { id: number; sourceType: 'external' | 'hosted' }) =>
+      ruleSetsApi.delete(id, sourceType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rule-sets'] })
       toast.success(t('common.success'))
@@ -448,7 +449,7 @@ export function RuleSets() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deletingRuleSet && deleteMutation.mutate(deletingRuleSet.id)}
+              onClick={() => deletingRuleSet && deleteMutation.mutate({ id: deletingRuleSet.id, sourceType: deletingRuleSet.source_type })}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? t('common.submitting') : t('common.delete')}

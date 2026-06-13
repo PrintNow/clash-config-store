@@ -71,20 +71,7 @@ export interface ConfigTemplate {
   updated_at: string
 }
 
-export interface HostedRuleSet {
-  id: number
-  user_id: number
-  name: string
-  behavior: 'domain' | 'ipcidr' | 'classical'
-  format: 'yaml' | 'text'
-  content?: string
-  token?: string
-  url?: string
-  created_at: string
-  updated_at: string
-}
-
-// 统一规则集类型（外部订阅 + 托管）
+// 统一规则集类型（外部引用 + 自托管）
 export interface RuleSet {
   id: number
   name: string
@@ -111,29 +98,11 @@ export interface SubscriptionComponents {
   template: ConfigTemplate | null
 }
 
-// 规则集库条目
-export interface RuleProvider {
-  id: number
-  /** 系统预设为 null */
-  user_id: number | null
-  name: string
-  type: 'http' | 'file'
-  url: string
-  behavior: 'domain' | 'ipcidr' | 'classical'
-  format: 'yaml' | 'text' | 'mrs'
-  interval: number
-  is_preset: boolean
-  preset_tag: string
-  created_at: string
-  updated_at: string
-}
-
 // 自定义配置（结构化）
 export interface CustomConfig {
   id: number
   user_id: number
   name: string
-  proxies: ProxyNode[]
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]

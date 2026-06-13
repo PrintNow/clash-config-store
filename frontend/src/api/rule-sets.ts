@@ -25,7 +25,7 @@ export const ruleSetsApi = {
     const res = await client.put<{ code: number; data: RuleSet }>(`/rule-sets/${id}`, data)
     return res.data.data
   },
-  delete: async (id: number): Promise<void> => {
-    await client.delete(`/rule-sets/${id}`)
+  delete: async (id: number, sourceType: 'external' | 'hosted'): Promise<void> => {
+    await client.delete(`/rule-sets/${id}`, { params: { source_type: sourceType } })
   },
 }

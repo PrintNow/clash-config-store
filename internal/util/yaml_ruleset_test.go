@@ -7,14 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestBuildMihomoConfig_RuleProviders 验证 rule-providers 注入逻辑
 func TestBuildMihomoConfig_RuleProviders(t *testing.T) {
 	providers := []RuleProviderInput{
 		{Name: "reject", Type: "http", URL: "https://example.com/reject.txt", Behavior: "domain", Format: "text", Interval: 86400},
 		{Name: "proxy", Type: "http", URL: "https://example.com/proxy.txt", Behavior: "domain", Format: "text", Interval: 86400},
 	}
 	customRules := []string{"RULE-SET,reject,REJECT", "RULE-SET,proxy,PROXY", "MATCH,DIRECT"}
-	out, err := BuildMihomoConfig("", nil, nil, nil, customRules, "append", providers, nil)
+	out, err := BuildMihomoConfig("", nil, nil, customRules, "append", providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,40 +31,6 @@ func TestBuildMihomoConfig_RuleProviders(t *testing.T) {
 	}
 }
 
-// TestBuildMihomoConfig_CustomProxiesExpand 验证 type=custom 的 __raw__ 展开
-func TestBuildMihomoConfig_CustomProxiesExpand(t *testing.T) {
-	customProxies := []map[string]interface{}{
-		{
-			"name": "home",
-			"type": "custom",
-			"__raw__": `name: home
-type: ss
-server: 1.2.3.4
-port: 8388
-cipher: aes-256-gcm
-password: test`,
-		},
-		{"name": "office", "type": "socks5", "server": "10.0.0.1", "port": 1080},
-	}
-	out, err := BuildMihomoConfig("", nil, customProxies, nil, nil, "append", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cfg map[string]interface{}
-	if err := yaml.Unmarshal(out, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	proxies, ok := cfg["proxies"].([]interface{})
-	if !ok || len(proxies) != 2 {
-		t.Fatalf("期望 2 个代理，得到: %v", proxies)
-	}
-	p0, _ := proxies[0].(map[string]interface{})
-	if p0["type"] != "ss" {
-		t.Fatalf("第一个代理类型期望 ss，得到 %v", p0["type"])
-	}
-}
-
-// TestBuildMihomoConfig_TemplateRulesMerge 验证 ConfigTemplate 中的 rules 与自定义规则合并
 func TestBuildMihomoConfig_TemplateRulesMerge(t *testing.T) {
 	tmpl := `
 mixed-port: 7890
@@ -73,7 +38,7 @@ rules:
   - IP-CIDR,10.0.0.0/8,DIRECT
 `
 	customRules := []string{"DOMAIN-SUFFIX,google.com,PROXY"}
-	out, err := BuildMihomoConfig(tmpl, nil, nil, nil, customRules, "prepend", nil, nil)
+	out, err := BuildMihomoConfig(tmpl, nil, nil, customRules, "prepend", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +54,6 @@ rules:
 	}
 }
 
-// TestBuildMihomoConfig_TemplateRuleProvidersMerge 验证模板中已有 rule-providers 与注入的合并
 func TestBuildMihomoConfig_TemplateRuleProvidersMerge(t *testing.T) {
 	tmpl := `
 rule-providers:
@@ -102,7 +66,7 @@ rule-providers:
 	providers := []RuleProviderInput{
 		{Name: "reject", Type: "http", URL: "https://example.com/reject.txt", Behavior: "domain", Interval: 86400},
 	}
-	out, err := BuildMihomoConfig(tmpl, nil, nil, nil, nil, "append", providers, nil)
+	out, err := BuildMihomoConfig(tmpl, nil, nil, nil, "append", providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,31 +78,25 @@ rule-providers:
 	}
 }
 
-// TestBuildMihomoConfig_UseExpand 验证 proxy-group 中 use:[providerName] 展开为节点名
 func TestBuildMihomoConfig_UseExpand(t *testing.T) {
-	// 模拟一个订阅源有 3 个节点（已带前缀）
 	providerNodes := map[string][]string{
 		"机场A": {"[机场A] 香港01", "[机场A] 日本01", "[机场A] 美国01"},
 	}
-
 	customGroups := []map[string]interface{}{
 		{
-			"name": "🚀 节点选择",
-			"type": "select",
-			// proxies 里有固定项，use 里引用机场A
+			"name":    "🚀 节点选择",
+			"type":    "select",
 			"proxies": []interface{}{"DIRECT", "REJECT"},
 			"use":     []interface{}{"机场A"},
 		},
 		{
-			// 只有 use，没有 proxies
 			"name": "♻️ 自动选择",
 			"type": "url-test",
 			"use":  []interface{}{"机场A"},
 			"url":  "http://www.gstatic.com/generate_204",
 		},
 	}
-
-	out, err := BuildMihomoConfig("", nil, nil, customGroups, nil, "append", nil, providerNodes)
+	out, err := BuildMihomoConfig("", nil, customGroups, nil, "append", nil, providerNodes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,18 +108,15 @@ func TestBuildMihomoConfig_UseExpand(t *testing.T) {
 		t.Fatalf("期望 2 个代理组，得到 %d", len(groups))
 	}
 
-	// 第一个组：DIRECT + REJECT + 3 个展开节点 = 5
 	g0, _ := groups[0].(map[string]interface{})
 	p0 := toStringSlice(g0["proxies"])
 	if len(p0) != 5 {
 		t.Fatalf("第一个组期望 5 个成员（2+3），得到 %d: %v", len(p0), p0)
 	}
-	// 不应再有 use 字段
 	if _, hasUse := g0["use"]; hasUse {
 		t.Fatal("展开后 use 字段应被移除")
 	}
 
-	// 第二个组：仅来自机场A的 3 个节点
 	g1, _ := groups[1].(map[string]interface{})
 	p1 := toStringSlice(g1["proxies"])
 	if len(p1) != 3 {

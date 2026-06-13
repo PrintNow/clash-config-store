@@ -3,7 +3,9 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -15,11 +17,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UnifiedRuleSet 统一返回的规则集结构
+var hostedRuleSetNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// UnifiedRuleSet 统一返回的规则集结构（外部引用 + 自托管）
 type UnifiedRuleSet struct {
 	ID         uint   `json:"id"`
 	Name       string `json:"name"`
-	SourceType string `json:"source_type"` // "external" 或 "hosted"
+	SourceType string `json:"source_type"` // "external" | "hosted"
 	Behavior   string `json:"behavior"`
 	Format     string `json:"format"`
 	// external 字段
@@ -28,9 +32,10 @@ type UnifiedRuleSet struct {
 	IsPreset  bool   `json:"is_preset,omitempty"`
 	PresetTag string `json:"preset_tag,omitempty"`
 	// hosted 字段
-	Content   string `json:"content,omitempty"` // 仅详情时返回
-	Token     string `json:"token,omitempty"`
-	HrsURL    string `json:"hrs_url,omitempty"` // 托管公开 URL
+	Content string `json:"content,omitempty"`
+	Token   string `json:"token,omitempty"`
+	HrsURL  string `json:"hrs_url,omitempty"`
+	// 公共时间字段
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -38,7 +43,6 @@ type UnifiedRuleSet struct {
 const timeLayout = "2006-01-02T15:04:05Z07:00"
 
 // ListRuleSets GET /api/rule-sets?source_type=external|hosted
-// 返回用户的全部规则集（外部 + 托管，不含系统预设 external 规则集）
 func ListRuleSets(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	sourceType := c.Query("source_type")
@@ -47,46 +51,26 @@ func ListRuleSets(c *gin.Context) {
 
 	if sourceType == "" || sourceType == "external" {
 		var rps []model.RuleProvider
-		query := repository.DB.Where("user_id = ?", userID)
-		if err := query.Find(&rps).Error; err != nil {
+		if err := repository.DB.
+			Where("user_id = ? OR is_preset = ?", userID, true).
+			Order("is_preset DESC, id ASC").
+			Find(&rps).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "查询失败")
 			return
 		}
 		for _, rp := range rps {
-			result = append(result, UnifiedRuleSet{
-				ID:         rp.ID,
-				Name:       rp.Name,
-				SourceType: "external",
-				Behavior:   rp.Behavior,
-				Format:     rp.Format,
-				URL:        rp.URL,
-				Interval:   rp.Interval,
-				IsPreset:   rp.IsPreset,
-				PresetTag:  rp.PresetTag,
-				CreatedAt:  rp.CreatedAt.Format(timeLayout),
-				UpdatedAt:  rp.UpdatedAt.Format(timeLayout),
-			})
+			result = append(result, ruleProviderToUnified(&rp))
 		}
 	}
 
 	if sourceType == "" || sourceType == "hosted" {
 		var hrss []model.HostedRuleSet
-		if err := repository.DB.Where("user_id = ?", userID).Find(&hrss).Error; err != nil {
+		if err := repository.DB.Where("user_id = ?", userID).Order("id ASC").Find(&hrss).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "查询失败")
 			return
 		}
 		for _, hrs := range hrss {
-			result = append(result, UnifiedRuleSet{
-				ID:         hrs.ID,
-				Name:       hrs.Name,
-				SourceType: "hosted",
-				Behavior:   hrs.Behavior,
-				Format:     hrs.Format,
-				Token:      hrs.Token,
-				HrsURL:     util.RuleSetPublicURL(hrs.Token, hrs.Name),
-				CreatedAt:  hrs.CreatedAt.Format(timeLayout),
-				UpdatedAt:  hrs.UpdatedAt.Format(timeLayout),
-			})
+			result = append(result, hostedRuleSetToUnified(&hrs))
 		}
 	}
 
@@ -96,8 +80,40 @@ func ListRuleSets(c *gin.Context) {
 	OK(c, result)
 }
 
+// GetRuleSet GET /api/rule-sets/:id?source_type=external|hosted
+func GetRuleSet(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+	sourceType := c.Query("source_type")
+
+	switch sourceType {
+	case "external":
+		var rp model.RuleProvider
+		if err := repository.DB.Where("(user_id = ? OR is_preset = ?) AND id = ?", userID, true, id).First(&rp).Error; err != nil {
+			Fail(c, http.StatusNotFound, "规则集不存在或无权限")
+			return
+		}
+		OK(c, ruleProviderToUnified(&rp))
+	case "hosted":
+		var hrs model.HostedRuleSet
+		if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&hrs).Error; err != nil {
+			Fail(c, http.StatusNotFound, "规则集不存在或无权限")
+			return
+		}
+		unified := hostedRuleSetToUnified(&hrs)
+		unified.Content = hrs.Content
+		OK(c, unified)
+	default:
+		Fail(c, http.StatusBadRequest, "source_type 参数必须为 external 或 hosted")
+	}
+}
+
 type ruleSetRequest struct {
-	SourceType string `json:"source_type" binding:"required"` // "external" | "hosted"
+	SourceType string `json:"source_type" binding:"required"`
 	Name       string `json:"name" binding:"required"`
 	Behavior   string `json:"behavior"`
 	Format     string `json:"format"`
@@ -108,7 +124,7 @@ type ruleSetRequest struct {
 	Content string `json:"content"`
 }
 
-// CreateRuleSet 创建规则集（根据 source_type 决定操作哪张表）
+// CreateRuleSet POST /api/rule-sets
 func CreateRuleSet(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	var req ruleSetRequest
@@ -119,24 +135,9 @@ func CreateRuleSet(c *gin.Context) {
 
 	switch req.SourceType {
 	case "external":
-		if err := validateRuleProviderRequest(&ruleProviderRequest{
-			Name:     req.Name,
-			Type:     "http",
-			URL:      req.URL,
-			Behavior: req.Behavior,
-			Format:   req.Format,
-			Interval: req.Interval,
-		}); err != nil {
+		if err := validateExternalRuleSet(req.Name, req.URL, req.Behavior, req.Format); err != nil {
 			Fail(c, http.StatusBadRequest, err.Error())
 			return
-		}
-		interval := req.Interval
-		if interval <= 0 {
-			interval = 86400
-		}
-		format := req.Format
-		if format == "" {
-			format = "yaml"
 		}
 		uid := userID
 		rp := &model.RuleProvider{
@@ -145,34 +146,18 @@ func CreateRuleSet(c *gin.Context) {
 			Type:     "http",
 			URL:      req.URL,
 			Behavior: defaultBehavior(req.Behavior),
-			Format:   format,
-			Interval: interval,
+			Format:   defaultFormat(req.Format),
+			Interval: defaultInterval(req.Interval),
 			IsPreset: false,
 		}
 		if err := repository.DB.Create(rp).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "创建失败")
 			return
 		}
-		OK(c, UnifiedRuleSet{
-			ID:         rp.ID,
-			Name:       rp.Name,
-			SourceType: "external",
-			Behavior:   rp.Behavior,
-			Format:     rp.Format,
-			URL:        rp.URL,
-			Interval:   rp.Interval,
-			CreatedAt:  rp.CreatedAt.Format(timeLayout),
-			UpdatedAt:  rp.UpdatedAt.Format(timeLayout),
-		})
+		OK(c, ruleProviderToUnified(rp))
 
 	case "hosted":
-		hreq := hostedRuleSetRequest{
-			Name:     req.Name,
-			Behavior: req.Behavior,
-			Format:   req.Format,
-			Content:  req.Content,
-		}
-		if err := validateHostedRuleSetRequest(userID, 0, &hreq); err != nil {
+		if err := validateHostedRuleSet(userID, 0, req.Name, req.Content, req.Behavior, req.Format); err != nil {
 			Fail(c, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -181,30 +166,19 @@ func CreateRuleSet(c *gin.Context) {
 			Fail(c, http.StatusInternalServerError, "生成 token 失败")
 			return
 		}
-		item := buildHostedRuleSetModel(userID, token, hreq)
-		if err := repository.DB.Create(item).Error; err != nil {
+		hrs := buildHostedRuleSet(userID, token, req.Name, req.Content, req.Behavior, req.Format)
+		if err := repository.DB.Create(hrs).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "创建失败")
 			return
 		}
-		item.URL = hostedRuleSetURL(item)
-		OK(c, UnifiedRuleSet{
-			ID:         item.ID,
-			Name:       item.Name,
-			SourceType: "hosted",
-			Behavior:   item.Behavior,
-			Format:     item.Format,
-			Token:      item.Token,
-			HrsURL:     item.URL,
-			CreatedAt:  item.CreatedAt.Format(timeLayout),
-			UpdatedAt:  item.UpdatedAt.Format(timeLayout),
-		})
+		OK(c, hostedRuleSetToUnified(hrs))
 
 	default:
 		Fail(c, http.StatusBadRequest, "source_type 无效，可选: external | hosted")
 	}
 }
 
-// UpdateRuleSet 更新规则集
+// UpdateRuleSet PUT /api/rule-sets/:id
 func UpdateRuleSet(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -230,91 +204,49 @@ func UpdateRuleSet(c *gin.Context) {
 			Fail(c, http.StatusForbidden, "内置预设不可修改")
 			return
 		}
-		if err := validateRuleProviderRequest(&ruleProviderRequest{
-			Name:     req.Name,
-			Type:     "http",
-			URL:      req.URL,
-			Behavior: req.Behavior,
-			Format:   req.Format,
-			Interval: req.Interval,
-		}); err != nil {
+		if err := validateExternalRuleSet(req.Name, req.URL, req.Behavior, req.Format); err != nil {
 			Fail(c, http.StatusBadRequest, err.Error())
 			return
-		}
-		interval := req.Interval
-		if interval <= 0 {
-			interval = 86400
-		}
-		format := req.Format
-		if format == "" {
-			format = "yaml"
 		}
 		rp.Name = req.Name
 		rp.URL = req.URL
 		rp.Behavior = defaultBehavior(req.Behavior)
-		rp.Format = format
-		rp.Interval = interval
+		rp.Format = defaultFormat(req.Format)
+		rp.Interval = defaultInterval(req.Interval)
 		if err := repository.DB.Save(&rp).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "更新失败")
 			return
 		}
-		OK(c, UnifiedRuleSet{
-			ID:         rp.ID,
-			Name:       rp.Name,
-			SourceType: "external",
-			Behavior:   rp.Behavior,
-			Format:     rp.Format,
-			URL:        rp.URL,
-			Interval:   rp.Interval,
-			CreatedAt:  rp.CreatedAt.Format(timeLayout),
-			UpdatedAt:  rp.UpdatedAt.Format(timeLayout),
-		})
+		OK(c, ruleProviderToUnified(&rp))
 
 	case "hosted":
-		var item model.HostedRuleSet
-		if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&item).Error; err != nil {
+		var hrs model.HostedRuleSet
+		if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&hrs).Error; err != nil {
 			Fail(c, http.StatusNotFound, "规则集不存在或无权限")
 			return
 		}
-		hreq := hostedRuleSetRequest{
-			Name:     req.Name,
-			Behavior: req.Behavior,
-			Format:   req.Format,
-			Content:  req.Content,
-		}
-		if err := validateHostedRuleSetRequest(userID, item.ID, &hreq); err != nil {
+		if err := validateHostedRuleSet(userID, hrs.ID, req.Name, req.Content, req.Behavior, req.Format); err != nil {
 			Fail(c, http.StatusBadRequest, err.Error())
 			return
 		}
 		sum := sha256.Sum256([]byte(req.Content))
-		item.Name = strings.TrimSpace(req.Name)
-		item.Behavior = defaultBehavior(req.Behavior)
-		item.Format = defaultFormat(req.Format)
-		item.Content = req.Content
-		item.ContentSHA256 = hex.EncodeToString(sum[:])
-		if err := repository.DB.Save(&item).Error; err != nil {
+		hrs.Name = strings.TrimSpace(req.Name)
+		hrs.Behavior = defaultBehavior(req.Behavior)
+		hrs.Format = defaultFormat(req.Format)
+		hrs.Content = req.Content
+		hrs.ContentSHA256 = hex.EncodeToString(sum[:])
+		if err := repository.DB.Save(&hrs).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "更新失败")
 			return
 		}
-		item.URL = hostedRuleSetURL(&item)
-		OK(c, UnifiedRuleSet{
-			ID:         item.ID,
-			Name:       item.Name,
-			SourceType: "hosted",
-			Behavior:   item.Behavior,
-			Format:     item.Format,
-			Token:      item.Token,
-			HrsURL:     item.URL,
-			CreatedAt:  item.CreatedAt.Format(timeLayout),
-			UpdatedAt:  item.UpdatedAt.Format(timeLayout),
-		})
+		OK(c, hostedRuleSetToUnified(&hrs))
 
 	default:
 		Fail(c, http.StatusBadRequest, "source_type 无效，可选: external | hosted")
 	}
 }
 
-// DeleteRuleSet 删除规则集
+// DeleteRuleSet DELETE /api/rule-sets/:id?source_type=external|hosted
 func DeleteRuleSet(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -322,16 +254,7 @@ func DeleteRuleSet(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, "无效的 ID")
 		return
 	}
-
 	sourceType := c.Query("source_type")
-	if sourceType == "" {
-		// 尝试从请求体读取
-		var body struct {
-			SourceType string `json:"source_type"`
-		}
-		_ = c.ShouldBindJSON(&body)
-		sourceType = body.SourceType
-	}
 
 	switch sourceType {
 	case "external":
@@ -351,12 +274,12 @@ func DeleteRuleSet(c *gin.Context) {
 		OKMsg(c, "删除成功", nil)
 
 	case "hosted":
-		var item model.HostedRuleSet
-		if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&item).Error; err != nil {
+		var hrs model.HostedRuleSet
+		if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&hrs).Error; err != nil {
 			Fail(c, http.StatusNotFound, "规则集不存在或无权限")
 			return
 		}
-		if err := repository.DB.Delete(&item).Error; err != nil {
+		if err := repository.DB.Delete(&hrs).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "删除失败")
 			return
 		}
@@ -365,4 +288,157 @@ func DeleteRuleSet(c *gin.Context) {
 	default:
 		Fail(c, http.StatusBadRequest, "source_type 参数必须为 external 或 hosted")
 	}
+}
+
+// ResetHostedRuleSetTokens POST /api/rule-sets/reset-hosted-tokens
+func ResetHostedRuleSetTokens(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	var items []model.HostedRuleSet
+	if err := repository.DB.Where("user_id = ?", userID).Find(&items).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	for _, item := range items {
+		token, err := util.GenerateSubscriptionToken()
+		if err != nil {
+			Fail(c, http.StatusInternalServerError, "生成 token 失败")
+			return
+		}
+		if err := repository.DB.Model(&model.HostedRuleSet{}).
+			Where("id = ? AND user_id = ?", item.ID, userID).
+			Update("token", token).Error; err != nil {
+			Fail(c, http.StatusInternalServerError, "更新失败")
+			return
+		}
+	}
+	OKMsg(c, "已重置全部托管规则集 token", nil)
+}
+
+// --- 内部辅助函数 ---
+
+func ruleProviderToUnified(rp *model.RuleProvider) UnifiedRuleSet {
+	return UnifiedRuleSet{
+		ID:         rp.ID,
+		Name:       rp.Name,
+		SourceType: "external",
+		Behavior:   rp.Behavior,
+		Format:     rp.Format,
+		URL:        rp.URL,
+		Interval:   rp.Interval,
+		IsPreset:   rp.IsPreset,
+		PresetTag:  rp.PresetTag,
+		CreatedAt:  rp.CreatedAt.Format(timeLayout),
+		UpdatedAt:  rp.UpdatedAt.Format(timeLayout),
+	}
+}
+
+func hostedRuleSetToUnified(hrs *model.HostedRuleSet) UnifiedRuleSet {
+	return UnifiedRuleSet{
+		ID:         hrs.ID,
+		Name:       hrs.Name,
+		SourceType: "hosted",
+		Behavior:   hrs.Behavior,
+		Format:     hrs.Format,
+		Token:      hrs.Token,
+		HrsURL:     util.RuleSetPublicURL(hrs.Token, hrs.Name),
+		CreatedAt:  hrs.CreatedAt.Format(timeLayout),
+		UpdatedAt:  hrs.UpdatedAt.Format(timeLayout),
+	}
+}
+
+func buildHostedRuleSet(userID uint, token, name, content, behavior, format string) *model.HostedRuleSet {
+	sum := sha256.Sum256([]byte(content))
+	return &model.HostedRuleSet{
+		UserID:        userID,
+		Name:          strings.TrimSpace(name),
+		Behavior:      defaultBehavior(behavior),
+		Format:        defaultFormat(format),
+		Content:       content,
+		ContentSHA256: hex.EncodeToString(sum[:]),
+		Token:         token,
+	}
+}
+
+func validateExternalRuleSet(name, url, behavior, format string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("name 不能为空")
+	}
+	if strings.TrimSpace(url) == "" {
+		return fmt.Errorf("url 不能为空")
+	}
+	if behavior != "" {
+		switch behavior {
+		case "domain", "ipcidr", "classical":
+		default:
+			return fmt.Errorf("behavior 无效，可选: domain | ipcidr | classical")
+		}
+	}
+	if format != "" {
+		switch format {
+		case "yaml", "text", "mrs":
+		default:
+			return fmt.Errorf("format 无效，可选: yaml | text | mrs")
+		}
+	}
+	return nil
+}
+
+func validateHostedRuleSet(userID uint, currentID uint, name, content, behavior, format string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("name 不能为空")
+	}
+	if !hostedRuleSetNamePattern.MatchString(name) {
+		return fmt.Errorf("name 仅允许字母、数字、下划线和短横线")
+	}
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("content 不能为空")
+	}
+	if behavior != "" {
+		switch behavior {
+		case "domain", "ipcidr", "classical":
+		default:
+			return fmt.Errorf("behavior 无效，可选: domain | ipcidr | classical")
+		}
+	}
+	if format != "" {
+		switch format {
+		case "yaml", "text":
+		default:
+			return fmt.Errorf("format 无效，可选: yaml | text")
+		}
+	}
+	query := repository.DB.Model(&model.HostedRuleSet{}).Where("user_id = ? AND name = ?", userID, name)
+	if currentID != 0 {
+		query = query.Where("id <> ?", currentID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("名称已存在")
+	}
+	return nil
+}
+
+func defaultFormat(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "yaml"
+	}
+	return strings.TrimSpace(v)
+}
+
+func defaultBehavior(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "domain"
+	}
+	return strings.TrimSpace(v)
+}
+
+func defaultInterval(v int) int {
+	if v <= 0 {
+		return 86400
+	}
+	return v
 }

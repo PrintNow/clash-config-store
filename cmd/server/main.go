@@ -111,22 +111,6 @@ func main() {
 			ct.PUT("/:id", handler.UpdateConfigTemplate)
 			ct.DELETE("/:id", handler.DeleteConfigTemplate)
 
-			// 规则集库管理
-			rp := protected.Group("/rule-providers")
-			rp.GET("", handler.ListRuleProviders)
-			rp.POST("", handler.CreateRuleProvider)
-			rp.GET("/:id", handler.GetRuleProvider)
-			rp.PUT("/:id", handler.UpdateRuleProvider)
-			rp.DELETE("/:id", handler.DeleteRuleProvider)
-
-			hrs := protected.Group("/hosted-rule-sets")
-			hrs.GET("", handler.ListHostedRuleSets)
-			hrs.POST("", handler.CreateHostedRuleSet)
-			hrs.GET("/:id", handler.GetHostedRuleSet)
-			hrs.PUT("/:id", handler.UpdateHostedRuleSet)
-			hrs.DELETE("/:id", handler.DeleteHostedRuleSet)
-			hrs.POST("/reset-tokens", handler.ResetHostedRuleSetTokens)
-
 			// 自定义配置管理
 			cc := protected.Group("/custom-configs")
 			cc.GET("", handler.ListCustomConfigs)
@@ -139,12 +123,14 @@ func main() {
 			cc.GET("/:id/export", handler.ExportCustomConfig)
 			cc.GET("/:id/preview", handler.PreviewCustomConfig)
 
-			// 统一规则集 API
+			// 统一规则集管理（外部引用 + 自托管）
 			rs := protected.Group("/rule-sets")
 			rs.GET("", handler.ListRuleSets)
 			rs.POST("", handler.CreateRuleSet)
+			rs.GET("/:id", handler.GetRuleSet)
 			rs.PUT("/:id", handler.UpdateRuleSet)
 			rs.DELETE("/:id", handler.DeleteRuleSet)
+			rs.POST("/reset-hosted-tokens", handler.ResetHostedRuleSetTokens)
 
 			// 订阅管理
 			sub := protected.Group("/subscriptions")

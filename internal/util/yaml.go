@@ -10,7 +10,7 @@ import (
 // MihomoConfig 表示完整的 mihomo 配置文件结构（使用 map 保持灵活性）
 type MihomoConfig map[string]interface{}
 
-// RuleProviderInput BuildMihomoConfig 接收的规则集描述（来自 model.RuleProvider）
+// RuleProviderInput BuildMihomoConfig 接收的规则集描述
 type RuleProviderInput struct {
 	Name     string // 在 rule-providers 中的键名，RULE-SET 规则引用此名
 	Type     string // http | file
@@ -25,22 +25,18 @@ func ParseProxiesFromContent(content string) ([]interface{}, error) {
 	if content == "" {
 		return nil, nil
 	}
-
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 		return nil, fmt.Errorf("解析 YAML 失败: %w", err)
 	}
-
 	proxiesRaw, ok := raw["proxies"]
 	if !ok {
 		return nil, nil
 	}
-
 	proxies, ok := proxiesRaw.([]interface{})
 	if !ok {
 		return nil, nil
 	}
-
 	return proxies, nil
 }
 
@@ -48,7 +44,6 @@ func ParseProxiesFromContent(content string) ([]interface{}, error) {
 func PrefixProxies(proxies []interface{}, providerName string) []interface{} {
 	prefix := fmt.Sprintf("[%s] ", providerName)
 	result := make([]interface{}, 0, len(proxies))
-
 	for _, p := range proxies {
 		pm, ok := p.(map[string]interface{})
 		if !ok {
@@ -67,41 +62,10 @@ func PrefixProxies(proxies []interface{}, providerName string) []interface{} {
 	return result
 }
 
-// ExpandCustomProxies 展开自定义代理节点列表
-// type="custom" 的节点从 __raw__ 字段解析 YAML，其余直接使用
-func ExpandCustomProxies(proxies []map[string]interface{}) []interface{} {
-	result := make([]interface{}, 0, len(proxies))
-	for _, p := range proxies {
-		typ, _ := p["type"].(string)
-		if strings.ToLower(typ) == "custom" {
-			raw, _ := p["__raw__"].(string)
-			if raw = strings.TrimSpace(raw); raw != "" {
-				var parsed map[string]interface{}
-				if err := yaml.Unmarshal([]byte(raw), &parsed); err == nil && parsed != nil {
-					result = append(result, parsed)
-					continue
-				}
-			}
-			// 解析失败则跳过该节点
-			continue
-		}
-		// 普通节点：去除 __raw__ 字段后直接使用
-		clean := make(map[string]interface{}, len(p))
-		for k, v := range p {
-			if k != "__raw__" {
-				clean[k] = v
-			}
-		}
-		result = append(result, clean)
-	}
-	return result
-}
-
 // BuildMihomoConfig 构建完整的 mihomo 配置
 //
 // configTemplateContent: ConfigTemplate.Content（YAML 文本，顶层字段）
 // providerProxies:       来自订阅源的代理节点（已处理前缀）
-// customProxies:         CustomConfig.Proxies（结构化，含 custom 类型）
 // customGroups:          CustomConfig.ProxyGroups（结构化）
 // customRules:           CustomConfig.Rules（字符串列表）
 // ruleInsertMode:        prepend | append | replace（相对于模板内的 rules）
@@ -110,14 +74,12 @@ func ExpandCustomProxies(proxies []map[string]interface{}) []interface{} {
 func BuildMihomoConfig(
 	configTemplateContent string,
 	providerProxies []interface{},
-	customProxies []map[string]interface{},
 	customGroups []map[string]interface{},
 	customRules []string,
 	ruleInsertMode string,
 	ruleProviders []RuleProviderInput,
 	providerNodeNames map[string][]string,
 ) ([]byte, error) {
-	// 从 ConfigTemplate YAML 构建初始配置 map
 	cfg := make(MihomoConfig)
 	if configTemplateContent != "" {
 		var tmplMap map[string]interface{}
@@ -128,20 +90,13 @@ func BuildMihomoConfig(
 		}
 	}
 
-	// 设置默认值
 	setDefault(cfg, "mixed-port", 7890)
 	setDefault(cfg, "allow-lan", false)
 	setDefault(cfg, "mode", "rule")
 	setDefault(cfg, "log-level", "info")
 
-	// 合并所有代理节点：provider 节点 + 自定义节点
-	expandedCustom := ExpandCustomProxies(customProxies)
-	allProxies := make([]interface{}, 0, len(providerProxies)+len(expandedCustom))
-	allProxies = append(allProxies, providerProxies...)
-	allProxies = append(allProxies, expandedCustom...)
-	cfg["proxies"] = allProxies
+	cfg["proxies"] = providerProxies
 
-	// 写入 proxy-groups，并将 use: [providerName] 展开为具体节点名
 	if len(customGroups) > 0 {
 		groups := make([]interface{}, len(customGroups))
 		for i, g := range customGroups {
@@ -150,7 +105,7 @@ func BuildMihomoConfig(
 		cfg["proxy-groups"] = groups
 	}
 
-	// 提取模板中已有的 rules（在插入模式下作为"base rules"）
+	// 提取模板中已有的 rules
 	var baseRules []string
 	for _, key := range []string{"rules", "rule"} {
 		if raw, ok := cfg[key]; ok {
@@ -162,9 +117,8 @@ func BuildMihomoConfig(
 		}
 	}
 
-	// 构建 rule-providers map
+	// 构建 rule-providers map，模板中已有的用户覆盖优先
 	rpMap := buildRuleProvidersMap(ruleProviders)
-	// 合并模板中已有的 rule-providers（用户覆盖优先）
 	if raw, ok := cfg["rule-providers"]; ok {
 		if existing, ok := raw.(map[string]interface{}); ok {
 			for k, v := range existing {
@@ -177,7 +131,6 @@ func BuildMihomoConfig(
 		cfg["rule-providers"] = rpMap
 	}
 
-	// 规则合并：baseRules → customRules（按 ruleInsertMode）
 	finalRules := mergeRules(baseRules, customRules, ruleInsertMode)
 	if len(finalRules) > 0 {
 		cfg["rules"] = finalRules
@@ -187,34 +140,25 @@ func BuildMihomoConfig(
 }
 
 // expandGroupUse 将代理组中的 use:[providerName,...] 展开为具体节点名追加到 proxies 中
-// 展开后从输出 map 里移除 use 字段，避免 Mihomo 找不到对应的 proxy-provider 报错
+// 展开后移除 use 字段，避免 Mihomo 找不到对应的 proxy-provider 报错
 func expandGroupUse(g map[string]interface{}, providerNodeNames map[string][]string) map[string]interface{} {
 	useRaw, hasUse := g["use"]
 	if !hasUse || providerNodeNames == nil {
 		return g
 	}
-
-	// 取出已有的 proxies 列表
 	existing := toStringSlice(g["proxies"])
-
-	// 按 use 中的每个 provider 名称展开节点
 	switch u := useRaw.(type) {
 	case []interface{}:
 		for _, item := range u {
-			name, _ := item.(string)
-			if nodes, ok := providerNodeNames[name]; ok {
-				existing = append(existing, nodes...)
+			if name, _ := item.(string); name != "" {
+				existing = append(existing, providerNodeNames[name]...)
 			}
 		}
 	case []string:
 		for _, name := range u {
-			if nodes, ok := providerNodeNames[name]; ok {
-				existing = append(existing, nodes...)
-			}
+			existing = append(existing, providerNodeNames[name]...)
 		}
 	}
-
-	// 构造不含 use 字段的新 map
 	out := make(map[string]interface{}, len(g))
 	for k, v := range g {
 		if k != "use" {
@@ -227,7 +171,18 @@ func expandGroupUse(g map[string]interface{}, providerNodeNames map[string][]str
 	return out
 }
 
-// toStringSlice 将 interface{} 类型的切片转为 []string
+// ParseYAMLList 将 YAML 格式的数组文本解析为 []interface{}
+func ParseYAMLList(yamlText string) ([]interface{}, error) {
+	if strings.TrimSpace(yamlText) == "" {
+		return nil, nil
+	}
+	var list []interface{}
+	if err := yaml.Unmarshal([]byte(yamlText), &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func toStringSlice(v interface{}) []string {
 	if v == nil {
 		return nil
@@ -247,11 +202,7 @@ func toStringSlice(v interface{}) []string {
 	return nil
 }
 
-// buildRuleProvidersMap 将 RuleProviderInput 列表转为 rule-providers map
 func buildRuleProvidersMap(providers []RuleProviderInput) map[string]interface{} {
-	if len(providers) == 0 {
-		return make(map[string]interface{})
-	}
 	m := make(map[string]interface{}, len(providers))
 	for _, rp := range providers {
 		entry := map[string]interface{}{
@@ -271,7 +222,6 @@ func buildRuleProvidersMap(providers []RuleProviderInput) map[string]interface{}
 	return m
 }
 
-// rulesFromConfigValue 将 config map 中取出的 rules/rule 值转为字符串列表
 func rulesFromConfigValue(v interface{}) []string {
 	if v == nil {
 		return nil
@@ -287,12 +237,10 @@ func rulesFromConfigValue(v interface{}) []string {
 			}
 		}
 		return filterEmptyStrings(out)
-	default:
-		return nil
 	}
+	return nil
 }
 
-// mergeRules 根据插入模式合并规则
 func mergeRules(baseRules, customRules []string, mode string) []string {
 	switch mode {
 	case "replace":
@@ -308,34 +256,6 @@ func mergeRules(baseRules, customRules []string, mode string) []string {
 		combined = append(combined, baseRules...)
 		return combined
 	}
-}
-
-// ParseYAMLList 将 YAML 格式的数组文本解析为 []interface{}（兼容旧逻辑，保留备用）
-func ParseYAMLList(yamlText string) ([]interface{}, error) {
-	if strings.TrimSpace(yamlText) == "" {
-		return nil, nil
-	}
-
-	var list []interface{}
-	if err := yaml.Unmarshal([]byte(yamlText), &list); err != nil {
-		return nil, err
-	}
-	return list, nil
-}
-
-// ParseRulesList 将 YAML 或换行分隔的规则文本解析为字符串列表（兼容旧逻辑，保留备用）
-func ParseRulesList(rulesText string) []string {
-	if strings.TrimSpace(rulesText) == "" {
-		return nil
-	}
-
-	var list []string
-	if err := yaml.Unmarshal([]byte(rulesText), &list); err == nil && len(list) > 0 {
-		return filterEmptyStrings(list)
-	}
-
-	lines := strings.Split(rulesText, "\n")
-	return filterEmptyStrings(lines)
 }
 
 func filterEmptyStrings(s []string) []string {

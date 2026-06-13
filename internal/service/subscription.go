@@ -114,7 +114,6 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 	yamlBytes, err := util.BuildMihomoConfig(
 		configTemplateContent,
 		providerProxies,
-		nil,
 		customGroups,
 		customRules,
 		string(sub.RuleInsertMode),
