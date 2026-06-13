@@ -10,8 +10,11 @@ func init() {
 }
 
 func dropCustomConfigProxies(db *gorm.DB) error {
-	if db.Migrator().HasColumn("custom_configs", "proxies") {
-		return db.Migrator().DropColumn("custom_configs", "proxies")
+	// 用 pragma_table_info 检查列是否存在（避免传字符串给 DropColumn 导致 nil schema panic）
+	var count int64
+	db.Raw("SELECT COUNT(*) FROM pragma_table_info('custom_configs') WHERE name = 'proxies'").Scan(&count)
+	if count == 0 {
+		return nil
 	}
-	return nil
+	return db.Exec("ALTER TABLE custom_configs DROP COLUMN proxies").Error
 }
