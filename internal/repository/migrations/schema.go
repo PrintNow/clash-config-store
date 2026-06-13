@@ -10,8 +10,9 @@ import (
 
 func init() {
 	register(Migration{
-		Version: 1,
-		Up:      applySchemaUp,
+		Version:     1,
+		Description: "initial schema: all tables",
+		Up:          applySchemaUp,
 	})
 }
 

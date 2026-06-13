@@ -8,8 +8,9 @@ import (
 
 func init() {
 	register(Migration{
-		Version: 2,
-		Up:      migrateProviderInlineUp,
+		Version:     2,
+		Description: "add providers.payload for inline type",
+		Up:          migrateProviderInlineUp,
 	})
 }
 
