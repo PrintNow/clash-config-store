@@ -25,7 +25,14 @@ export const ruleSetsApi = {
     const res = await client.put<{ code: number; data: RuleSet }>(`/rule-sets/${id}`, data)
     return res.data.data
   },
+  get: async (id: number, sourceType: 'external' | 'hosted'): Promise<RuleSet> => {
+    const res = await client.get<{ code: number; data: RuleSet }>(`/rule-sets/${id}`, { params: { source_type: sourceType } })
+    return res.data.data
+  },
   delete: async (id: number, sourceType: 'external' | 'hosted'): Promise<void> => {
     await client.delete(`/rule-sets/${id}`, { params: { source_type: sourceType } })
+  },
+  resetTokens: async (): Promise<void> => {
+    await client.post('/rule-sets/reset-hosted-tokens')
   },
 }

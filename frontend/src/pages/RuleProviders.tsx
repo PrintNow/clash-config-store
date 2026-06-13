@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Plus, Trash2, Edit, Shield, ExternalLink } from 'lucide-react'
-import { ruleProvidersApi } from '@/api/rule-providers'
-import type { RuleProvider } from '@/types'
+import { ruleSetsApi } from '@/api/rule-sets'
+import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -69,13 +69,13 @@ export function RuleProviders() {
   const queryClient = useQueryClient()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingProvider, setEditingProvider] = useState<RuleProvider | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<RuleProvider | null>(null)
+  const [editingProvider, setEditingProvider] = useState<RuleSet | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<RuleSet | null>(null)
   const [form, setForm] = useState(emptyForm)
 
   const { data: providers = [], isLoading } = useQuery({
-    queryKey: ['rule-providers'],
-    queryFn: ruleProvidersApi.list,
+    queryKey: ['rule-sets', 'external'],
+    queryFn: () => ruleSetsApi.list('external'),
   })
 
   const presetProviders = providers.filter((p) => p.is_preset)
@@ -92,11 +92,11 @@ export function RuleProviders() {
         interval: form.interval,
       }
       return editingProvider
-        ? ruleProvidersApi.update(editingProvider.id, payload)
-        : ruleProvidersApi.create(payload)
+        ? ruleSetsApi.update(editingProvider.id, { source_type: 'external', ...payload })
+        : ruleSetsApi.create({ source_type: 'external', ...payload })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rule-providers'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'external'] })
       toast.success(editingProvider ? t('ruleProviders.updateSuccess') : t('ruleProviders.addSuccess'))
       closeDialog()
     },
@@ -104,9 +104,9 @@ export function RuleProviders() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => ruleProvidersApi.delete(id),
+    mutationFn: (id: number) => ruleSetsApi.delete(id, 'external'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rule-providers'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'external'] })
       toast.success(t('ruleProviders.deleteSuccess'))
       setDeleteTarget(null)
     },
@@ -119,7 +119,7 @@ export function RuleProviders() {
     setDialogOpen(true)
   }
 
-  const openEdit = (provider: RuleProvider) => {
+  const openEdit = (provider: RuleSet) => {
     if (provider.is_preset) {
       toast.error(t('ruleProviders.cannotEdit'))
       return
@@ -127,11 +127,11 @@ export function RuleProviders() {
     setEditingProvider(provider)
     setForm({
       name: provider.name,
-      type: provider.type,
+      type: 'http',
       url: provider.url ?? '',
       behavior: provider.behavior,
       format: provider.format,
-      interval: provider.interval,
+      interval: provider.interval ?? 86400,
     })
     setDialogOpen(true)
   }
@@ -187,7 +187,7 @@ export function RuleProviders() {
                     <BehaviorBadge behavior={provider.behavior} t={t} />
                     <FormatBadge format={provider.format} t={t} />
                     <Badge variant="outline" className="text-xs">
-                      {provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}
+                      {t('ruleProviders.typeHttp')}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">{t('ruleProviders.providerInterval')}：{provider.interval}s</p>
@@ -231,7 +231,7 @@ export function RuleProviders() {
                   {customProviders.map((provider) => (
                     <TableRow key={provider.id}>
                       <TableCell className="font-medium">{provider.name}</TableCell>
-                      <TableCell>{provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}</TableCell>
+                      <TableCell>{t('ruleProviders.typeHttp')}</TableCell>
                       <TableCell><BehaviorBadge behavior={provider.behavior} t={t} /></TableCell>
                       <TableCell><FormatBadge format={provider.format} t={t} /></TableCell>
                       <TableCell className="max-w-[200px]">
@@ -271,7 +271,7 @@ export function RuleProviders() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{provider.name}</span>
                           <Badge variant="outline" className="text-xs">
-                            {provider.type === 'http' ? t('ruleProviders.typeHttp') : t('ruleProviders.typeFile')}
+                            {t('ruleProviders.typeHttp')}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">

@@ -37,6 +37,10 @@ export interface YamlEditorProps {
   placeholder?: string
   /** 编辑器最小高度，如 200px、300px */
   minHeight?: string
+  /** 编辑器固定高度，设置后内容超出时滚动 */
+  height?: string
+  /** 编辑器最大高度，超出后滚动 */
+  maxHeight?: string
   className?: string
   readOnly?: boolean
   highlightedLine?: number | null
@@ -48,6 +52,8 @@ export function YamlEditor({
   onChange,
   placeholder,
   minHeight = '200px',
+  height,
+  maxHeight,
   className,
   readOnly = false,
   highlightedLine = null,
@@ -109,6 +115,8 @@ export function YamlEditor({
       <CodeMirror
         value={value}
         minHeight={minHeight}
+        height={height}
+        maxHeight={maxHeight}
         theme={isDark ? 'dark' : 'light'}
         extensions={extensions}
         onChange={onChange}

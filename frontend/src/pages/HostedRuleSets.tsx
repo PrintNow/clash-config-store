@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Plus, Trash2, Edit, Copy, RotateCcw } from 'lucide-react'
-import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
-import type { HostedRuleSet } from '@/types'
+import { ruleSetsApi } from '@/api/rule-sets'
+import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,8 +35,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const emptyForm = {
   name: '',
-  behavior: 'domain' as HostedRuleSet['behavior'],
-  format: 'yaml' as HostedRuleSet['format'],
+  behavior: 'domain' as RuleSet['behavior'],
+  format: 'yaml' as RuleSet['format'],
   content: '',
 }
 
@@ -64,13 +64,13 @@ export function HostedRuleSets() {
   const queryClient = useQueryClient()
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['hosted-rule-sets'],
-    queryFn: hostedRuleSetsApi.list,
+    queryKey: ['rule-sets', 'hosted'],
+    queryFn: () => ruleSetsApi.list('hosted'),
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<HostedRuleSet | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<HostedRuleSet | null>(null)
+  const [editingItem, setEditingItem] = useState<RuleSet | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<RuleSet | null>(null)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
@@ -86,7 +86,7 @@ export function HostedRuleSets() {
     setDialogOpen(true)
   }
 
-  const openEdit = (it: HostedRuleSet) => {
+  const openEdit = (it: RuleSet) => {
     setEditingItem(it)
     setForm({
       name: it.name,
@@ -95,8 +95,8 @@ export function HostedRuleSets() {
       content: '',
     })
     setDialogOpen(true)
-    hostedRuleSetsApi
-      .get(it.id)
+    ruleSetsApi
+      .get(it.id, 'hosted')
       .then((full) => {
         setForm((f) => ({ ...f, content: full.content ?? '' }))
       })
@@ -124,11 +124,11 @@ export function HostedRuleSets() {
         content: form.content,
       }
       return editingItem
-        ? hostedRuleSetsApi.update(editingItem.id, payload)
-        : hostedRuleSetsApi.create(payload)
+        ? ruleSetsApi.update(editingItem.id, { source_type: 'hosted', ...payload })
+        : ruleSetsApi.create({ source_type: 'hosted', ...payload })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       closeDialog()
     },
@@ -136,9 +136,9 @@ export function HostedRuleSets() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => hostedRuleSetsApi.delete(id),
+    mutationFn: (id: number) => ruleSetsApi.delete(id, 'hosted'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       setDeleteTarget(null)
     },
@@ -146,19 +146,19 @@ export function HostedRuleSets() {
   })
 
   const resetTokensMutation = useMutation({
-    mutationFn: hostedRuleSetsApi.resetTokens,
+    mutationFn: ruleSetsApi.resetTokens,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       setResetDialogOpen(false)
     },
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const copyUrl = async (it: HostedRuleSet) => {
+  const copyUrl = async (it: RuleSet) => {
     try {
-      if (!it.url) return
-      await navigator.clipboard.writeText(it.url)
+      if (!it.hrs_url) return
+      await navigator.clipboard.writeText(it.hrs_url)
       toast.success(t('common.copied'))
     } catch {
       toast.error(t('common.error'))
@@ -220,8 +220,8 @@ export function HostedRuleSets() {
                   <TableCell><BehaviorBadge behavior={it.behavior} t={t} /></TableCell>
                   <TableCell><FormatBadge format={it.format} t={t} /></TableCell>
                   <TableCell className="max-w-[260px]">
-                    {it.url ? (
-                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.url}</code>
+                    {it.hrs_url ? (
+                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
                     ) : (
                       <span className="text-sm text-muted-foreground">-</span>
                     )}
@@ -231,7 +231,7 @@ export function HostedRuleSets() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.url} aria-label={t('common.copy')}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.hrs_url} aria-label={t('common.copy')}>
                         <Copy className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)} aria-label={t('common.edit')}>
@@ -279,15 +279,15 @@ export function HostedRuleSets() {
                       <BehaviorBadge behavior={it.behavior} t={t} />
                       <FormatBadge format={it.format} t={t} />
                     </div>
-                    {it.url && (
-                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.url}</code>
+                    {it.hrs_url && (
+                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
                     )}
                     <p className="text-xs text-muted-foreground">
                       {new Date(it.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.url}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.hrs_url}>
                       <Copy className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)}>
@@ -341,7 +341,7 @@ export function HostedRuleSets() {
                 <NativeSelect
                   value={form.behavior}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, behavior: e.target.value as HostedRuleSet['behavior'] }))
+                    setForm((f) => ({ ...f, behavior: e.target.value as RuleSet['behavior'] }))
                   }
                 >
                   <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
@@ -355,7 +355,7 @@ export function HostedRuleSets() {
                 <NativeSelect
                   value={form.format}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, format: e.target.value as HostedRuleSet['format'] }))
+                    setForm((f) => ({ ...f, format: e.target.value as RuleSet['format'] }))
                   }
                 >
                   <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>

@@ -42,8 +42,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import equal from 'fast-deep-equal'
 import { customConfigsApi } from '@/api/custom-configs'
-import { ruleProvidersApi } from '@/api/rule-providers'
-import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
+
+import { ruleSetsApi } from '@/api/rule-sets'
 import { providersApi } from '@/api/providers'
 import type { ProxyGroup } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -336,14 +336,12 @@ export function CustomConfigDetail() {
     enabled: !!configId,
   })
 
-  const { data: allRuleProviders = [] } = useQuery({
-    queryKey: ['rule-providers'],
-    queryFn: ruleProvidersApi.list,
+  const { data: _allRuleSets = [] } = useQuery({
+    queryKey: ['rule-sets'],
+    queryFn: (): Promise<import('@/types').RuleSet[]> => ruleSetsApi.list(),
   })
-  const { data: allHostedRuleSets = [] } = useQuery({
-    queryKey: ['hosted-rule-sets'],
-    queryFn: hostedRuleSetsApi.list,
-  })
+  const allRuleProviders = useMemo(() => _allRuleSets.filter((rs) => rs.source_type === 'external'), [_allRuleSets])
+  const allHostedRuleSets = useMemo(() => _allRuleSets.filter((rs) => rs.source_type === 'hosted'), [_allRuleSets])
 
   // 加载所有订阅源，供代理组"引用订阅源"选择
   const { data: allProviders = [] } = useQuery({
@@ -688,7 +686,7 @@ export function CustomConfigDetail() {
         id: rs.id,
         name: rs.name,
         behavior: rs.behavior,
-        url: rs.url,
+        url: rs.hrs_url,
         source: 'hosted' as const,
       })),
     ],
@@ -1776,7 +1774,7 @@ export function CustomConfigDetail() {
           <YamlEditor
             value={yamlEditContent}
             onChange={setYamlEditContent}
-            minHeight="480px"
+            height="480px"
           />
         </TabsContent>
       </Tabs>
@@ -1860,7 +1858,7 @@ export function CustomConfigDetail() {
               <YamlEditor
                 value={previewYaml}
                 readOnly
-                minHeight="480px"
+                height="480px"
                 className="bg-muted/30"
               />
             )}
