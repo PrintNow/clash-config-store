@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Trash2, Edit, Copy, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Edit, Copy, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
 import { ruleSetsApi } from '@/api/rule-sets'
 import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { YamlEditor } from '@/components/YamlEditor'
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,7 @@ export function HostedRuleSets() {
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogFullscreen, setDialogFullscreen] = useState(false)
   const [editingItem, setEditingItem] = useState<RuleSet | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RuleSet | null>(null)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -76,6 +77,7 @@ export function HostedRuleSets() {
 
   const closeDialog = () => {
     setDialogOpen(false)
+    setDialogFullscreen(false)
     setEditingItem(null)
     setForm(emptyForm)
   }
@@ -83,11 +85,13 @@ export function HostedRuleSets() {
   const openCreate = () => {
     setEditingItem(null)
     setForm(emptyForm)
+    setDialogFullscreen(false)
     setDialogOpen(true)
   }
 
   const openEdit = (it: RuleSet) => {
     setEditingItem(it)
+    setDialogFullscreen(false)
     setForm({
       name: it.name,
       behavior: it.behavior,
@@ -191,6 +195,7 @@ export function HostedRuleSets() {
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('ruleProviders.providerBehavior')}</TableHead>
               <TableHead>{t('ruleProviders.providerFormat')}</TableHead>
+              <TableHead className="w-[80px] text-right">{t('ruleSets.ruleCount')}</TableHead>
               <TableHead className="w-[260px]">{t('hostedRuleSets.url')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
               <TableHead className="w-[120px]">{t('common.actions')}</TableHead>
@@ -200,7 +205,7 @@ export function HostedRuleSets() {
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
@@ -209,7 +214,7 @@ export function HostedRuleSets() {
               ))
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
@@ -219,6 +224,9 @@ export function HostedRuleSets() {
                   <TableCell className="font-medium">{it.name}</TableCell>
                   <TableCell><BehaviorBadge behavior={it.behavior} t={t} /></TableCell>
                   <TableCell><FormatBadge format={it.format} t={t} /></TableCell>
+                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                    {it.rule_count ? it.rule_count.toLocaleString() : '-'}
+                  </TableCell>
                   <TableCell className="max-w-[260px]">
                     {it.hrs_url ? (
                       <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
@@ -278,6 +286,9 @@ export function HostedRuleSets() {
                       <span className="font-medium text-sm">{it.name}</span>
                       <BehaviorBadge behavior={it.behavior} t={t} />
                       <FormatBadge format={it.format} t={t} />
+                      {(it.rule_count ?? 0) > 0 && (
+                        <span className="text-xs text-muted-foreground">{it.rule_count!.toLocaleString()} 条</span>
+                      )}
                     </div>
                     {it.hrs_url && (
                       <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
@@ -311,70 +322,97 @@ export function HostedRuleSets() {
 
       {/* 创建/编辑弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent
+          className={dialogFullscreen
+            ? 'fixed inset-2 max-w-none w-auto h-auto rounded-lg flex flex-col overflow-hidden translate-x-0 translate-y-0 top-2 left-2 right-2 bottom-2'
+            : 'sm:max-w-[900px] max-h-[85vh] overflow-y-auto'
+          }
+          onEscapeKeyDown={(e) => {
+            if (dialogFullscreen) {
+              e.preventDefault()
+              setDialogFullscreen(false)
+            }
+          }}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <form
-            className="flex flex-col gap-4"
+            className={dialogFullscreen ? 'flex flex-col h-full gap-4 overflow-hidden' : 'flex flex-col gap-4'}
             onSubmit={(e) => {
               e.preventDefault()
               if (isFormValid && !saveMutation.isPending) saveMutation.mutate()
             }}
           >
-            <DialogHeader>
-              <DialogTitle>{editingItem ? t('hostedRuleSets.edit') : t('hostedRuleSets.add')}</DialogTitle>
-              <DialogDescription>{t('hostedRuleSets.nameHint')}</DialogDescription>
+            <DialogHeader className="flex-none">
+              <div className="flex items-center justify-between pr-8">
+                <div>
+                  <DialogTitle>{editingItem ? t('hostedRuleSets.edit') : t('hostedRuleSets.add')}</DialogTitle>
+                  <DialogDescription>{t('hostedRuleSets.nameHint')}</DialogDescription>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDialogFullscreen(f => !f)}
+                  className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  title={dialogFullscreen ? '退出全屏' : '全屏编辑'}
+                >
+                  {dialogFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+              </div>
             </DialogHeader>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="hrs-name">{t('common.name')}</Label>
-                <Input
-                  id="hrs-name"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="my_ruleset"
+            <div className={dialogFullscreen ? 'flex flex-col flex-1 gap-4 overflow-y-auto min-h-0' : 'grid gap-4 md:grid-cols-2'}>
+              <div className={dialogFullscreen ? 'grid gap-4 grid-cols-3 flex-none' : 'contents'}>
+                <div className="space-y-1.5">
+                  <Label htmlFor="hrs-name">{t('common.name')}</Label>
+                  <Input
+                    id="hrs-name"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="my_ruleset"
+                  />
+                  {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t('ruleProviders.providerBehavior')}</Label>
+                  <NativeSelect
+                    value={form.behavior}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, behavior: e.target.value as RuleSet['behavior'] }))
+                    }
+                  >
+                    <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
+                    <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
+                    <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
+                  </NativeSelect>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t('ruleProviders.providerFormat')}</Label>
+                  <NativeSelect
+                    value={form.format}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, format: e.target.value as RuleSet['format'] }))
+                    }
+                  >
+                    <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
+                    <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
+                  </NativeSelect>
+                </div>
+              </div>
+
+              <div className={dialogFullscreen ? 'flex flex-col flex-1 space-y-1.5 min-h-0' : 'space-y-1.5 md:col-span-2'}>
+                <Label htmlFor="hrs-content">{t('hostedRuleSets.content')}</Label>
+                <YamlEditor
+                  value={form.content}
+                  onChange={(v) => setForm((f) => ({ ...f, content: v }))}
+                  language={form.format === 'yaml' ? 'yaml' : 'text'}
+                  minHeight={dialogFullscreen ? 'calc(100vh - 300px)' : '200px'}
+                  maxHeight={dialogFullscreen ? 'calc(100vh - 300px)' : '45vh'}
                 />
-                {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t('ruleProviders.providerBehavior')}</Label>
-                <NativeSelect
-                  value={form.behavior}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, behavior: e.target.value as RuleSet['behavior'] }))
-                  }
-                >
-                  <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
-                  <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
-                  <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
-                </NativeSelect>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t('ruleProviders.providerFormat')}</Label>
-                <NativeSelect
-                  value={form.format}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, format: e.target.value as RuleSet['format'] }))
-                  }
-                >
-                  <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
-                  <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
-                </NativeSelect>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="hrs-content">{t('hostedRuleSets.content')}</Label>
-              <Textarea
-                id="hrs-content"
-                value={form.content}
-                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                className="min-h-[260px] font-mono"
-              />
-            </div>
-
-            <DialogFooter>
+            <DialogFooter className="flex-none">
               <Button type="button" variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={!isFormValid || saveMutation.isPending}>
                 {saveMutation.isPending ? t('common.saving') : t('common.save')}

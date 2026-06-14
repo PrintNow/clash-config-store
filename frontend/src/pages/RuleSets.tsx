@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Maximize2, Minimize2 } from 'lucide-react'
 import { ruleSetsApi } from '@/api/rule-sets'
 import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -26,10 +27,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/EmptyState'
+import { YamlEditor } from '@/components/YamlEditor'
 
 type TabValue = 'all' | 'external' | 'hosted'
 
@@ -40,6 +41,7 @@ interface RuleSetFormData {
   format: string
   url: string
   interval: string
+  server_cache_enabled: boolean
   content: string
 }
 
@@ -50,6 +52,7 @@ const defaultForm: RuleSetFormData = {
   format: 'yaml',
   url: '',
   interval: '86400',
+  server_cache_enabled: false,
   content: '',
 }
 
@@ -57,8 +60,12 @@ export function RuleSets() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const [activeTab, setActiveTab] = useState<TabValue>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = (searchParams.get('tab') as TabValue) ?? 'all'
+  const setActiveTab = (tab: TabValue) =>
+    setSearchParams((prev) => { prev.set('tab', tab); return prev }, { replace: true })
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogFullscreen, setDialogFullscreen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editingRuleSet, setEditingRuleSet] = useState<RuleSet | null>(null)
   const [deletingRuleSet, setDeletingRuleSet] = useState<RuleSet | null>(null)
@@ -111,11 +118,13 @@ export function RuleSets() {
     setEditingRuleSet(null)
     setFormData(defaultForm)
     setFormErrors({})
+    setDialogFullscreen(false)
     setDialogOpen(true)
   }
 
   const openEditDialog = (rs: RuleSet) => {
     setEditingRuleSet(rs)
+    setDialogFullscreen(false)
     setFormData({
       source_type: rs.source_type,
       name: rs.name,
@@ -123,16 +132,26 @@ export function RuleSets() {
       format: rs.format,
       url: rs.url ?? '',
       interval: String(rs.interval ?? 86400),
-      content: rs.content ?? '',
+      server_cache_enabled: rs.server_cache_enabled ?? false,
+      content: '',
     })
     setFormErrors({})
     setDialogOpen(true)
+    if (rs.source_type === 'hosted') {
+      ruleSetsApi
+        .get(rs.id, 'hosted')
+        .then((full) => {
+          setFormData((f) => ({ ...f, content: full.content ?? '' }))
+        })
+        .catch(() => toast.error(t('common.error')))
+    }
   }
 
   const validateForm = () => {
     const errors: Partial<Record<keyof RuleSetFormData, string>> = {}
     if (!formData.name.trim()) errors.name = t('common.required')
     if (formData.source_type === 'external' && !formData.url.trim()) errors.url = t('common.required')
+    if (formData.source_type === 'hosted' && !formData.content.trim()) errors.content = t('common.required')
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -146,6 +165,7 @@ export function RuleSets() {
       format: formData.format,
       url: formData.source_type === 'external' ? formData.url : undefined,
       interval: formData.source_type === 'external' ? Number(formData.interval) || 86400 : undefined,
+      server_cache_enabled: formData.source_type === 'external' ? formData.server_cache_enabled : undefined,
       content: formData.source_type === 'hosted' ? formData.content : undefined,
     }
     if (editingRuleSet) {
@@ -240,6 +260,7 @@ export function RuleSets() {
                 <TableHead>{t('common.type')}</TableHead>
                 <TableHead>Behavior</TableHead>
                 <TableHead>Format</TableHead>
+                <TableHead className="w-[80px] text-right">{t('ruleSets.ruleCount')}</TableHead>
                 <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
@@ -253,6 +274,9 @@ export function RuleSets() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{rs.format}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                    {rs.rule_count ? rs.rule_count.toLocaleString() : '-'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -294,6 +318,9 @@ export function RuleSets() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="outline" className="text-xs">{rs.behavior}</Badge>
                       <Badge variant="secondary" className="text-xs">{rs.format}</Badge>
+                      {(rs.rule_count ?? 0) > 0 && (
+                        <span className="text-xs text-muted-foreground">{rs.rule_count!.toLocaleString()} 条</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -372,19 +399,41 @@ export function RuleSets() {
       </Tabs>
 
       {/* 添加/编辑弹窗 */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) setDialogFullscreen(false); setDialogOpen(open) }}>
+        <DialogContent
+          className={dialogFullscreen
+            ? 'fixed inset-2 max-w-none w-auto h-auto rounded-lg flex flex-col overflow-hidden translate-x-0 translate-y-0 top-2 left-2 right-2 bottom-2'
+            : 'sm:max-w-[720px] max-h-[85vh] overflow-y-auto'
+          }
+          onEscapeKeyDown={(e) => {
+            if (dialogFullscreen) {
+              e.preventDefault()
+              setDialogFullscreen(false)
+            }
+          }}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <form
-            className="flex flex-col gap-4"
+            className={dialogFullscreen ? 'flex flex-col h-full gap-4 overflow-hidden' : 'flex flex-col gap-4'}
             onSubmit={(e) => { e.preventDefault(); handleSubmit() }}
           >
-            <DialogHeader>
-              <DialogTitle>
-                {editingRuleSet ? t('ruleSets.editRuleSet') : t('ruleSets.addRuleSet')}
-              </DialogTitle>
+            <DialogHeader className="flex-none">
+              <div className="flex items-center justify-between pr-8">
+                <DialogTitle>
+                  {editingRuleSet ? t('ruleSets.editRuleSet') : t('ruleSets.addRuleSet')}
+                </DialogTitle>
+                <button
+                  type="button"
+                  onClick={() => setDialogFullscreen(f => !f)}
+                  className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  title={dialogFullscreen ? '退出全屏' : '全屏编辑'}
+                >
+                  {dialogFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+              </div>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
+            <div className={dialogFullscreen ? 'flex flex-col flex-1 space-y-4 py-2 overflow-y-auto min-h-0' : 'space-y-4 py-2'}>
               {/* source_type */}
               {!editingRuleSet && (
                 <div className="space-y-2">
@@ -404,43 +453,43 @@ export function RuleSets() {
                 </div>
               )}
 
-              {/* 名称 */}
-              <div className="space-y-2">
-                <Label>{t('common.name')}</Label>
-                <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="my-rules"
-                />
-                {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
-              </div>
+              {/* 名称 + Behavior + Format 同行 */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label>{t('common.name')}</Label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="my-rules"
+                  />
+                  {formErrors.name && <p className="text-sm text-destructive">{formErrors.name}</p>}
+                </div>
 
-              {/* Behavior */}
-              <div className="space-y-2">
-                <Label>Behavior</Label>
-                <NativeSelect
-                  value={formData.behavior}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, behavior: e.target.value }))}
-                >
-                  <NativeSelectOption value="domain">domain</NativeSelectOption>
-                  <NativeSelectOption value="ipcidr">ipcidr</NativeSelectOption>
-                  <NativeSelectOption value="classical">classical</NativeSelectOption>
-                </NativeSelect>
-              </div>
+                <div className="space-y-2">
+                  <Label>Behavior</Label>
+                  <NativeSelect
+                    value={formData.behavior}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, behavior: e.target.value }))}
+                  >
+                    <NativeSelectOption value="domain">domain</NativeSelectOption>
+                    <NativeSelectOption value="ipcidr">ipcidr</NativeSelectOption>
+                    <NativeSelectOption value="classical">classical</NativeSelectOption>
+                  </NativeSelect>
+                </div>
 
-              {/* Format */}
-              <div className="space-y-2">
-                <Label>Format</Label>
-                <NativeSelect
-                  value={formData.format}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, format: e.target.value }))}
-                >
-                  <NativeSelectOption value="yaml">yaml</NativeSelectOption>
-                  <NativeSelectOption value="text">text</NativeSelectOption>
-                  {formData.source_type === 'external' && (
-                    <NativeSelectOption value="mrs">mrs</NativeSelectOption>
-                  )}
-                </NativeSelect>
+                <div className="space-y-2">
+                  <Label>Format</Label>
+                  <NativeSelect
+                    value={formData.format}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, format: e.target.value }))}
+                  >
+                    <NativeSelectOption value="yaml">yaml</NativeSelectOption>
+                    <NativeSelectOption value="text">text</NativeSelectOption>
+                    {formData.source_type === 'external' && (
+                      <NativeSelectOption value="mrs">mrs</NativeSelectOption>
+                    )}
+                  </NativeSelect>
+                </div>
               </div>
 
               {/* external 特有字段 */}
@@ -463,25 +512,54 @@ export function RuleSets() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, interval: e.target.value }))}
                     />
                   </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">{t('ruleSets.serverCache')}</Label>
+                      <p className="text-xs text-muted-foreground">{t('ruleSets.serverCacheHint')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={formData.server_cache_enabled}
+                      onClick={() => setFormData((prev) => ({ ...prev, server_cache_enabled: !prev.server_cache_enabled }))}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${formData.server_cache_enabled ? 'bg-primary' : 'bg-input'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${formData.server_cache_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
                 </>
               )}
 
               {/* hosted 特有字段 */}
               {formData.source_type === 'hosted' && (
-                <div className="space-y-2">
-                  <Label>{t('ruleSets.ruleContent')}</Label>
-                  <Textarea
+                <div className={dialogFullscreen ? 'flex flex-col flex-1 space-y-2 min-h-0' : 'space-y-2'}>
+                  <div className="flex items-center justify-between">
+                    <Label>{t('ruleSets.ruleContent')}</Label>
+                    <a
+                      href="https://wiki.metacubex.one/config/rule-providers/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                    >
+                      格式文档 ↗
+                    </a>
+                  </div>
+                  <YamlEditor
                     value={formData.content}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
-                    placeholder={'example.com\ngoogle.com'}
-                    className="min-h-[160px] font-mono text-xs"
+                    onChange={(v) => setFormData((prev) => ({ ...prev, content: v }))}
+                    language={formData.format === 'yaml' ? 'yaml' : 'text'}
+                    minHeight={dialogFullscreen ? 'calc(100vh - 350px)' : '200px'}
+                    maxHeight={dialogFullscreen ? 'calc(100vh - 350px)' : '45vh'}
+                    placeholder={formData.format === 'yaml'
+                      ? 'payload:\n  - DOMAIN-SUFFIX,example.com\n  - DOMAIN-SUFFIX,google.com'
+                      : 'DOMAIN-SUFFIX,example.com\nDOMAIN-SUFFIX,google.com'}
                   />
-                  <p className="text-xs text-muted-foreground">每行一条规则</p>
+                  {formErrors.content && <p className="text-sm text-destructive">{formErrors.content}</p>}
                 </div>
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-none">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 {t('common.cancel')}
               </Button>
