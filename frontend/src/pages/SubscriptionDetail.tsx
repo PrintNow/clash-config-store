@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useBreadcrumb } from '@/store/breadcrumb'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -18,17 +19,15 @@ import {
   Info,
 } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
-import { providersApi } from '@/api/providers'
 import { customConfigsApi } from '@/api/custom-configs'
 import { configTemplatesApi } from '@/api/config-templates'
-import type { Provider, CustomConfig, ConfigTemplate, AccessRestriction } from '@/types'
+import type { CustomConfig, ConfigTemplate, AccessRestriction } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -69,7 +68,11 @@ export function SubscriptionDetail() {
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState('')
 
-  const [enabledProviderIds, setEnabledProviderIds] = useState<number[]>([])
+  useBreadcrumb([
+    { label: t('nav.subscriptions'), href: '/subscriptions' },
+    { label: name || '...' },
+  ])
+
   const [customConfigId, setCustomConfigId] = useState<string>('')
   const [configTemplateId, setConfigTemplateId] = useState<string>('')
   const [ruleInsertMode, setRuleInsertMode] = useState<'prepend' | 'append' | 'replace'>('append')
@@ -92,11 +95,6 @@ export function SubscriptionDetail() {
   const subscription = detailData?.subscription
   const restrictions: AccessRestriction[] = detailData?.access_restrictions ?? []
 
-  const { data: providers = [] } = useQuery<Provider[]>({
-    queryKey: ['providers'],
-    queryFn: providersApi.list,
-  })
-
   const { data: customConfigs = [] } = useQuery<CustomConfig[]>({
     queryKey: ['custom-configs'],
     queryFn: customConfigsApi.list,
@@ -110,7 +108,6 @@ export function SubscriptionDetail() {
   useEffect(() => {
     if (subscription) {
       setName(subscription.name)
-      setEnabledProviderIds(subscription.enabled_provider_ids ?? [])
       setCustomConfigId(subscription.custom_config_id ? String(subscription.custom_config_id) : '')
       setConfigTemplateId(
         subscription.config_template_id ? String(subscription.config_template_id) : ''
@@ -166,7 +163,6 @@ export function SubscriptionDetail() {
   const handleSave = () => {
     updateMutation.mutate({
       name,
-      enabled_provider_ids: enabledProviderIds,
       custom_config_id: customConfigId ? Number(customConfigId) : null,
       config_template_id: configTemplateId ? Number(configTemplateId) : null,
       rule_insert_mode: ruleInsertMode,
@@ -179,12 +175,6 @@ export function SubscriptionDetail() {
     if (name.trim()) {
       updateMutation.mutate({ name: name.trim() })
     }
-  }
-
-  const toggleProvider = (providerId: number) => {
-    setEnabledProviderIds((prev) =>
-      prev.includes(providerId) ? prev.filter((pid) => pid !== providerId) : [...prev, providerId]
-    )
   }
 
   const handleCopyUrl = () => {
@@ -205,30 +195,6 @@ export function SubscriptionDetail() {
 
   const selectedCustomConfig = customConfigs.find((c) => String(c.id) === customConfigId)
   const selectedTemplate = configTemplates.find((t) => String(t.id) === configTemplateId)
-
-  const referencedProviderNames: string[] = (() => {
-    if (!selectedCustomConfig?.proxy_groups) return []
-    const names = new Set<string>()
-    for (const g of selectedCustomConfig.proxy_groups) {
-      const use = (g as Record<string, unknown>)['use']
-      if (Array.isArray(use)) {
-        use.forEach((n) => typeof n === 'string' && names.add(n))
-      }
-    }
-    return [...names]
-  })()
-
-  const unenabledReferencedProviders = referencedProviderNames.filter((name) => {
-    const provider = providers.find((p) => p.name === name)
-    return provider && !enabledProviderIds.includes(provider.id)
-  })
-
-  const handleEnableReferenced = () => {
-    const idsToAdd = referencedProviderNames
-      .map((name) => providers.find((p) => p.name === name)?.id)
-      .filter((id): id is number => id !== undefined && !enabledProviderIds.includes(id))
-    setEnabledProviderIds((prev) => [...prev, ...idsToAdd])
-  }
 
   if (isLoading) {
     return (
@@ -368,90 +334,14 @@ export function SubscriptionDetail() {
       {/* ───── 主配置 Tabs ───── */}
       <Card>
         <CardContent className="pt-4 px-4 pb-4">
-          <Tabs defaultValue="providers">
+          <Tabs defaultValue="config">
             <TabsList className="mb-4 w-full sm:w-auto">
-              <TabsTrigger value="providers" className="text-xs sm:text-sm">{t('subscriptions.tabProviders')}</TabsTrigger>
               <TabsTrigger value="config" className="text-xs sm:text-sm">{t('subscriptions.tabConfig')}</TabsTrigger>
               <TabsTrigger value="template" className="text-xs sm:text-sm">{t('subscriptions.tabTemplate')}</TabsTrigger>
               <TabsTrigger value="restrictions" className="text-xs sm:text-sm">{t('subscriptions.tabRestrictions')}</TabsTrigger>
             </TabsList>
 
-            {/* Tab 1：订阅源 */}
-            <TabsContent value="providers" className="space-y-3">
-              <div className="space-y-0.5">
-                <Label className="text-sm">{t('subscriptions.enabledProviders')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  勾选后点击右上角「保存」生效。代理组中通过「引用订阅源」使用的 Provider 必须在此启用。
-                </p>
-              </div>
-
-              {unenabledReferencedProviders.length > 0 && (
-                <div className="flex items-center justify-between rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
-                  <p className="text-xs text-amber-800 dark:text-amber-300">
-                    ⚠️ 自定义配置引用了 <strong>{unenabledReferencedProviders.join(', ')}</strong>，但未启用
-                  </p>
-                  <Button size="sm" variant="ghost" className="h-6 text-xs text-amber-700 dark:text-amber-400 px-2" onClick={handleEnableReferenced}>
-                    一键启用
-                  </Button>
-                </div>
-              )}
-
-              {providers.length === 0 ? (
-                <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-                  <p className="text-sm font-medium">{t('subscriptions.noProvidersTitle')}</p>
-                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                    {t('subscriptions.noProvidersDescription')}
-                  </p>
-                  <Button
-                    className="mt-4"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate('/providers')}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('providers.addProvider')}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-0.5 max-h-72 overflow-y-auto rounded-md border p-1.5">
-                  {providers.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-start gap-3 p-2 rounded-md hover:bg-muted cursor-pointer"
-                      onClick={() => toggleProvider(p.id)}
-                    >
-                      <Checkbox
-                        id={`provider-${p.id}`}
-                        checked={enabledProviderIds.includes(p.id)}
-                        onCheckedChange={() => toggleProvider(p.id)}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium leading-none">{p.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{p.url}</p>
-                        {p.last_fetched_at && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {t('providers.lastFetched')}：
-                            {new Date(p.last_fetched_at).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                      {enabledProviderIds.includes(p.id) && (
-                        <Badge variant="secondary" className="shrink-0 text-xs">
-                          {t('common.enabled')}
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                {t('subscriptions.enabledProviders')}：{enabledProviderIds.length} / {providers.length}
-              </p>
-            </TabsContent>
-
-            {/* Tab 2：自定义配置 */}
+            {/* Tab 1：自定义配置 */}
             <TabsContent value="config" className="space-y-4">
               <div className="space-y-1.5">
                 <Label>{t('subscriptions.customConfig')}</Label>
@@ -503,30 +393,6 @@ export function SubscriptionDetail() {
                       {t('customConfigs.tabRules')}：{selectedCustomConfig.rules?.length ?? 0}
                     </span>
                   </div>
-
-                  {unenabledReferencedProviders.length > 0 && (
-                    <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
-                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                        <span>⚠️</span>
-                        以下订阅源被代理组引用，但尚未在「订阅源」Tab 中启用，生成的 YAML 将缺少这些节点：
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {unenabledReferencedProviders.map((name) => (
-                          <Badge key={name} variant="outline" className="text-amber-700 dark:text-amber-400 border-amber-400">
-                            {name}
-                          </Badge>
-                        ))}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950"
-                        onClick={handleEnableReferenced}
-                      >
-                        一键启用这些订阅源
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
 

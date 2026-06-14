@@ -429,11 +429,6 @@ export function ProxyGroupDialog({
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t('customConfigs.groupUseHint')}</p>
-            {form.useProviders.length > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠️ 请确保在订阅管理 →「订阅源」Tab 中同时启用这些订阅源，否则生成时节点为空。
-              </p>
-            )}
           </div>
 
           {/* 条件字段：url-test / fallback / load-balance */}

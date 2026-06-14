@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { CalendarClock, Check, Copy, Plus, QrCode, Server, Settings, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { CalendarClock, Check, Copy, Plus, QrCode, Settings, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
 import type { Subscription, SubscriptionComponents } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -153,7 +153,6 @@ export function Subscriptions() {
     }
     createMutation.mutate({
       name: newName,
-      enabled_provider_ids: [],
       rule_insert_mode: 'append',
       proxy_prefix_enabled: false,
     })
@@ -289,12 +288,6 @@ export function Subscriptions() {
                             <code className="rounded bg-muted px-1.5 py-0.5">
                               {t('subscriptions.token')}: {maskToken(sub.token)}
                             </code>
-                            <span className="inline-flex items-center gap-1">
-                              <Server className="h-3.5 w-3.5" />
-                              {t('subscriptions.activeProviderCount', {
-                                count: sub.enabled_provider_ids.length,
-                              })}
-                            </span>
                             <button
                               type="button"
                               className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
@@ -442,10 +435,6 @@ export function Subscriptions() {
                       </button>
                       <div className="mt-1 flex items-center gap-2 flex-wrap">
                         {getExpiryBadge(sub)}
-                        <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                          <Server className="h-3 w-3" />
-                          {t('subscriptions.activeProviderCount', { count: sub.enabled_provider_ids.length })}
-                        </span>
                       </div>
                     </div>
                   </div>

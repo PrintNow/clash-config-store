@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Save, FileCode2 } from 'lucide-react'
 import { configTemplatesApi } from '@/api/config-templates'
+import { useBreadcrumb } from '@/store/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +24,11 @@ export function ConfigTemplateDetail() {
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
   const [nameError, setNameError] = useState('')
+
+  useBreadcrumb([
+    { label: t('nav.configTemplates'), href: '/config-templates' },
+    { label: name || '...' },
+  ])
 
   const { data: template, isLoading } = useQuery({
     queryKey: ['config-templates', templateId],
@@ -91,9 +97,9 @@ export function ConfigTemplateDetail() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full gap-4">
       {/* 顶部操作栏 */}
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-end gap-2 shrink-0">
         <Button
           variant="outline"
           size="sm"
@@ -144,21 +150,21 @@ export function ConfigTemplateDetail() {
         </Button>
       </div>
 
-      {/* YAML 编辑区 */}
-      <Card>
-        <CardContent className="p-3 sm:p-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{t('configTemplates.templateContent')}</Label>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {t('configTemplates.contentHint')}
-            </p>
+      {/* YAML 编辑区，撑满剩余高度 */}
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="flex-1 min-h-0 flex flex-col p-3 sm:p-4">
+          <div className="flex items-center justify-between mb-1 shrink-0">
+            <Label className="text-sm">{t('configTemplates.templateContent')}</Label>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed mb-2 shrink-0">
+            {t('configTemplates.contentHint')}
+          </p>
+          <div style={{ height: 'calc(100vh - 280px)' }}>
             <YamlEditor
               value={content}
               onChange={setContent}
               placeholder={t('configTemplates.contentPlaceholder')}
-              minHeight="24rem"
+              height="100%"
             />
           </div>
         </CardContent>

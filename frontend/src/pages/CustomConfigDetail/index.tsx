@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useParams, useNavigate, useSearchParams, useBlocker } from 'react-router-dom'
+import { useParams, useSearchParams, useBlocker } from 'react-router-dom'
+import { useBreadcrumb } from '@/store/breadcrumb'
 import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import yaml from 'js-yaml'
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   Edit,
@@ -257,7 +257,6 @@ function CustomConfigLeaveDialog({ blocker }: { blocker: Blocker }) {
 
 export function CustomConfigDetail() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -291,6 +290,11 @@ export function CustomConfigDetail() {
   // ── 页面级状态 ──
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState('')
+
+  useBreadcrumb([
+    { label: t('nav.customConfigs'), href: '/custom-configs' },
+    { label: name || '...' },
+  ])
 
   // 代理组列表
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
@@ -975,145 +979,116 @@ export function CustomConfigDetail() {
 
   return (
     <>
-    <div className="space-y-3">
-      {/* ── 顶部操作栏 ── */}
-      <div className="rounded-xl border bg-background/95 p-2.5 shadow-sm">
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="-ml-1 mt-0.5 h-8 w-8"
-              onClick={() => navigate('/custom-configs')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="space-y-1">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-8 text-base font-bold"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSave()
-                      if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
-                    }}
-                    autoFocus
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={!isDirty || updateMutation.isPending}
-                    onClick={() => handleSave()}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => { setName(config.name); setEditingName(false) }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <h1
-                    className="text-lg font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
-                    title={t('customConfigs.clickToEditTitle')}
-                    onClick={() => setEditingName(true)}
-                  >
-                    {name}
-                  </h1>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => setEditingName(true)}
-                    aria-label={t('customConfigs.clickToEditTitle')}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-              {/* 固定一行高度，避免切到「规则」tab 时徽章出现导致整块变高、右侧按钮上下漂移 */}
-              <div className="flex min-h-5 flex-wrap items-center gap-1.5">
-                {activeTab === 'rules' && (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'border',
-                      saveHealth === 'error' && 'border-destructive/40 text-destructive',
-                      saveHealth === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                      saveHealth === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                    )}
-                  >
-                    {saveHealth === 'error'
-                      ? t('customConfigs.validationErrorsBadge', { count: ruleStats.errors })
-                      : saveHealth === 'warning'
-                        ? t('customConfigs.validationWarningsBadge', { count: ruleStats.warnings })
-                        : t('customConfigs.validationReady')}
-                  </Badge>
-                )}
-                {lastValidationState !== 'idle' && (
-                  <Badge variant="outline" className={cn(
-                    lastValidationState === 'error' && 'border-destructive/40 text-destructive',
-                    lastValidationState === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                    lastValidationState === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                  )}>
-                    {lastValidationState === 'error'
-                      ? t('customConfigs.lastCheckError')
-                      : lastValidationState === 'warning'
-                        ? t('customConfigs.lastCheckWarning')
-                        : t('customConfigs.lastCheckValid')}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-            <Button variant="outline" size="sm" onClick={handleOpenPreview}>
-              <Eye className="mr-1.5 h-3.5 w-3.5" />
-              {t('customConfigs.previewYaml')}
-            </Button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-3">
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
-      <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
-        <div className="overflow-x-auto pb-0.5">
-          <TabsList className="h-8 gap-0.5 p-0.5">
-            <TabsTrigger value="proxyGroups">
-              {t('customConfigs.tabProxyGroups')}
-              {proxyGroups.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="rules">
-              {t('customConfigs.tabRules')}
-              {rules.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="ruleSets">
-              {t('customConfigs.tabRuleSets')}
-              {ruleProviderIds.length + hostedRuleSetIds.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                  {ruleProviderIds.length + hostedRuleSetIds.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="yamlEdit">
-              YAML 编辑
-            </TabsTrigger>
-          </TabsList>
+      <Tabs value={activeTab} onValueChange={handleDetailTabChange} className="flex flex-col">
+        {/* 标题行 + tabs 合并为一行 */}
+        <div className="shrink-0 flex items-center gap-3">
+          {/* 名称编辑区 */}
+          <div className="flex min-w-0 items-center gap-1">
+            {editingName ? (
+              <>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-7 w-48 text-sm font-semibold"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSave()
+                    if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
+                  }}
+                  autoFocus
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0"
+                  disabled={!isDirty || updateMutation.isPending} onClick={() => handleSave()}>
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0"
+                  onClick={() => { setName(config.name); setEditingName(false) }}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : (
+              <button
+                className="flex items-center gap-1.5 rounded-md px-1 py-0.5 text-sm font-semibold hover:bg-muted/60 transition-colors"
+                title={t('customConfigs.clickToEditTitle')}
+                onClick={() => setEditingName(true)}
+              >
+                <span className="truncate max-w-[14rem]">{name}</span>
+                <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* 状态 badge */}
+          <div className="flex items-center gap-1.5">
+            {activeTab === 'rules' && (
+              <Badge variant="outline" className={cn(
+                'text-xs border',
+                saveHealth === 'error' && 'border-destructive/40 text-destructive',
+                saveHealth === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                saveHealth === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              )}>
+                {saveHealth === 'error'
+                  ? t('customConfigs.validationErrorsBadge', { count: ruleStats.errors })
+                  : saveHealth === 'warning'
+                    ? t('customConfigs.validationWarningsBadge', { count: ruleStats.warnings })
+                    : t('customConfigs.validationReady')}
+              </Badge>
+            )}
+            {lastValidationState !== 'idle' && (
+              <Badge variant="outline" className={cn(
+                'text-xs',
+                lastValidationState === 'error' && 'border-destructive/40 text-destructive',
+                lastValidationState === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                lastValidationState === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              )}>
+                {lastValidationState === 'error'
+                  ? t('customConfigs.lastCheckError')
+                  : lastValidationState === 'warning'
+                    ? t('customConfigs.lastCheckWarning')
+                    : t('customConfigs.lastCheckValid')}
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Tabs 靠右对齐，和右侧按钮同行 */}
+          <div className="overflow-x-auto">
+            <TabsList className="h-8 gap-0.5 p-0.5">
+              <TabsTrigger value="proxyGroups">
+                {t('customConfigs.tabProxyGroups')}
+                {proxyGroups.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="rules">
+                {t('customConfigs.tabRules')}
+                {rules.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ruleSets">
+                {t('customConfigs.tabRuleSets')}
+                {ruleProviderIds.length + hostedRuleSetIds.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                    {ruleProviderIds.length + hostedRuleSetIds.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="yamlEdit">
+                YAML 编辑
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={handleOpenPreview}>
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
+            {t('customConfigs.previewYaml')}
+          </Button>
         </div>
 
-        <div className="mt-2 rounded-lg border bg-muted/20 px-3 py-2">
+        <div className="shrink-0 mt-2 rounded-lg border bg-muted/20 px-3 py-2">
           <div className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">
@@ -1385,7 +1360,7 @@ export function CustomConfigDetail() {
                         <YamlEditor
                           value={rulesText}
                           onChange={handleRulesTextChange}
-                          minHeight="420px"
+                          height="420px"
                           highlightedLine={selectedDiagnosticLine}
                           placeholder={'DOMAIN,example.com,DIRECT\nGEOIP,CN,DIRECT\nMATCH,PROXY'}
                         />
@@ -1739,8 +1714,8 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 5: YAML 编辑 ── */}
-        <TabsContent value="yamlEdit" className="space-y-3 mt-3">
-          <div className="flex items-center justify-between">
+        <TabsContent value="yamlEdit" className="mt-3 flex flex-col gap-3">
+          <div className="shrink-0 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               编辑代理组和规则，点击"应用"后更新配置。
             </p>
@@ -1767,15 +1742,17 @@ export function CustomConfigDetail() {
             </div>
           </div>
           {yamlEditError && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {yamlEditError}
             </div>
           )}
-          <YamlEditor
-            value={yamlEditContent}
-            onChange={setYamlEditContent}
-            height="480px"
-          />
+          <div style={{ height: 'calc(100vh - 270px)' }}>
+            <YamlEditor
+              value={yamlEditContent}
+              onChange={setYamlEditContent}
+              height="100%"
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -1844,7 +1821,7 @@ export function CustomConfigDetail() {
               </div>
             </div>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto p-6 pt-4">
+          <div className="flex-1 min-h-0 flex flex-col p-6 pt-4">
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -1855,12 +1832,14 @@ export function CustomConfigDetail() {
                 </p>
               </div>
             ) : (
-              <YamlEditor
-                value={previewYaml}
-                readOnly
-                height="480px"
-                className="bg-muted/30"
-              />
+              <div className="flex-1 min-h-0 flex flex-col">
+                <YamlEditor
+                  value={previewYaml}
+                  readOnly
+                  height="100%"
+                  className="bg-muted/30 h-full"
+                />
+              </div>
             )}
           </div>
         </SheetContent>
@@ -1885,11 +1864,11 @@ interface RuleProviderGroupProps {
 function RuleProviderGroup({ providers, ruleProviderIds, hostedRuleSetIds, onToggle }: RuleProviderGroupProps) {
   const { t } = useTranslation()
   return (
-    <div className="border rounded-lg overflow-hidden">
-      {providers.map((rp, idx) => (
+    <div className="grid grid-cols-2 gap-2">
+      {providers.map((rp) => (
         <div
           key={rp.id}
-          className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${idx !== 0 ? 'border-t' : ''}`}
+          className="flex items-center gap-3 px-4 py-3 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
           onClick={() => onToggle(rp)}
         >
           <Checkbox
