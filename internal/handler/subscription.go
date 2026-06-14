@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	domsub "clash-config-store/internal/domain/subscription"
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository"
@@ -62,7 +60,6 @@ func ListSubscriptions(c *gin.Context) {
 
 type subscriptionRequest struct {
 	Name               string     `json:"name" binding:"required"`
-	EnabledProviderIDs *[]uint    `json:"enabled_provider_ids"`
 	CustomConfigID     *uint      `json:"custom_config_id"`
 	ConfigTemplateID   *uint      `json:"config_template_id"`
 	RuleInsertMode     string     `json:"rule_insert_mode"`
@@ -85,11 +82,6 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	ids := []uint{}
-	if req.EnabledProviderIDs != nil {
-		ids = *req.EnabledProviderIDs
-	}
-
 	ruleInsertMode := req.RuleInsertMode
 	if ruleInsertMode == "" {
 		ruleInsertMode = string(model.RuleInsertPrepend)
@@ -100,7 +92,6 @@ func CreateSubscription(c *gin.Context) {
 		Name:               req.Name,
 		Token:              token,
 		TokenExpiredAt:     req.TokenExpiredAt,
-		EnabledProviderIDs: domsub.EnabledProviderIDsToStore(ids),
 		CustomConfigID:     req.CustomConfigID,
 		ConfigTemplateID:   req.ConfigTemplateID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),
@@ -169,7 +160,6 @@ func UpdateSubscription(c *gin.Context) {
 	}
 
 	sub.Name = req.Name
-	sub.EnabledProviderIDs = domsub.PatchEnabledProviderIDs(sub.EnabledProviderIDs, req.EnabledProviderIDs)
 	sub.CustomConfigID = req.CustomConfigID
 	sub.ConfigTemplateID = req.ConfigTemplateID
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
@@ -360,12 +350,13 @@ func GetSubscriptionComponents(c *gin.Context) {
 		return
 	}
 
-	// 节点源
-	var providerIDs []uint
-	_ = json.Unmarshal([]byte(sub.EnabledProviderIDs), &providerIDs)
+	// 节点源：从 CustomConfig 的 use: 字段推导
 	var providers []model.Provider
-	if len(providerIDs) > 0 {
-		repository.DB.Where("id IN ?", providerIDs).Find(&providers)
+	if sub.CustomConfig != nil {
+		referencedNames := extractProviderNamesFromGroups(sub.CustomConfig.ProxyGroups)
+		if len(referencedNames) > 0 {
+			repository.DB.Where("name IN ? AND user_id = ?", referencedNames, userID).Find(&providers)
+		}
 	}
 	if providers == nil {
 		providers = []model.Provider{}
@@ -423,6 +414,39 @@ func GetSubscriptionComponents(c *gin.Context) {
 		RuleSets:     inferredRuleSets,
 		Template:     sub.ConfigTemplate,
 	})
+}
+
+// extractProviderNamesFromGroups 从代理组的 use: 字段中提取被引用的 Provider 名（去重）
+func extractProviderNamesFromGroups(groups []map[string]interface{}) []string {
+	seen := make(map[string]struct{})
+	names := make([]string, 0)
+	for _, g := range groups {
+		use, ok := g["use"]
+		if !ok {
+			continue
+		}
+		switch v := use.(type) {
+		case []interface{}:
+			for _, item := range v {
+				if name, ok := item.(string); ok && name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		case []string:
+			for _, name := range v {
+				if name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		}
+	}
+	return names
 }
 
 // extractRuleSetNames 从规则列表中提取 RULE-SET 引用的规则集名称

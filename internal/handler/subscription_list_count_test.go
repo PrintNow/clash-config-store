@@ -30,7 +30,7 @@ func TestListSubscriptions_accessLogCountAggregate(t *testing.T) {
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatal(err)
 	}
-	sub := model.Subscription{UserID: u.ID, Name: "s", Token: "tok1", EnabledProviderIDs: "[]"}
+	sub := model.Subscription{UserID: u.ID, Name: "s", Token: "tok1"}
 	if err := db.Create(&sub).Error; err != nil {
 		t.Fatal(err)
 	}

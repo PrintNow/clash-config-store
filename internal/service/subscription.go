@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -36,15 +35,13 @@ func GenerateYAML(token string, clientIP string) ([]byte, uint, bool, string, er
 		return nil, sub.ID, false, denyReason, nil
 	}
 
-	// 解析启用的 Provider IDs
-	var providerIDs []uint
-	if sub.EnabledProviderIDs != "" {
-		_ = json.Unmarshal([]byte(sub.EnabledProviderIDs), &providerIDs)
-	}
-
+	// 从 CustomConfig 的代理组 use: 字段推导所需 Provider，按名字查询
 	var providers []model.Provider
-	if len(providerIDs) > 0 {
-		repository.DB.Where("id IN ?", providerIDs).Find(&providers)
+	if sub.CustomConfig != nil {
+		referencedNames := extractProviderNamesFromGroups(sub.CustomConfig.ProxyGroups)
+		if len(referencedNames) > 0 {
+			repository.DB.Where("name IN ? AND user_id = ?", referencedNames, sub.UserID).Find(&providers)
+		}
 	}
 
 	// 收集 provider 代理节点，同时记录每个 provider 的节点名列表（供 use: 展开）
@@ -149,10 +146,17 @@ func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hos
 				return nil, fmt.Errorf("规则集名称 %q 重复", rp.Name)
 			}
 			names[rp.Name] = struct{}{}
+			rpURL := rp.URL
+			if rp.ServerCacheEnabled && rp.CacheToken != "" {
+				rpURL = util.RuleProviderCacheURL(rp.CacheToken)
+				if IsRuleProviderCacheStale(&rp) {
+					AsyncFetchAndCacheRuleProvider(rp.ID)
+				}
+			}
 			inputs = append(inputs, util.RuleProviderInput{
 				Name:     rp.Name,
 				Type:     rp.Type,
-				URL:      rp.URL,
+				URL:      rpURL,
 				Behavior: rp.Behavior,
 				Format:   rp.Format,
 				Interval: rp.Interval,
@@ -187,6 +191,39 @@ func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hos
 	}
 
 	return inputs, nil
+}
+
+// extractProviderNamesFromGroups 从代理组的 use: 字段中提取被引用的 Provider 名（去重）
+func extractProviderNamesFromGroups(groups []map[string]interface{}) []string {
+	seen := make(map[string]struct{})
+	names := make([]string, 0)
+	for _, g := range groups {
+		use, ok := g["use"]
+		if !ok {
+			continue
+		}
+		switch v := use.(type) {
+		case []interface{}:
+			for _, item := range v {
+				if name, ok := item.(string); ok && name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		case []string:
+			for _, name := range v {
+				if name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		}
+	}
+	return names
 }
 
 // checkAccess 根据访问限制规则判断客户端 IP 是否允许访问
