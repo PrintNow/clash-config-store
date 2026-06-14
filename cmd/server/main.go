@@ -63,6 +63,7 @@ func main() {
 	// 公开路由：订阅下发，无需认证
 	r.GET("/sub/:token", handler.HandleSub)
 	r.GET("/ruleset/:token/:name", handler.HandleRuleSet)
+	r.GET("/rule-cache/:token", handler.HandleRuleProviderCache)
 
 	api := r.Group("/api")
 	{

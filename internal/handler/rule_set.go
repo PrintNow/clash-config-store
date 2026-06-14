@@ -12,6 +12,7 @@ import (
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository"
+	"clash-config-store/internal/service"
 	"clash-config-store/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -26,11 +27,13 @@ type UnifiedRuleSet struct {
 	SourceType string `json:"source_type"` // "external" | "hosted"
 	Behavior   string `json:"behavior"`
 	Format     string `json:"format"`
+	RuleCount  int    `json:"rule_count"`
 	// external 字段
-	URL       string `json:"url,omitempty"`
-	Interval  int    `json:"interval,omitempty"`
-	IsPreset  bool   `json:"is_preset,omitempty"`
-	PresetTag string `json:"preset_tag,omitempty"`
+	URL                string `json:"url,omitempty"`
+	Interval           int    `json:"interval,omitempty"`
+	IsPreset           bool   `json:"is_preset,omitempty"`
+	PresetTag          string `json:"preset_tag,omitempty"`
+	ServerCacheEnabled bool   `json:"server_cache_enabled,omitempty"`
 	// hosted 字段
 	Content string `json:"content,omitempty"`
 	Token   string `json:"token,omitempty"`
@@ -118,8 +121,9 @@ type ruleSetRequest struct {
 	Behavior   string `json:"behavior"`
 	Format     string `json:"format"`
 	// external 专有
-	URL      string `json:"url"`
-	Interval int    `json:"interval"`
+	URL                string `json:"url"`
+	Interval           int    `json:"interval"`
+	ServerCacheEnabled bool   `json:"server_cache_enabled"`
 	// hosted 专有
 	Content string `json:"content"`
 }
@@ -141,18 +145,30 @@ func CreateRuleSet(c *gin.Context) {
 		}
 		uid := userID
 		rp := &model.RuleProvider{
-			UserID:   &uid,
-			Name:     req.Name,
-			Type:     "http",
-			URL:      req.URL,
-			Behavior: defaultBehavior(req.Behavior),
-			Format:   defaultFormat(req.Format),
-			Interval: defaultInterval(req.Interval),
-			IsPreset: false,
+			UserID:             &uid,
+			Name:               req.Name,
+			Type:               "http",
+			URL:                req.URL,
+			Behavior:           defaultBehavior(req.Behavior),
+			Format:             defaultFormat(req.Format),
+			Interval:           defaultInterval(req.Interval),
+			IsPreset:           false,
+			ServerCacheEnabled: req.ServerCacheEnabled,
+		}
+		if req.ServerCacheEnabled {
+			cacheToken, err := util.GenerateSubscriptionToken()
+			if err != nil {
+				Fail(c, http.StatusInternalServerError, "生成 cache token 失败")
+				return
+			}
+			rp.CacheToken = cacheToken
 		}
 		if err := repository.DB.Create(rp).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "创建失败")
 			return
+		}
+		if req.ServerCacheEnabled {
+			service.AsyncFetchAndCacheRuleProvider(rp.ID)
 		}
 		OK(c, ruleProviderToUnified(rp))
 
@@ -208,14 +224,27 @@ func UpdateRuleSet(c *gin.Context) {
 			Fail(c, http.StatusBadRequest, err.Error())
 			return
 		}
+		justEnabled := req.ServerCacheEnabled && !rp.ServerCacheEnabled
 		rp.Name = req.Name
 		rp.URL = req.URL
 		rp.Behavior = defaultBehavior(req.Behavior)
 		rp.Format = defaultFormat(req.Format)
 		rp.Interval = defaultInterval(req.Interval)
+		rp.ServerCacheEnabled = req.ServerCacheEnabled
+		if req.ServerCacheEnabled && rp.CacheToken == "" {
+			cacheToken, err := util.GenerateSubscriptionToken()
+			if err != nil {
+				Fail(c, http.StatusInternalServerError, "生成 cache token 失败")
+				return
+			}
+			rp.CacheToken = cacheToken
+		}
 		if err := repository.DB.Save(&rp).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "更新失败")
 			return
+		}
+		if justEnabled {
+			service.AsyncFetchAndCacheRuleProvider(rp.ID)
 		}
 		OK(c, ruleProviderToUnified(&rp))
 
@@ -235,6 +264,7 @@ func UpdateRuleSet(c *gin.Context) {
 		hrs.Format = defaultFormat(req.Format)
 		hrs.Content = req.Content
 		hrs.ContentSHA256 = hex.EncodeToString(sum[:])
+		hrs.RuleCount = util.CountRules(req.Content, defaultFormat(req.Format))
 		if err := repository.DB.Save(&hrs).Error; err != nil {
 			Fail(c, http.StatusInternalServerError, "更新失败")
 			return
@@ -318,17 +348,19 @@ func ResetHostedRuleSetTokens(c *gin.Context) {
 
 func ruleProviderToUnified(rp *model.RuleProvider) UnifiedRuleSet {
 	return UnifiedRuleSet{
-		ID:         rp.ID,
-		Name:       rp.Name,
-		SourceType: "external",
-		Behavior:   rp.Behavior,
-		Format:     rp.Format,
-		URL:        rp.URL,
-		Interval:   rp.Interval,
-		IsPreset:   rp.IsPreset,
-		PresetTag:  rp.PresetTag,
-		CreatedAt:  rp.CreatedAt.Format(timeLayout),
-		UpdatedAt:  rp.UpdatedAt.Format(timeLayout),
+		ID:                 rp.ID,
+		Name:               rp.Name,
+		SourceType:         "external",
+		Behavior:           rp.Behavior,
+		Format:             rp.Format,
+		RuleCount:          rp.RuleCount,
+		URL:                rp.URL,
+		Interval:           rp.Interval,
+		IsPreset:           rp.IsPreset,
+		PresetTag:          rp.PresetTag,
+		ServerCacheEnabled: rp.ServerCacheEnabled,
+		CreatedAt:          rp.CreatedAt.Format(timeLayout),
+		UpdatedAt:          rp.UpdatedAt.Format(timeLayout),
 	}
 }
 
@@ -339,6 +371,7 @@ func hostedRuleSetToUnified(hrs *model.HostedRuleSet) UnifiedRuleSet {
 		SourceType: "hosted",
 		Behavior:   hrs.Behavior,
 		Format:     hrs.Format,
+		RuleCount:  hrs.RuleCount,
 		Token:      hrs.Token,
 		HrsURL:     util.RuleSetPublicURL(hrs.Token, hrs.Name),
 		CreatedAt:  hrs.CreatedAt.Format(timeLayout),
@@ -348,14 +381,16 @@ func hostedRuleSetToUnified(hrs *model.HostedRuleSet) UnifiedRuleSet {
 
 func buildHostedRuleSet(userID uint, token, name, content, behavior, format string) *model.HostedRuleSet {
 	sum := sha256.Sum256([]byte(content))
+	resolvedFormat := defaultFormat(format)
 	return &model.HostedRuleSet{
 		UserID:        userID,
 		Name:          strings.TrimSpace(name),
 		Behavior:      defaultBehavior(behavior),
-		Format:        defaultFormat(format),
+		Format:        resolvedFormat,
 		Content:       content,
 		ContentSHA256: hex.EncodeToString(sum[:]),
 		Token:         token,
+		RuleCount:     util.CountRules(content, resolvedFormat),
 	}
 }
 
