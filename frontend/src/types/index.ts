@@ -78,11 +78,13 @@ export interface RuleSet {
   source_type: 'external' | 'hosted'
   behavior: 'domain' | 'ipcidr' | 'classical'
   format: 'yaml' | 'text' | 'mrs'
+  rule_count?: number
   // external 字段
   url?: string
   interval?: number
   is_preset?: boolean
   preset_tag?: string
+  server_cache_enabled?: boolean
   // hosted 字段
   token?: string
   hrs_url?: string
@@ -130,7 +132,6 @@ export interface Subscription {
   /** 列表接口聚合的访问日志条数 */
   access_log_count?: number
   token_expired_at?: string
-  enabled_provider_ids: number[]
   custom_config_id?: number
   config_template_id?: number
   rule_insert_mode: 'prepend' | 'append' | 'replace'
