@@ -159,6 +159,7 @@ export interface AccessLog {
   country: string
   country_code: string
   city: string
+  user_agent?: string
   allowed: boolean
   deny_reason?: string
   created_at: string

@@ -569,29 +569,38 @@ export function Dashboard() {
                       log.allowed ? 'bg-green-500' : 'bg-destructive'
                     }`}
                   />
-                  {/* 订阅名 + IP */}
-                  <span className="shrink-0 w-28 min-w-0">
-                    <span className="block truncate text-xs font-medium" title={log.subscription_name}>{log.subscription_name}</span>
-                    <span className="block truncate font-mono text-[10px] text-muted-foreground">{log.ip}</span>
-                  </span>
-                  {/* 地理位置 + 拒绝原因 */}
-                  <span className="hidden sm:inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{getLogLocation(log)}</span>
-                    {log.deny_reason && (
-                      <>
-                        <span className="text-muted-foreground/60">/</span>
-                        <span className="truncate text-destructive">{log.deny_reason}</span>
-                      </>
+                  {/* 主行：订阅名+IP / 地理+原因 / 时间 */}
+                  <span className="min-w-0 flex-1 flex items-start gap-2">
+                    {/* 订阅名 + IP */}
+                    <span className="shrink-0 w-28">
+                      <span className="block truncate text-xs font-medium" title={log.subscription_name}>{log.subscription_name}</span>
+                      <span className="block truncate font-mono text-[10px] text-muted-foreground">{log.ip}</span>
+                    </span>
+                    {/* 地理位置 + 拒绝原因 + UA */}
+                    <span className="hidden sm:block min-w-0 flex-1">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{getLogLocation(log)}</span>
+                        {log.deny_reason && (
+                          <>
+                            <span className="text-muted-foreground/60">/</span>
+                            <span className="truncate text-destructive">{log.deny_reason}</span>
+                          </>
+                        )}
+                      </span>
+                      {log.user_agent && (
+                        <span className="block truncate text-[10px] text-muted-foreground/60 mt-0.5" title={log.user_agent}>
+                          {log.user_agent}
+                        </span>
+                      )}
+                    </span>
+                    {/* 移动端：拒绝原因简要 */}
+                    {log.deny_reason ? (
+                      <span className="sm:hidden flex-1 truncate text-xs text-destructive">{log.deny_reason}</span>
+                    ) : (
+                      <span className="sm:hidden flex-1" />
                     )}
                   </span>
-                  {/* 移动端：拒绝原因简要 */}
-                  {log.deny_reason && (
-                    <span className="sm:hidden flex-1 truncate text-xs text-destructive">{log.deny_reason}</span>
-                  )}
-                  {!log.deny_reason && (
-                    <span className="sm:hidden flex-1" />
-                  )}
                   {/* 时间：完整时间 + 相对时间 */}
                   <time className="shrink-0 text-right" dateTime={log.created_at}>
                     <span className="block text-xs text-foreground/80 whitespace-nowrap font-mono">{formatDateTimeFull(log.created_at)}</span>

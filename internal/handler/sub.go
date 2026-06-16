@@ -33,6 +33,7 @@ func HandleSub(c *gin.Context) {
 			Country:        geoInfo.Country,
 			CountryCode:    geoInfo.CountryCode,
 			City:           geoInfo.City,
+			UserAgent:      c.GetHeader("User-Agent"),
 			Allowed:        allowed,
 			DenyReason:     denyReason,
 		}

@@ -10,6 +10,7 @@ type AccessLog struct {
 	Country        string    `json:"country"`
 	CountryCode    string    `json:"country_code"`
 	City           string    `json:"city"`
+	UserAgent      string    `gorm:"type:text" json:"user_agent,omitempty"`
 	Allowed        bool      `json:"allowed"`
 	DenyReason     string    `json:"deny_reason,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
