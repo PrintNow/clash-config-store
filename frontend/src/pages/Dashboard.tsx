@@ -21,6 +21,7 @@ import {
   MapPin,
   Server,
   Wifi,
+  HardDrive,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
 import { providersApi } from '@/api/providers'
@@ -167,7 +168,7 @@ export function Dashboard() {
   const recentLogs = stats?.recent_access_logs?.slice(0, 10) ?? []
   const recentAllowedCount = recentLogs.filter((log) => log.allowed).length
   const recentDeniedCount = recentLogs.length - recentAllowedCount
-  const staleProviderCount = stats?.providers?.filter((provider) => provider.cache_stale || provider.fetch_error).length ?? 0
+  const staleProviderCount = stats?.providers?.filter((provider) => provider.type !== 'inline' && (provider.cache_stale || provider.fetch_error)).length ?? 0
   const expiringSubscriptionCount = stats?.subscriptions?.filter((sub) => sub.token_expired).length ?? 0
 
   const renderCacheBadge = (provider: ProviderStatus) => {
@@ -362,35 +363,49 @@ export function Dashboard() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          provider.cache_stale || provider.fetch_error ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}
-                      />
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
                       <span className="font-medium truncate text-sm">{provider.name}</span>
-                      {renderCacheBadge(provider)}
+                      {provider.type === 'inline' ? (
+                        <Badge variant="secondary" className="text-xs gap-1 shrink-0">
+                          <HardDrive className="h-2.5 w-2.5" />
+                          {t('dashboard.inlineProvider')}
+                        </Badge>
+                      ) : (
+                        renderCacheBadge(provider)
+                      )}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0 shrink-0"
-                      disabled={refreshingIds.has(provider.id)}
-                      onClick={() => handleRefreshProvider(provider.id)}
-                    >
-                      <RefreshCw
-                        className={`h-3 w-3 ${refreshingIds.has(provider.id) ? 'animate-spin' : ''}`}
-                      />
-                    </Button>
+                    {provider.type !== 'inline' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0"
+                        disabled={refreshingIds.has(provider.id)}
+                        onClick={() => handleRefreshProvider(provider.id)}
+                      >
+                        <RefreshCw
+                          className={`h-3 w-3 ${refreshingIds.has(provider.id) ? 'animate-spin' : ''}`}
+                        />
+                      </Button>
+                    )}
                   </div>
-                  <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3 shrink-0" />
-                    <span className="truncate">
-                      {t('dashboard.lastFetched')}：
-                      {provider.last_fetched_at
-                        ? new Date(provider.last_fetched_at).toLocaleString()
-                        : t('dashboard.neverFetched')}
-                    </span>
-                  </div>
+                  {provider.type === 'inline' ? (
+                    <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        {t('dashboard.lastFetched')}：{new Date(provider.updated_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        {t('dashboard.lastFetched')}：
+                        {provider.last_fetched_at
+                          ? new Date(provider.last_fetched_at).toLocaleString()
+                          : t('dashboard.neverFetched')}
+                      </span>
+                    </div>
+                  )}
                   {provider.fetch_error && (
                     <div className="mt-1 flex items-start gap-1 text-xs text-destructive">
                       <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
@@ -483,6 +498,7 @@ export function Dashboard() {
       </div>
 
       {/* 最近访问日志 */}
+      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/20 py-3 px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -493,28 +509,26 @@ export function Dashboard() {
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">{t('dashboard.recentLogsDescription')}</CardDescription>
             </div>
-            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              <div className="flex gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="success" className="cursor-help gap-1 text-xs">
-                      <CheckCircle2 className="h-3 w-3" />
-                      {t('dashboard.allowedCount', { count: recentAllowedCount })}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('dashboard.allowedCountTooltip')}</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="cursor-help gap-1 text-xs">
-                      <XCircle className="h-3 w-3" />
-                      {t('dashboard.deniedCount', { count: recentDeniedCount })}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('dashboard.deniedCountTooltip')}</TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
+            <div className="flex gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="success" className="cursor-help gap-1 text-xs">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {t('dashboard.allowedCount', { count: recentAllowedCount })}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>{t('dashboard.allowedCountTooltip')}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="cursor-help gap-1 text-xs">
+                    <XCircle className="h-3 w-3" />
+                    {t('dashboard.deniedCount', { count: recentDeniedCount })}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>{t('dashboard.deniedCountTooltip')}</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-3">
@@ -546,9 +560,12 @@ export function Dashboard() {
                       log.allowed ? 'bg-green-500' : 'bg-destructive'
                     }`}
                   />
-                  {/* IP：移动端显示，桌面端固定宽度 */}
-                  <span className="w-24 shrink-0 font-mono text-xs font-semibold truncate">{log.ip}</span>
-                  {/* 地理位置：移动端隐藏 */}
+                  {/* 订阅名 + IP */}
+                  <span className="shrink-0 w-28 min-w-0">
+                    <span className="block truncate text-xs font-medium" title={log.subscription_name}>{log.subscription_name}</span>
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground">{log.ip}</span>
+                  </span>
+                  {/* 地理位置 + 拒绝原因 */}
                   <span className="hidden sm:inline-flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span className="truncate">{getLogLocation(log)}</span>
@@ -566,15 +583,24 @@ export function Dashboard() {
                   {!log.deny_reason && (
                     <span className="sm:hidden flex-1" />
                   )}
-                  <time className="shrink-0 text-xs text-muted-foreground whitespace-nowrap" dateTime={log.created_at}>
-                    {formatLogTime(log.created_at)}
-                  </time>
+                  {/* 时间：相对时间 + tooltip 显示完整时间 */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <time className="shrink-0 text-xs text-muted-foreground whitespace-nowrap cursor-default" dateTime={log.created_at}>
+                        {formatLogTime(log.created_at)}
+                      </time>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      {new Date(log.created_at).toLocaleString()}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+      </TooltipProvider>
     </div>
   )
 }

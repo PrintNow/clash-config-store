@@ -154,6 +154,7 @@ export interface AccessRestriction {
 export interface AccessLog {
   id: number
   subscription_id: number
+  subscription_name: string
   ip: string
   country: string
   country_code: string
@@ -167,7 +168,9 @@ export interface AccessLog {
 export interface ProviderStatus {
   id: number
   name: string
+  type: 'http' | 'inline'
   url: string
+  updated_at: string
   last_fetched_at?: string
   fetch_error: string
   cache_stale: boolean

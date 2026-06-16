@@ -13,12 +13,14 @@ import (
 
 // ProviderStatus Provider 缓存状态摘要
 type ProviderStatus struct {
-	ID            uint       `json:"id"`
-	Name          string     `json:"name"`
-	URL           string     `json:"url"`
-	LastFetchedAt *time.Time `json:"last_fetched_at"`
-	FetchError    string     `json:"fetch_error"`
-	CacheStale    bool       `json:"cache_stale"`
+	ID            uint               `json:"id"`
+	Name          string             `json:"name"`
+	Type          model.ProviderType `json:"type"`
+	URL           string             `json:"url"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	LastFetchedAt *time.Time         `json:"last_fetched_at"`
+	FetchError    string             `json:"fetch_error"`
+	CacheStale    bool               `json:"cache_stale"`
 }
 
 // SubscriptionHealth 订阅健康摘要
@@ -33,6 +35,12 @@ type SubscriptionHealth struct {
 	HasConfigTemplate bool       `json:"has_config_template"`
 }
 
+// AccessLogEntry 访问日志条目（含订阅名）
+type AccessLogEntry struct {
+	model.AccessLog
+	SubscriptionName string `json:"subscription_name"`
+}
+
 // DashboardStats 仪表板统计数据（含详细状态）
 type DashboardStats struct {
 	TotalProviders       int64                `json:"total_providers"`
@@ -42,7 +50,7 @@ type DashboardStats struct {
 	TotalRuleProviders   int64                `json:"total_rule_providers"`
 	Providers            []ProviderStatus     `json:"providers"`
 	Subscriptions        []SubscriptionHealth `json:"subscriptions"`
-	RecentAccessLogs     []model.AccessLog    `json:"recent_access_logs"`
+	RecentAccessLogs     []AccessLogEntry     `json:"recent_access_logs"`
 }
 
 // GetDashboardStats 获取当前用户的仪表板统计数据
@@ -66,7 +74,9 @@ func GetDashboardStats(c *gin.Context) {
 		stats.Providers = append(stats.Providers, ProviderStatus{
 			ID:            p.ID,
 			Name:          p.Name,
+			Type:          p.Type,
 			URL:           p.URL,
+			UpdatedAt:     p.UpdatedAt,
 			LastFetchedAt: p.LastFetchedAt,
 			FetchError:    p.FetchError,
 			CacheStale:    service.IsCacheStale(&p),
@@ -100,18 +110,26 @@ func GetDashboardStats(c *gin.Context) {
 		stats.Subscriptions = append(stats.Subscriptions, h)
 	}
 
-	// 最近访问日志（跨所有订阅）
+	// 最近访问日志（跨所有订阅，附带订阅名）
+	subNameMap := make(map[uint]string, len(subs))
 	var subIDs []uint
 	for _, s := range subs {
 		subIDs = append(subIDs, s.ID)
+		subNameMap[s.ID] = s.Name
 	}
+	stats.RecentAccessLogs = []AccessLogEntry{}
 	if len(subIDs) > 0 {
+		var logs []model.AccessLog
 		repository.DB.Where("subscription_id IN ?", subIDs).
 			Order("id DESC").
 			Limit(20).
-			Find(&stats.RecentAccessLogs)
-	} else {
-		stats.RecentAccessLogs = []model.AccessLog{}
+			Find(&logs)
+		for _, l := range logs {
+			stats.RecentAccessLogs = append(stats.RecentAccessLogs, AccessLogEntry{
+				AccessLog:        l,
+				SubscriptionName: subNameMap[l.SubscriptionID],
+			})
+		}
 	}
 
 	OK(c, &stats)
