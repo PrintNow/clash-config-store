@@ -356,15 +356,18 @@ export function Dashboard() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2 p-3">
+          <CardContent className="p-3">
             {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
             ) : !stats?.providers?.length ? (
               <p className="text-center text-sm text-muted-foreground py-4">{t('common.noData')}</p>
             ) : (
-              stats.providers.map((provider: ProviderStatus) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {stats.providers.map((provider: ProviderStatus) => (
                 <div
                   key={provider.id}
                   className="rounded-lg border bg-background/70 p-2.5 transition-colors hover:bg-muted/30"
@@ -421,7 +424,8 @@ export function Dashboard() {
                     </div>
                   )}
                 </div>
-              ))
+              ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -444,62 +448,66 @@ export function Dashboard() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2 p-3">
+          <CardContent className="p-3">
             {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
             ) : !stats?.subscriptions?.length ? (
               <p className="text-center text-sm text-muted-foreground py-4">{t('common.noData')}</p>
             ) : (
-              stats.subscriptions.map((sub: SubscriptionHealth) => (
-                <div
-                  key={sub.id}
-                  className="rounded-lg border bg-background/70 p-2.5 transition-colors hover:bg-muted/30"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          sub.token_expired ? 'bg-destructive' : 'bg-green-500'
-                        }`}
-                      />
-                      <span className="font-medium truncate text-sm">{sub.name}</span>
-                      {renderTokenBadge(sub)}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {stats.subscriptions.map((sub: SubscriptionHealth) => (
+                  <div
+                    key={sub.id}
+                    className="rounded-lg border bg-background/70 p-2.5 transition-colors hover:bg-muted/30"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                            sub.token_expired ? 'bg-destructive' : 'bg-green-500'
+                          }`}
+                        />
+                        <span className="font-medium truncate text-sm">{sub.name}</span>
+                        {renderTokenBadge(sub)}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0"
+                        onClick={() => handleCopyLink(sub)}
+                      >
+                        {copiedId === sub.id ? (
+                          <CheckCircle2 className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0 shrink-0"
-                      onClick={() => handleCopyLink(sub)}
-                    >
-                      {copiedId === sub.id ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-500" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
-                    </Button>
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                      <Badge
+                        variant={sub.has_custom_config ? 'secondary' : 'outline'}
+                        className="text-xs h-4 px-1"
+                      >
+                        {sub.has_custom_config
+                          ? t('dashboard.hasCustomConfig')
+                          : t('dashboard.noCustomConfig')}
+                      </Badge>
+                      <Badge
+                        variant={sub.has_config_template ? 'secondary' : 'outline'}
+                        className="text-xs h-4 px-1"
+                      >
+                        {sub.has_config_template
+                          ? t('dashboard.hasConfigTemplate')
+                          : t('dashboard.noConfigTemplate')}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                    <Badge
-                      variant={sub.has_custom_config ? 'secondary' : 'outline'}
-                      className="text-xs h-4 px-1"
-                    >
-                      {sub.has_custom_config
-                        ? t('dashboard.hasCustomConfig')
-                        : t('dashboard.noCustomConfig')}
-                    </Badge>
-                    <Badge
-                      variant={sub.has_config_template ? 'secondary' : 'outline'}
-                      className="text-xs h-4 px-1"
-                    >
-                      {sub.has_config_template
-                        ? t('dashboard.hasConfigTemplate')
-                        : t('dashboard.noConfigTemplate')}
-                    </Badge>
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

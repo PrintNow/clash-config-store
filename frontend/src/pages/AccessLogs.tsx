@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MapPin, Clock } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MapPin, Monitor } from 'lucide-react'
 import { subscriptionsApi } from '@/api/subscriptions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import {
   Table,
   TableBody,
@@ -17,7 +18,13 @@ import {
 } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+function formatDateTimeFull(dateStr: string) {
+  const d = new Date(dateStr)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 
 export function AccessLogs() {
   const { id } = useParams<{ id: string }>()
@@ -25,14 +32,20 @@ export function AccessLogs() {
   const { t } = useTranslation()
   const subId = Number(id)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['subscriptions', subId, 'access-logs', page],
-    queryFn: () => subscriptionsApi.getAccessLogs(subId, { page, page_size: PAGE_SIZE }),
+    queryKey: ['subscriptions', subId, 'access-logs', page, pageSize],
+    queryFn: () => subscriptionsApi.getAccessLogs(subId, { page, page_size: pageSize }),
     enabled: !!subId,
   })
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0
+  const totalPages = data ? Math.ceil(data.total / pageSize) : 0
+
+  const handlePageSizeChange = (value: number) => {
+    setPageSize(value)
+    setPage(1)
+  }
 
   return (
     <div className="space-y-4">
@@ -48,60 +61,74 @@ export function AccessLogs() {
         <h1 className="text-xl font-bold">{t('accessLogs.title')}</h1>
         {data && (
           <span className="text-sm text-muted-foreground">
-            共 {data.total} 条
+            {t('accessLogs.totalCount', { count: data.total })}
           </span>
         )}
       </div>
 
       <Card>
         <CardHeader className="py-3 px-4 border-b">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {t('common.page', { page })}
-            {totalPages > 0 && ` / ${totalPages}`}
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {t('common.page', { page })}
+              {totalPages > 0 && ` / ${totalPages}`}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t('accessLogs.perPage')}</span>
+              <NativeSelect
+                size="sm"
+                className="w-20"
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((s) => (
+                  <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {/* 桌面端：完整表格 */}
-          <div className="hidden md:block">
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-36">{t('accessLogs.time')}</TableHead>
+                  <TableHead className="w-40">{t('accessLogs.time')}</TableHead>
                   <TableHead className="w-32">{t('accessLogs.ip')}</TableHead>
-                  <TableHead className="w-16">{t('accessLogs.country')}</TableHead>
-                  <TableHead>{t('accessLogs.city')}</TableHead>
+                  <TableHead className="w-20">{t('accessLogs.country')}</TableHead>
+                  <TableHead className="w-24">{t('accessLogs.city')}</TableHead>
                   <TableHead className="w-20">{t('accessLogs.allowed')}</TableHead>
+                  <TableHead>{t('accessLogs.userAgent')}</TableHead>
                   <TableHead>{t('accessLogs.denyReason')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  Array.from({ length: 10 }).map((_, i) => (
+                  Array.from({ length: pageSize > 20 ? 10 : 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : !data?.items?.length ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       {t('accessLogs.noLogs')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.items.map((log) => (
                     <TableRow key={log.id} className={log.allowed ? '' : 'bg-destructive/5'}>
-                      <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-                        {new Date(log.created_at).toLocaleString()}
+                      <TableCell className="text-xs whitespace-nowrap font-mono text-muted-foreground">
+                        {formatDateTimeFull(log.created_at)}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{log.ip}</TableCell>
                       <TableCell className="text-xs">
                         {log.country_code ? (
                           <span title={log.country}>{log.country_code}</span>
-                        ) : (
-                          '-'
-                        )}
+                        ) : '-'}
                       </TableCell>
                       <TableCell className="text-xs">{log.city || '-'}</TableCell>
                       <TableCell>
@@ -117,6 +144,11 @@ export function AccessLogs() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-xs">
+                        <span className="block truncate" title={log.user_agent}>
+                          {log.user_agent || '-'}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {log.deny_reason || '-'}
                       </TableCell>
@@ -127,7 +159,7 @@ export function AccessLogs() {
             </Table>
           </div>
 
-          {/* 移动端：卡片列表，只显示关键信息 */}
+          {/* 移动端：卡片列表 */}
           <div className="md:hidden divide-y">
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
@@ -144,42 +176,35 @@ export function AccessLogs() {
               data.items.map((log) => (
                 <div
                   key={log.id}
-                  className={`flex items-center gap-3 px-4 py-2.5 ${log.allowed ? '' : 'bg-destructive/5'}`}
+                  className={`px-4 py-3 space-y-1 ${log.allowed ? '' : 'bg-destructive/5'}`}
                 >
-                  {/* 状态指示点 */}
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${log.allowed ? 'bg-green-500' : 'bg-destructive'}`}
-                  />
-                  {/* IP + 位置 */}
-                  <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${log.allowed ? 'bg-green-500' : 'bg-destructive'}`} />
                       <span className="font-mono text-xs font-medium">{log.ip}</span>
                       {log.country_code && (
                         <span className="text-xs text-muted-foreground">{log.country_code}</span>
                       )}
                     </div>
-                    {log.deny_reason && (
-                      <p className="text-xs text-destructive truncate mt-0.5">{log.deny_reason}</p>
-                    )}
-                    {!log.deny_reason && log.city && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <MapPin className="h-3 w-3" />
-                        {log.city}
-                      </p>
-                    )}
+                    <time className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDateTimeFull(log.created_at)}
+                    </time>
                   </div>
-                  {/* 时间 */}
-                  <div className="shrink-0 text-right">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <time dateTime={log.created_at}>
-                        {new Date(log.created_at).toLocaleTimeString()}
-                      </time>
+                  {log.city && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground pl-4">
+                      <MapPin className="h-3 w-3" />
+                      {log.city}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(log.created_at).toLocaleDateString()}
+                  )}
+                  {log.user_agent && (
+                    <div className="flex items-start gap-1 text-xs text-muted-foreground/70 pl-4">
+                      <Monitor className="h-3 w-3 mt-0.5 shrink-0" />
+                      <span className="truncate">{log.user_agent}</span>
                     </div>
-                  </div>
+                  )}
+                  {log.deny_reason && (
+                    <p className="text-xs text-destructive truncate pl-4">{log.deny_reason}</p>
+                  )}
                 </div>
               ))
             )}
