@@ -8,6 +8,7 @@ import (
 	"clash-config-store/internal/config"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository/migrations"
+	"clash-config-store/internal/util"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
@@ -84,16 +85,19 @@ func SeedRuleProviders(db *gorm.DB) error {
 func loyalsoldierPresets() []*model.RuleProvider {
 	cdnBase := "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/"
 	mkRP := func(name, behavior string) *model.RuleProvider {
+		token, _ := util.GenerateSubscriptionToken()
 		return &model.RuleProvider{
-			UserID:    nil,
-			Name:      name,
-			Type:      "http",
-			URL:       cdnBase + name + ".txt",
-			Behavior:  behavior,
-			Format:    "text",
-			Interval:  86400,
-			IsPreset:  true,
-			PresetTag: "loyalsoldier",
+			UserID:             nil,
+			Name:               name,
+			Type:               "http",
+			URL:                cdnBase + name + ".txt",
+			Behavior:           behavior,
+			Format:             "text",
+			Interval:           86400,
+			IsPreset:           true,
+			PresetTag:          "loyalsoldier",
+			ServerCacheEnabled: true,
+			CacheToken:         token,
 		}
 	}
 	return []*model.RuleProvider{

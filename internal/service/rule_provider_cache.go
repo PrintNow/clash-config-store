@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -75,6 +76,49 @@ func AsyncFetchAndCacheRuleProvider(id uint) {
 	go func() {
 		_ = FetchAndCacheRuleProvider(id)
 	}()
+}
+
+// InitPresetRuleProviderCaches 启动时检查所有预设，对过期或从未缓存的触发异步刷新。
+func InitPresetRuleProviderCaches() {
+	var presets []model.RuleProvider
+	if err := repository.DB.Where("is_preset = ? AND cache_token != ''", true).Find(&presets).Error; err != nil {
+		slog.Warn("初始化预设缓存：查询失败", slog.String("err", err.Error()))
+		return
+	}
+	for _, rp := range presets {
+		if IsRuleProviderCacheStale(&rp) {
+			AsyncFetchAndCacheRuleProvider(rp.ID)
+		}
+	}
+}
+
+// StartPresetCacheRefresher 启动后台定时器，每隔 checkInterval 检查并刷新到期的预设缓存。
+func StartPresetCacheRefresher(ctx context.Context, checkInterval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(checkInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				refreshStalePresetCaches()
+			}
+		}
+	}()
+}
+
+func refreshStalePresetCaches() {
+	var presets []model.RuleProvider
+	if err := repository.DB.Where("is_preset = ? AND cache_token != ''", true).Find(&presets).Error; err != nil {
+		slog.Warn("定时刷新预设缓存：查询失败", slog.String("err", err.Error()))
+		return
+	}
+	for _, rp := range presets {
+		if IsRuleProviderCacheStale(&rp) {
+			AsyncFetchAndCacheRuleProvider(rp.ID)
+		}
+	}
 }
 
 func saveRuleProviderCacheError(rp *model.RuleProvider, errMsg string) error {

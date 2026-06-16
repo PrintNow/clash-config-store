@@ -132,6 +132,7 @@ func main() {
 			rs.PUT("/:id", handler.UpdateRuleSet)
 			rs.DELETE("/:id", handler.DeleteRuleSet)
 			rs.POST("/reset-hosted-tokens", handler.ResetHostedRuleSetTokens)
+			rs.PATCH("/:id/cache-mode", handler.UpdateRuleSetCacheMode)
 
 			// 订阅管理
 			sub := protected.Group("/subscriptions")
@@ -146,6 +147,16 @@ func main() {
 			sub.POST("/:id/restrictions", handler.CreateRestriction)
 			sub.DELETE("/:id/restrictions/:rid", handler.DeleteRestriction)
 			sub.GET("/:id/components", handler.GetSubscriptionComponents)
+
+			// 管理后台（需管理员权限）
+			admin := protected.Group("/admin", middleware.Admin())
+			admin.GET("/settings", handler.GetSystemSettings)
+			admin.PUT("/settings", handler.UpdateSystemSettings)
+			admin.GET("/users", handler.ListAdminUsers)
+			admin.POST("/users", handler.CreateAdminUser)
+			admin.GET("/users/:id", handler.GetAdminUser)
+			admin.PUT("/users/:id", handler.UpdateAdminUser)
+			admin.DELETE("/users/:id", handler.DeleteAdminUser)
 		}
 	}
 

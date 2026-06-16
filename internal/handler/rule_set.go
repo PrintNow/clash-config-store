@@ -276,6 +276,54 @@ func UpdateRuleSet(c *gin.Context) {
 	}
 }
 
+// UpdateRuleSetCacheMode PATCH /api/rule-sets/:id/cache-mode
+// 切换外部规则集（含内置预设）的拉取方式：服务器缓存 / 源站直接
+func UpdateRuleSetCacheMode(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+
+	var req struct {
+		ServerCacheEnabled bool `json:"server_cache_enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BindFail(c, err)
+		return
+	}
+
+	var rp model.RuleProvider
+	if err := repository.DB.Where("id = ? AND (user_id = ? OR is_preset = ?)", id, userID, true).First(&rp).Error; err != nil {
+		Fail(c, http.StatusNotFound, "规则集不存在或无权限")
+		return
+	}
+
+	updates := map[string]interface{}{
+		"server_cache_enabled": req.ServerCacheEnabled,
+	}
+	if req.ServerCacheEnabled && rp.CacheToken == "" {
+		cacheToken, err := util.GenerateSubscriptionToken()
+		if err != nil {
+			Fail(c, http.StatusInternalServerError, "生成 cache token 失败")
+			return
+		}
+		updates["cache_token"] = cacheToken
+	}
+
+	if err := repository.DB.Model(&rp).Updates(updates).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "更新失败")
+		return
+	}
+	// 刷新结构体以反映 updates
+	rp.ServerCacheEnabled = req.ServerCacheEnabled
+	if t, ok := updates["cache_token"]; ok {
+		rp.CacheToken = t.(string)
+	}
+	OK(c, ruleProviderToUnified(&rp))
+}
+
 // DeleteRuleSet DELETE /api/rule-sets/:id?source_type=external|hosted
 func DeleteRuleSet(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)

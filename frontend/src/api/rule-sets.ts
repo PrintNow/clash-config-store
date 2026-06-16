@@ -35,4 +35,8 @@ export const ruleSetsApi = {
   resetTokens: async (): Promise<void> => {
     await client.post('/rule-sets/reset-hosted-tokens')
   },
+  updateCacheMode: async (id: number, serverCacheEnabled: boolean): Promise<RuleSet> => {
+    const res = await client.patch<{ code: number; data: RuleSet }>(`/rule-sets/${id}/cache-mode`, { server_cache_enabled: serverCacheEnabled })
+    return res.data.data
+  },
 }

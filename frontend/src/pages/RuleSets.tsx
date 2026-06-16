@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Maximize2, Minimize2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Maximize2, Minimize2, Server, Globe, Check, Copy } from 'lucide-react'
 import { ruleSetsApi } from '@/api/rule-sets'
 import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -41,8 +47,56 @@ interface RuleSetFormData {
   format: string
   url: string
   interval: string
-  server_cache_enabled: boolean
   content: string
+}
+
+function CacheModeDropdown({ enabled, onSelect }: { enabled: boolean; onSelect: (v: boolean) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium transition-colors hover:opacity-80 focus:outline-none
+            ${enabled
+              ? 'bg-primary/10 text-primary border border-primary/20'
+              : 'bg-muted text-muted-foreground border border-border'}`}
+        >
+          {enabled
+            ? <><Server className="h-3 w-3" />服务器缓存</>
+            : <><Globe className="h-3 w-3" />源站直接</>}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuItem onClick={() => onSelect(true)} className="flex items-start gap-2 py-2">
+          <Server className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm">服务器缓存</span>
+              {enabled && <Check className="h-3 w-3 text-primary" />}
+            </div>
+            <p className="text-xs text-muted-foreground">从本服务拉取，可能有延迟</p>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSelect(false)} className="flex items-start gap-2 py-2">
+          <Globe className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm">源站直接</span>
+              {!enabled && <Check className="h-3 w-3 text-primary" />}
+            </div>
+            <p className="text-xs text-muted-foreground">Clash 客户端实时从源站获取</p>
+          </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function formatInterval(seconds?: number): string {
+  if (!seconds) return '—'
+  if (seconds >= 86400 && seconds % 86400 === 0) return `${seconds / 86400}天`
+  if (seconds >= 3600 && seconds % 3600 === 0) return `${seconds / 3600}小时`
+  if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60}分钟`
+  return `${seconds}秒`
 }
 
 const defaultForm: RuleSetFormData = {
@@ -52,7 +106,6 @@ const defaultForm: RuleSetFormData = {
   format: 'yaml',
   url: '',
   interval: '86400',
-  server_cache_enabled: false,
   content: '',
 }
 
@@ -98,6 +151,15 @@ export function RuleSets() {
     onError: () => toast.error(t('common.error')),
   })
 
+  const cacheMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      ruleSetsApi.updateCacheMode(id, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rule-sets'] })
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: ({ id, sourceType }: { id: number; sourceType: 'external' | 'hosted' }) =>
       ruleSetsApi.delete(id, sourceType),
@@ -108,6 +170,7 @@ export function RuleSets() {
     },
     onError: () => toast.error(t('common.error')),
   })
+
 
   const filteredRuleSets = ruleSets.filter((rs) => {
     if (activeTab === 'all') return true
@@ -132,7 +195,6 @@ export function RuleSets() {
       format: rs.format,
       url: rs.url ?? '',
       interval: String(rs.interval ?? 86400),
-      server_cache_enabled: rs.server_cache_enabled ?? false,
       content: '',
     })
     setFormErrors({})
@@ -165,7 +227,6 @@ export function RuleSets() {
       format: formData.format,
       url: formData.source_type === 'external' ? formData.url : undefined,
       interval: formData.source_type === 'external' ? Number(formData.interval) || 86400 : undefined,
-      server_cache_enabled: formData.source_type === 'external' ? formData.server_cache_enabled : undefined,
       content: formData.source_type === 'hosted' ? formData.content : undefined,
     }
     if (editingRuleSet) {
@@ -256,47 +317,105 @@ export function RuleSets() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('common.name')}</TableHead>
-                <TableHead>{t('common.type')}</TableHead>
-                <TableHead>Behavior</TableHead>
-                <TableHead>Format</TableHead>
-                <TableHead className="w-[80px] text-right">{t('ruleSets.ruleCount')}</TableHead>
-                <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
+                <TableHead className="w-[160px]">{t('common.name')}</TableHead>
+                <TableHead className="w-[80px]">{t('common.type')}</TableHead>
+                <TableHead>{t('ruleSets.urlColumn')}</TableHead>
+                <TableHead className="w-[80px]">Behavior</TableHead>
+                <TableHead className="w-[70px]">Format</TableHead>
+                <TableHead className="w-[100px]">{t('ruleSets.cacheMode')}</TableHead>
+                <TableHead className="w-[60px] text-center">{t('ruleSets.interval')}</TableHead>
+                <TableHead className="w-[70px] text-right">{t('ruleSets.ruleCount')}</TableHead>
+                <TableHead className="w-[80px]">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((rs) => (
                 <TableRow key={rs.id}>
-                  <TableCell className="font-medium">{rs.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{rs.name}</span>
+                      {rs.is_preset && (
+                        <Badge className="shrink-0 text-[10px] px-1 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200">
+                          预设
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{renderSourceTypeBadge(rs)}</TableCell>
+                  <TableCell className="max-w-[240px]">
+                    {rs.source_type === 'hosted' && rs.hrs_url ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span
+                          className="block truncate text-xs text-muted-foreground font-mono flex-1"
+                          title={rs.hrs_url}
+                        >
+                          {rs.hrs_url}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                          title={t('common.copy')}
+                          onClick={() => {
+                            navigator.clipboard.writeText(rs.hrs_url!).then(() => toast.success(t('common.copied')))
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : rs.url ? (
+                      <span
+                        className="block truncate text-xs text-muted-foreground font-mono"
+                        title={rs.url}
+                      >
+                        {rs.url}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{rs.behavior}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{rs.format}</Badge>
                   </TableCell>
+                  <TableCell>
+                    {rs.source_type === 'external' ? (
+                      <CacheModeDropdown
+                        enabled={rs.server_cache_enabled ?? false}
+                        onSelect={(enabled) => cacheMutation.mutate({ id: rs.id, enabled })}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
+                    {rs.source_type === 'external' ? formatInterval(rs.interval) : '—'}
+                  </TableCell>
                   <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                    {rs.rule_count ? rs.rule_count.toLocaleString() : '-'}
+                    {rs.rule_count ? rs.rule_count.toLocaleString() : '—'}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEditDialog(rs)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {!rs.is_preset && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(rs)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -314,33 +433,64 @@ export function RuleSets() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{rs.name}</span>
                       {renderSourceTypeBadge(rs)}
+                      {rs.is_preset && (
+                        <Badge className="text-[10px] px-1 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200">
+                          预设
+                        </Badge>
+                      )}
                     </div>
+                    {rs.source_type === 'hosted' && rs.hrs_url ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <p className="text-xs text-muted-foreground font-mono truncate flex-1">{rs.hrs_url}</p>
+                        <button
+                          type="button"
+                          className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => {
+                            navigator.clipboard.writeText(rs.hrs_url!).then(() => toast.success(t('common.copied')))
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : rs.url ? (
+                      <p className="text-xs text-muted-foreground font-mono truncate">{rs.url}</p>
+                    ) : null}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="outline" className="text-xs">{rs.behavior}</Badge>
                       <Badge variant="secondary" className="text-xs">{rs.format}</Badge>
+                      {rs.source_type === 'external' && (
+                        <span className="text-xs text-muted-foreground">{formatInterval(rs.interval)}</span>
+                      )}
+                      {rs.source_type === 'external' && (
+                        rs.server_cache_enabled
+                          ? <span className="flex items-center gap-0.5 text-xs text-primary"><Server className="h-3 w-3" />服务器缓存</span>
+                          : <span className="flex items-center gap-0.5 text-xs text-muted-foreground"><Globe className="h-3 w-3" />源站直接</span>
+                      )}
                       {(rs.rule_count ?? 0) > 0 && (
                         <span className="text-xs text-muted-foreground">{rs.rule_count!.toLocaleString()} 条</span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => openEditDialog(rs)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {!rs.is_preset && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEditDialog(rs)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => { setDeletingRuleSet(rs); setDeleteDialogOpen(true) }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -511,21 +661,6 @@ export function RuleSets() {
                       value={formData.interval}
                       onChange={(e) => setFormData((prev) => ({ ...prev, interval: e.target.value }))}
                     />
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-medium">{t('ruleSets.serverCache')}</Label>
-                      <p className="text-xs text-muted-foreground">{t('ruleSets.serverCacheHint')}</p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={formData.server_cache_enabled}
-                      onClick={() => setFormData((prev) => ({ ...prev, server_cache_enabled: !prev.server_cache_enabled }))}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${formData.server_cache_enabled ? 'bg-primary' : 'bg-input'}`}
-                    >
-                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${formData.server_cache_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
                   </div>
                 </>
               )}

@@ -136,6 +136,7 @@ func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hos
 	if len(ruleProviderIDs) > 0 {
 		var rps []model.RuleProvider
 		if err := repository.DB.
+			Select("id, name, type, url, behavior, format, interval, is_preset, server_cache_enabled, cache_token, cache_expires_at, rule_count").
 			Where("id IN ?", ruleProviderIDs).
 			Where("user_id = ? OR is_preset = ?", userID, true).
 			Find(&rps).Error; err != nil {
@@ -147,9 +148,16 @@ func loadSubscriptionRuleProviderInputs(userID uint, ruleProviderIDs []uint, hos
 			}
 			names[rp.Name] = struct{}{}
 			rpURL := rp.URL
-			if rp.ServerCacheEnabled && rp.CacheToken != "" {
-				rpURL = util.RuleProviderCacheURL(rp.CacheToken)
-				if IsRuleProviderCacheStale(&rp) {
+			// Cloudflare 式懒加载策略：按需缓存，有历史缓存则走服务器 URL + 异步刷新
+			if rp.CacheToken != "" && (rp.IsPreset || rp.ServerCacheEnabled) {
+				if rp.CacheExpiresAt != nil {
+					// 有缓存历史（可能过期），走服务器 URL；过期则后台刷新
+					rpURL = util.RuleProviderCacheURL(rp.CacheToken)
+					if IsRuleProviderCacheStale(&rp) {
+						AsyncFetchAndCacheRuleProvider(rp.ID)
+					}
+				} else {
+					// 从未缓存：本次走源站 URL，同时触发首次拉取
 					AsyncFetchAndCacheRuleProvider(rp.ID)
 				}
 			}
