@@ -94,11 +94,11 @@ export function AccessLogs() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-40">{t('accessLogs.time')}</TableHead>
-                  <TableHead className="w-32">{t('accessLogs.ip')}</TableHead>
-                  <TableHead className="w-20">{t('accessLogs.country')}</TableHead>
-                  <TableHead className="w-24">{t('accessLogs.city')}</TableHead>
-                  <TableHead className="w-20">{t('accessLogs.allowed')}</TableHead>
+                  <TableHead className="w-40 whitespace-nowrap">{t('accessLogs.time')}</TableHead>
+                  <TableHead className="w-32 whitespace-nowrap">{t('accessLogs.ip')}</TableHead>
+                  <TableHead className="w-20 whitespace-nowrap">{t('accessLogs.country')}</TableHead>
+                  <TableHead className="w-24 whitespace-nowrap">{t('accessLogs.city')}</TableHead>
+                  <TableHead className="w-24 whitespace-nowrap">{t('accessLogs.allowed')}</TableHead>
                   <TableHead>{t('accessLogs.userAgent')}</TableHead>
                   <TableHead>{t('accessLogs.denyReason')}</TableHead>
                 </TableRow>
