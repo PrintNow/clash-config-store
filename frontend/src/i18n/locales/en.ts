@@ -195,6 +195,7 @@ const en = {
     relativeJustNow: 'just now',
     relativeMinutesAgo: '{{count}} minutes ago',
     relativeHoursAgo: '{{count}} hours ago',
+    relativeDaysAgo: '{{count}} days ago',
   },
 
   providers: {
@@ -480,6 +481,8 @@ const en = {
     serverCache: 'Server Cache',
     serverCacheHint: 'When enabled, Clash fetches rule sets from this server instead of upstream',
     interval: 'Interval',
+    cloneToHosted: 'Clone to private hosted rule set',
+    cloneSuccess: 'Cloned to private hosted rule set',
     emptyTitle: 'No rule sets yet',
     emptyDescription: 'Add a subscribed rule set or create a private one',
   },

@@ -199,6 +199,7 @@ const zh = {
     relativeJustNow: '刚刚',
     relativeMinutesAgo: '{{count}} 分钟前',
     relativeHoursAgo: '{{count}} 小时前',
+    relativeDaysAgo: '{{count}} 天前',
   },
 
   // 节点源
@@ -489,6 +490,8 @@ const zh = {
     serverCache: '服务器缓存',
     serverCacheHint: '开启后，Clash 客户端将从本服务拉取规则集，无需直接访问上游',
     interval: '间隔',
+    cloneToHosted: '克隆为私有托管规则集',
+    cloneSuccess: '已克隆为私有托管规则集',
     emptyTitle: '暂无规则集',
     emptyDescription: '添加订阅规则集或创建私有规则集',
   },

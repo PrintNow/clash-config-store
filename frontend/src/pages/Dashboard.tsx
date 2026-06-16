@@ -44,6 +44,8 @@ export function Dashboard() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: dashboardApi.getStats,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   })
 
   useEffect(() => {
@@ -208,16 +210,22 @@ export function Dashboard() {
     )
   }
 
-  const formatLogTime = (dateStr: string) => {
+  const formatRelativeTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMin = Math.floor(diffMs / 60000)
+    const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000)
     if (diffMin < 1) return t('dashboard.relativeJustNow')
     if (diffMin < 60) return t('dashboard.relativeMinutesAgo', { count: diffMin })
     const diffH = Math.floor(diffMin / 60)
     if (diffH < 24) return t('dashboard.relativeHoursAgo', { count: diffH })
-    return date.toLocaleString()
+    const diffD = Math.floor(diffH / 24)
+    return t('dashboard.relativeDaysAgo', { count: diffD })
+  }
+
+  const formatDateTimeFull = (dateStr: string) => {
+    const d = new Date(dateStr)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   }
 
   const getLogLocation = (log: AccessLog) => {
@@ -498,7 +506,6 @@ export function Dashboard() {
       </div>
 
       {/* 最近访问日志 */}
-      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/20 py-3 px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -509,26 +516,28 @@ export function Dashboard() {
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">{t('dashboard.recentLogsDescription')}</CardDescription>
             </div>
-            <div className="flex gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="success" className="cursor-help gap-1 text-xs">
-                    <CheckCircle2 className="h-3 w-3" />
-                    {t('dashboard.allowedCount', { count: recentAllowedCount })}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>{t('dashboard.allowedCountTooltip')}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="cursor-help gap-1 text-xs">
-                    <XCircle className="h-3 w-3" />
-                    {t('dashboard.deniedCount', { count: recentDeniedCount })}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>{t('dashboard.deniedCountTooltip')}</TooltipContent>
-              </Tooltip>
-            </div>
+            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+              <div className="flex gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="success" className="cursor-help gap-1 text-xs">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {t('dashboard.allowedCount', { count: recentAllowedCount })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('dashboard.allowedCountTooltip')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant={recentDeniedCount > 0 ? 'destructive' : 'outline'} className="cursor-help gap-1 text-xs">
+                      <XCircle className="h-3 w-3" />
+                      {t('dashboard.deniedCount', { count: recentDeniedCount })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('dashboard.deniedCountTooltip')}</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent className="p-3">
@@ -583,24 +592,17 @@ export function Dashboard() {
                   {!log.deny_reason && (
                     <span className="sm:hidden flex-1" />
                   )}
-                  {/* 时间：相对时间 + tooltip 显示完整时间 */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <time className="shrink-0 text-xs text-muted-foreground whitespace-nowrap cursor-default" dateTime={log.created_at}>
-                        {formatLogTime(log.created_at)}
-                      </time>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {new Date(log.created_at).toLocaleString()}
-                    </TooltipContent>
-                  </Tooltip>
+                  {/* 时间：完整时间 + 相对时间 */}
+                  <time className="shrink-0 text-right" dateTime={log.created_at}>
+                    <span className="block text-xs text-foreground/80 whitespace-nowrap font-mono">{formatDateTimeFull(log.created_at)}</span>
+                    <span className="block text-[10px] text-muted-foreground whitespace-nowrap">{formatRelativeTime(log.created_at)}</span>
+                  </time>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-      </TooltipProvider>
     </div>
   )
 }
