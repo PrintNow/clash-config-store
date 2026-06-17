@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/native-select'
 import { X, GripVertical, Code2, FormInput } from 'lucide-react'
 import { sortableInstantReorder, BUILTIN_PROXIES } from '../shared/constants'
+import { IconPicker } from '@/components/IconPicker'
 
 function groupToYaml(group: Partial<ProxyGroup> & { name: string; type: string }): string {
   return yaml.dump(group, { indent: 2, lineWidth: -1 })
@@ -52,6 +53,7 @@ function formToGroupObject(form: GroupFormState): Record<string, unknown> {
     g.tolerance = parseInt(form.tolerance) || 50
   }
   if (form.type === 'load-balance') g.strategy = form.strategy
+  if (form.icon) g.icon = form.icon
   return g
 }
 
@@ -84,6 +86,7 @@ interface GroupFormState {
   interval: string
   tolerance: string
   strategy: string
+  icon: string
 }
 
 const defaultGroupForm: GroupFormState = {
@@ -95,6 +98,7 @@ const defaultGroupForm: GroupFormState = {
   interval: '300',
   tolerance: '50',
   strategy: 'consistent-hashing',
+  icon: '',
 }
 
 function groupToForm(g: ProxyGroup): GroupFormState {
@@ -107,6 +111,7 @@ function groupToForm(g: ProxyGroup): GroupFormState {
     interval: String(g.interval ?? 300),
     tolerance: String(g.tolerance ?? 50),
     strategy: g.strategy || 'consistent-hashing',
+    icon: g.icon || '',
   }
 }
 
@@ -216,8 +221,9 @@ export function ProxyGroupDialog({
     }))
   }
 
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   const groupMemberSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: isMobile ? Infinity : 5 } })
   )
 
   const handleGroupMembersDragEnd = (event: DragEndEvent) => {
@@ -271,6 +277,7 @@ export function ProxyGroupDialog({
     if (form.type === 'load-balance') {
       group.strategy = form.strategy
     }
+    if (form.icon) group.icon = form.icon
     onSave(group)
   }
 
@@ -330,6 +337,12 @@ export function ProxyGroupDialog({
             <div className="space-y-1">
               <Label>{t('customConfigs.groupName')}</Label>
               <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
+            </div>
+
+            {/* 图标 */}
+            <div className="space-y-1.5">
+              <Label>图标</Label>
+              <IconPicker value={form.icon} onChange={(v) => set('icon', v)} />
             </div>
 
           {/* 类型 */}
