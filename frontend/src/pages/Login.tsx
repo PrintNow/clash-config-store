@@ -83,10 +83,10 @@ export function Login() {
               <form onSubmit={handleSubmit} className="space-y-3">
                 {/* 服务端/网络级错误：用 Alert 组件内联展示，不弹 toast */}
                 {errors.form && (
-                  <Alert variant="destructive" className="py-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">{errors.form}</AlertDescription>
-                  </Alert>
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/50 px-3 py-2 text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span className="text-xs">{errors.form}</span>
+                  </div>
                 )}
 
                 <div className="space-y-1">

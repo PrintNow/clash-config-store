@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, Trash2, FileCode2 } from 'lucide-react'
+import { Plus, Trash2, FileCode2, MoreHorizontal, Copy } from 'lucide-react'
 import { configTemplatesApi } from '@/api/config-templates'
 import type { ConfigTemplate } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -71,6 +78,25 @@ export function ConfigTemplates() {
     },
   })
 
+  const cloneMutation = useMutation({
+    mutationFn: async (template: ConfigTemplate) => {
+      const full = await configTemplatesApi.get(template.id)
+      return configTemplatesApi.create({
+        name: `${full.name} 副本`,
+        description: full.description || undefined,
+        content: full.content || undefined,
+      })
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['config-templates'] })
+      toast.success(t('common.cloneSuccess'))
+      navigate(`/config-templates/${data.id}`)
+    },
+    onError: () => {
+      toast.error(t('common.error'))
+    },
+  })
+
   const handleOpenCreate = () => {
     setNewName('')
     setNewDescription('')
@@ -113,6 +139,7 @@ export function ConfigTemplates() {
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('common.description')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
+              <TableHead>{t('common.updatedAt')}</TableHead>
               <TableHead className="w-[60px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
@@ -123,12 +150,13 @@ export function ConfigTemplates() {
                   <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : templates.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
@@ -150,15 +178,34 @@ export function ConfigTemplates() {
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(template.created_at).toLocaleDateString()}
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {new Date(template.updated_at).toLocaleDateString()}
+                  </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openDeleteDialog(template)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => cloneMutation.mutate(template)}
+                          disabled={cloneMutation.isPending}
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          {t('common.cloneConfig')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => openDeleteDialog(template)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {t('common.delete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))
@@ -201,14 +248,35 @@ export function ConfigTemplates() {
                       {new Date(template.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-destructive hover:text-destructive"
-                    onClick={(e) => { e.stopPropagation(); openDeleteDialog(template) }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => { e.stopPropagation(); cloneMutation.mutate(template) }}
+                        disabled={cloneMutation.isPending}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        {t('common.cloneConfig')}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); openDeleteDialog(template) }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {t('common.delete')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </CardContent>
             </Card>

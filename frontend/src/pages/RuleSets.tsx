@@ -319,11 +319,11 @@ export function RuleSets() {
               <TableRow>
                 <TableHead className="w-[160px]">{t('common.name')}</TableHead>
                 <TableHead className="w-[80px]">{t('common.type')}</TableHead>
-                <TableHead>{t('ruleSets.urlColumn')}</TableHead>
+                <TableHead className="w-[240px]">{t('ruleSets.urlColumn')}</TableHead>
                 <TableHead className="w-[80px]">Behavior</TableHead>
                 <TableHead className="w-[70px]">Format</TableHead>
-                <TableHead className="w-[100px]">{t('ruleSets.cacheMode')}</TableHead>
-                <TableHead className="w-[60px] text-center">{t('ruleSets.interval')}</TableHead>
+                {activeTab !== 'hosted' && <TableHead className="w-[100px]">{t('ruleSets.cacheMode')}</TableHead>}
+                {activeTab !== 'hosted' && <TableHead className="w-[60px] text-center">{t('ruleSets.interval')}</TableHead>}
                 <TableHead className="w-[70px] text-right">{t('ruleSets.ruleCount')}</TableHead>
                 <TableHead className="w-[80px]">{t('common.actions')}</TableHead>
               </TableRow>
@@ -333,16 +333,16 @@ export function RuleSets() {
                 <TableRow key={rs.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="truncate">{rs.name}</span>
                       {rs.is_preset && (
                         <Badge className="shrink-0 text-[10px] px-1 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200">
                           预设
                         </Badge>
                       )}
+                      <span className="truncate">{rs.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>{renderSourceTypeBadge(rs)}</TableCell>
-                  <TableCell className="max-w-[240px]">
+                  <TableCell className="w-[240px] max-w-[240px]">
                     {rs.source_type === 'hosted' && rs.hrs_url ? (
                       <div className="flex items-center gap-1 min-w-0">
                         <span
@@ -379,19 +379,23 @@ export function RuleSets() {
                   <TableCell>
                     <Badge variant="secondary">{rs.format}</Badge>
                   </TableCell>
-                  <TableCell>
-                    {rs.source_type === 'external' ? (
-                      <CacheModeDropdown
-                        enabled={rs.server_cache_enabled ?? false}
-                        onSelect={(enabled) => cacheMutation.mutate({ id: rs.id, enabled })}
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
-                    {rs.source_type === 'external' ? formatInterval(rs.interval) : '—'}
-                  </TableCell>
+                  {activeTab !== 'hosted' && (
+                    <TableCell>
+                      {rs.source_type === 'external' ? (
+                        <CacheModeDropdown
+                          enabled={rs.server_cache_enabled ?? false}
+                          onSelect={(enabled) => cacheMutation.mutate({ id: rs.id, enabled })}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {activeTab !== 'hosted' && (
+                    <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
+                      {rs.source_type === 'external' ? formatInterval(rs.interval) : '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                     {rs.rule_count ? rs.rule_count.toLocaleString() : '—'}
                   </TableCell>
@@ -431,13 +435,13 @@ export function RuleSets() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{rs.name}</span>
-                      {renderSourceTypeBadge(rs)}
                       {rs.is_preset && (
                         <Badge className="text-[10px] px-1 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200">
                           预设
                         </Badge>
                       )}
+                      <span className="font-medium text-sm">{rs.name}</span>
+                      {renderSourceTypeBadge(rs)}
                     </div>
                     {rs.source_type === 'hosted' && rs.hrs_url ? (
                       <div className="flex items-center gap-1 min-w-0">

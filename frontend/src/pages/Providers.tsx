@@ -1,11 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, RefreshCw, AlertCircle, Server } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, AlertCircle, Server, FileCode2 } from 'lucide-react'
+import * as jsYaml from 'js-yaml'
 import { providersApi } from '@/api/providers'
 import { userAgentsApi } from '@/api/user-agents'
 import type { Provider } from '@/types'
+import { YamlEditor } from '@/components/YamlEditor'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -106,20 +115,9 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
     }
   }
 
-  const openAddNode = () => {
-    setEditingNodeIndex(null)
-    setNodeFormOpen(true)
-  }
-
-  const openEditNode = (idx: number) => {
-    setEditingNodeIndex(idx)
-    setNodeFormOpen(true)
-  }
-
-  const openDeleteNode = (idx: number) => {
-    setDeleteNodeIndex(idx)
-    setDeleteNodeDialogOpen(true)
-  }
+  const openAddNode = () => { setEditingNodeIndex(null); setNodeFormOpen(true) }
+  const openEditNode = (idx: number) => { setEditingNodeIndex(idx); setNodeFormOpen(true) }
+  const openDeleteNode = (idx: number) => { setDeleteNodeIndex(idx); setDeleteNodeDialogOpen(true) }
 
   const editingNode = editingNodeIndex !== null ? nodes[editingNodeIndex] : undefined
 
@@ -128,9 +126,7 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {t('providers.editNodes')} — {provider.name}
-            </DialogTitle>
+            <DialogTitle>{t('providers.editNodes')} — {provider.name}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 py-1">
@@ -165,9 +161,7 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
                   <TableBody>
                     {nodes.map((node, idx) => (
                       <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {String(node.name ?? '-')}
-                        </TableCell>
+                        <TableCell className="font-medium">{String(node.name ?? '-')}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{String(node.type ?? '-')}</Badge>
                         </TableCell>
@@ -176,20 +170,10 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => openEditNode(idx)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditNode(idx)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => openDeleteNode(idx)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => openDeleteNode(idx)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -208,13 +192,10 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
         </DialogContent>
       </Dialog>
 
-      {/* 节点表单弹窗 */}
       <Dialog open={nodeFormOpen} onOpenChange={(o) => { if (!o) { setNodeFormOpen(false); setEditingNodeIndex(null) } }}>
         <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingNodeIndex !== null ? t('providers.editNode') : t('providers.addNode')}
-            </DialogTitle>
+            <DialogTitle>{editingNodeIndex !== null ? t('providers.editNode') : t('providers.addNode')}</DialogTitle>
           </DialogHeader>
           <ProxyNodeForm
             initialValue={editingNode}
@@ -224,7 +205,6 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
         </DialogContent>
       </Dialog>
 
-      {/* 删除节点确认 */}
       <Dialog open={deleteNodeDialogOpen} onOpenChange={setDeleteNodeDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -232,9 +212,7 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
           </DialogHeader>
           <p className="text-muted-foreground">确认删除该节点吗？</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteNodeDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteNodeDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button
               variant="destructive"
               onClick={() => deleteNodeIndex !== null && deleteNodeMutation.mutate(deleteNodeIndex)}
@@ -246,6 +224,107 @@ function InlineProviderNodesDialog({ provider, open, onClose }: InlineProviderNo
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// ─── YAML 批量编辑抽屉 ────────────────────────────────────────────────────────
+
+interface InlineProviderYamlSheetProps {
+  provider: Provider
+  open: boolean
+  onClose: () => void
+}
+
+function InlineProviderYamlSheet({ provider, open, onClose }: InlineProviderYamlSheetProps) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [yamlText, setYamlText] = useState('')
+  const [yamlError, setYamlError] = useState('')
+
+  const { data: nodes = [], isLoading } = useQuery({
+    queryKey: ['provider-nodes', provider.id],
+    queryFn: () => providersApi.getNodes(provider.id),
+    enabled: open,
+  })
+
+  // nodes 加载完成后同步到编辑器（每次打开重置）
+  useEffect(() => {
+    if (open && !isLoading) {
+      setYamlText(
+        nodes.length > 0
+          ? jsYaml.dump(nodes, { indent: 2, lineWidth: -1 })
+          : '# 在此粘贴节点列表（YAML 数组格式）\n'
+      )
+      setYamlError('')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isLoading])
+
+  const bulkSaveMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>[]) =>
+      providersApi.update(provider.id, { name: provider.name, type: 'inline', payload }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['provider-nodes', provider.id] })
+      queryClient.invalidateQueries({ queryKey: ['providers'] })
+      toast.success(t('common.success'))
+      onClose()
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
+  const handleSave = () => {
+    let parsed: unknown
+    try {
+      parsed = jsYaml.load(yamlText)
+    } catch (e) {
+      setYamlError(String(e))
+      return
+    }
+    if (!Array.isArray(parsed)) {
+      setYamlError('顶层必须是 YAML 列表（以 "- " 开头的数组）')
+      return
+    }
+    setYamlError('')
+    bulkSaveMutation.mutate(parsed as Record<string, unknown>[])
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <SheetContent resizable defaultWidth={640} minWidth={480} className="flex flex-col p-0">
+        <SheetHeader className="px-6 py-4">
+          <SheetTitle>YAML 编辑 — {provider.name}</SheetTitle>
+          <p className="text-xs text-muted-foreground">编辑完整节点列表（YAML 数组格式），保存后替换所有节点</p>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-hidden px-6 pb-2">
+          {isLoading ? (
+            <div className="space-y-2 pt-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-5 w-full" />
+              ))}
+            </div>
+          ) : (
+            <YamlEditor
+              value={yamlText}
+              onChange={(v) => { setYamlText(v); setYamlError('') }}
+              height="100%"
+              className="h-full"
+            />
+          )}
+        </div>
+
+        {yamlError && (
+          <p className="px-6 text-xs text-destructive font-mono whitespace-pre-wrap">{yamlError}</p>
+        )}
+
+        <SheetFooter className="px-6 py-4">
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={bulkSaveMutation.isPending || isLoading}>
+            {bulkSaveMutation.isPending ? t('common.saving') : t('common.save')}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -265,6 +344,7 @@ export function Providers() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [nodesDialogProvider, setNodesDialogProvider] = useState<Provider | null>(null)
+  const [yamlSheetProvider, setYamlSheetProvider] = useState<Provider | null>(null)
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null)
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null)
   const [refreshingId, setRefreshingId] = useState<number | null>(null)
@@ -446,15 +526,26 @@ export function Providers() {
   const renderActionButtons = (p: Provider) => (
     <div className="flex items-center gap-1">
       {p.type === 'inline' ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setNodesDialogProvider(p)}
-          title={t('providers.editNodes')}
-        >
-          <Server className="h-4 w-4" />
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setNodesDialogProvider(p)}
+            title={t('providers.editNodes')}
+          >
+            <Server className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setYamlSheetProvider(p)}
+            title="YAML 编辑"
+          >
+            <FileCode2 className="h-4 w-4" />
+          </Button>
+        </>
       ) : (
         <Button
           variant="ghost"
@@ -797,6 +888,15 @@ export function Providers() {
           provider={nodesDialogProvider}
           open={!!nodesDialogProvider}
           onClose={() => setNodesDialogProvider(null)}
+        />
+      )}
+
+      {/* YAML 批量编辑抽屉 */}
+      {yamlSheetProvider && (
+        <InlineProviderYamlSheet
+          provider={yamlSheetProvider}
+          open={!!yamlSheetProvider}
+          onClose={() => setYamlSheetProvider(null)}
         />
       )}
     </div>
