@@ -634,6 +634,17 @@ const zh = {
     noLogs: '暂无访问日志',
   },
 
+  // 配置变更历史
+  configHistory: {
+    tab: '变更历史',
+    empty: '暂无变更历史',
+    restoreBtn: '恢复',
+    restoreTitle: '恢复到此版本？',
+    restoreDesc: '当前配置将被替换为此历史快照，此操作不可撤销。',
+    restoreSuccess: '已恢复到历史版本',
+    timeLabel: '保存于',
+  },
+
   // 个人设置
   settings: {
     title: '个人设置',
@@ -699,6 +710,14 @@ const zh = {
     subscriptions: '订阅',
     customConfigs: '自定义配置',
     passwordPlaceholder: '留空则不修改密码',
+    baseUrl: '全局 Base URL',
+    baseUrlDesc: '订阅链接和规则集链接的域名前缀，反代部署时必须配置',
+    baseUrlPlaceholder: 'https://your-domain.com',
+    baseUrlHint: '留空则使用启动时的 BASE_URL 环境变量值，修改后立即生效无需重启',
+    defaultTokenExpiry: '默认订阅 Token 有效期',
+    defaultTokenExpiryDesc: '新建订阅时若未手动设置过期时间，将自动应用此默认值',
+    days: '天',
+    neverExpires: '永不过期',
   },
 
   // 通用错误（用于 axios 拦截器等非 React 上下文）

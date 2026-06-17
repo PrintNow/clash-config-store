@@ -12,7 +12,17 @@ import (
 )
 
 // Register 注册新用户，返回 JWT token 和用户信息
-func Register(email, name, password string) (string, *model.User, error) {
+// skipRegistrationCheck=true 时跳过注册开关检查（管理员创建用户时使用）
+func Register(email, name, password string, skipRegistrationCheck bool) (string, *model.User, error) {
+	if !skipRegistrationCheck {
+		var setting model.SystemSetting
+		if err := repository.DB.Where("key = ?", "allow_registration").First(&setting).Error; err == nil {
+			if setting.Value != "true" {
+				return "", nil, errors.New("注册已关闭")
+			}
+		}
+	}
+
 	// 检查邮箱是否已被注册
 	var existing model.User
 	err := repository.DB.Where("email = ?", email).First(&existing).Error
@@ -28,10 +38,15 @@ func Register(email, name, password string) (string, *model.User, error) {
 		return "", nil, err
 	}
 
+	// 第一个注册的用户自动成为管理员
+	var userCount int64
+	repository.DB.Model(&model.User{}).Count(&userCount)
+
 	user := &model.User{
 		Email:        email,
 		Name:         name,
 		PasswordHash: string(hash),
+		IsAdmin:      userCount == 0,
 	}
 
 	if err := repository.DB.Create(user).Error; err != nil {

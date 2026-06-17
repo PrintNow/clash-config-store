@@ -622,6 +622,16 @@ const en = {
     noLogs: 'No access logs',
   },
 
+  configHistory: {
+    tab: 'History',
+    empty: 'No history yet',
+    restoreBtn: 'Restore',
+    restoreTitle: 'Restore this version?',
+    restoreDesc: 'The current config will be replaced by this snapshot. This cannot be undone.',
+    restoreSuccess: 'Restored to historical version',
+    timeLabel: 'Saved at',
+  },
+
   settings: {
     title: 'Settings',
     basicInfo: 'Basic Info',
@@ -682,6 +692,14 @@ const en = {
     subscriptions: 'Subscriptions',
     customConfigs: 'Custom Configs',
     passwordPlaceholder: 'Leave blank to keep current password',
+    baseUrl: 'Global Base URL',
+    baseUrlDesc: 'Domain prefix for subscription and rule set URLs. Required when deployed behind a reverse proxy.',
+    baseUrlPlaceholder: 'https://your-domain.com',
+    baseUrlHint: 'Leave blank to use the BASE_URL env var set at startup. Changes take effect immediately without restart.',
+    defaultTokenExpiry: 'Default Token Expiry',
+    defaultTokenExpiryDesc: 'Applied automatically when creating a new subscription without a manual expiry date.',
+    days: 'days',
+    neverExpires: 'never expires',
   },
 
   // Generic errors (used in axios interceptor and non-React contexts)

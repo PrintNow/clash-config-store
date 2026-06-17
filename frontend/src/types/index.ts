@@ -3,6 +3,7 @@ export interface User {
   id: number
   email: string
   name: string
+  is_admin: boolean
   created_at: string
 }
 
@@ -57,6 +58,7 @@ export interface ProxyGroup {
   interval?: number
   tolerance?: number
   strategy?: string
+  icon?: string
   [key: string]: unknown
 }
 

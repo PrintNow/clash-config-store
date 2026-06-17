@@ -14,6 +14,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// applyDefaultTokenExpiry 当 expiredAt 为 nil 且配置了全局默认有效期时，计算并返回过期时间
+func applyDefaultTokenExpiry(expiredAt *time.Time) *time.Time {
+	if expiredAt != nil {
+		return expiredAt
+	}
+	days, _ := strconv.Atoi(repository.GetSetting("default_token_expiry_days", "0"))
+	if days <= 0 {
+		return nil
+	}
+	t := time.Now().AddDate(0, 0, days)
+	return &t
+}
+
 func fillSubscriptionURL(sub *model.Subscription) {
 	sub.SubscriptionURL = util.SubscriptionPublicURL(sub.Token)
 }
@@ -91,7 +104,7 @@ func CreateSubscription(c *gin.Context) {
 		UserID:             userID,
 		Name:               req.Name,
 		Token:              token,
-		TokenExpiredAt:     req.TokenExpiredAt,
+		TokenExpiredAt:     applyDefaultTokenExpiry(req.TokenExpiredAt),
 		CustomConfigID:     req.CustomConfigID,
 		ConfigTemplateID:   req.ConfigTemplateID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),

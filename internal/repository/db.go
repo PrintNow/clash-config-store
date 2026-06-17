@@ -15,6 +15,20 @@ import (
 	"gorm.io/gorm"
 )
 
+// GetSetting 读取系统设置，不存在时返回 defaultVal
+func GetSetting(key, defaultVal string) string {
+	var s model.SystemSetting
+	if err := DB.Where("key = ?", key).First(&s).Error; err != nil {
+		return defaultVal
+	}
+	return s.Value
+}
+
+// SetSetting 写入系统设置（upsert）
+func SetSetting(key, value string) error {
+	return DB.Model(&model.SystemSetting{}).Where("key = ?", key).Update("value", value).Error
+}
+
 var DB *gorm.DB
 
 // Init 初始化数据库连接并自动迁移
@@ -51,6 +65,12 @@ func Init(cfg *config.Config) error {
 
 	if err := SeedUserAgentPresets(DB); err != nil {
 		slog.Warn("UA 内置预设种子初始化警告", slog.String("component", "db"), slog.Any("err", err))
+	}
+
+	// 用数据库中的 base_url 覆盖启动时的环境变量配置（若已设置）
+	if v := GetSetting("base_url", ""); v != "" {
+		config.App.BaseURL = v
+		slog.Info("base_url 已从数据库覆盖", slog.String("component", "db"), slog.String("base_url", v))
 	}
 
 	slog.Info("数据库初始化成功", slog.String("component", "db"), slog.String("db_type", cfg.DBType))

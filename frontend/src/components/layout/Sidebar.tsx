@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Globe, Bot, Settings2, Link, Settings, FileCode2, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Globe, Bot, Settings2, Link, Settings, FileCode2, BookOpen, ShieldCheck, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAuthStore } from '@/store/auth'
 
 interface NavItem {
   path: string
@@ -14,6 +15,7 @@ interface NavGroup {
   label?: string
   labelKey?: string
   items: NavItem[]
+  adminOnly?: boolean
 }
 
 const navGroups: NavGroup[] = [
@@ -48,6 +50,14 @@ const navGroups: NavGroup[] = [
       { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
     ],
   },
+  {
+    labelKey: 'nav.groupAdmin',
+    adminOnly: true,
+    items: [
+      { path: '/admin/users', icon: Users, labelKey: 'nav.adminUsers' },
+      { path: '/admin/settings', icon: ShieldCheck, labelKey: 'nav.adminSettings' },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -58,6 +68,7 @@ interface SidebarProps {
 
 export function Sidebar({ onNavClick, collapsed = false, labelsVisible = !collapsed }: SidebarProps) {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon
@@ -108,9 +119,11 @@ export function Sidebar({ onNavClick, collapsed = false, labelsVisible = !collap
     return link
   }
 
+  const visibleGroups = navGroups.filter((g) => !g.adminOnly || user?.is_admin)
+
   const navContent = (
     <nav className={cn('flex flex-col gap-1 p-2', collapsed && 'items-center')}>
-      {navGroups.map((group, groupIdx) => (
+      {visibleGroups.map((group, groupIdx) => (
         <div key={groupIdx} className={cn('flex flex-col gap-1', groupIdx > 0 && 'mt-1')}>
           {!collapsed && group.labelKey && (
             <div className="px-2 py-1 text-xs text-muted-foreground font-medium">
