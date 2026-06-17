@@ -116,7 +116,7 @@ export const BUILTIN_PROXIES = ['DIRECT', 'REJECT']
 // ─────────────────────────────────────────────
 
 // 自定义配置详情页 Tab，与 URL ?tab= 同步以便刷新保留
-export const CONFIG_DETAIL_TABS = ['proxyGroups', 'rules', 'ruleSets', 'yamlEdit'] as const
+export const CONFIG_DETAIL_TABS = ['proxyGroups', 'rules', 'ruleSets', 'yamlEdit', 'history'] as const
 export type ConfigDetailTab = (typeof CONFIG_DETAIL_TABS)[number]
 
 export function parseConfigDetailTab(raw: string | null): ConfigDetailTab {

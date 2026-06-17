@@ -123,6 +123,8 @@ func main() {
 			cc.POST("/:id/clone", handler.CloneCustomConfig)
 			cc.GET("/:id/export", handler.ExportCustomConfig)
 			cc.GET("/:id/preview", handler.PreviewCustomConfig)
+			cc.GET("/:id/history", handler.GetConfigHistories)
+			cc.POST("/:id/history/:hid/restore", handler.RestoreConfigHistory)
 
 			// 统一规则集管理（外部引用 + 自托管）
 			rs := protected.Group("/rule-sets")

@@ -164,6 +164,22 @@ func UpdateCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
+
+	// 保存变更历史（异步，不影响响应）
+	go func(saved model.CustomConfig) {
+		history := model.ConfigHistory{
+			CustomConfigID:   saved.ID,
+			UserID:           saved.UserID,
+			Name:             saved.Name,
+			ProxyGroups:      saved.ProxyGroups,
+			Rules:            saved.Rules,
+			RuleProviderIDs:  saved.RuleProviderIDs,
+			HostedRuleSetIDs: saved.HostedRuleSetIDs,
+		}
+		repository.DB.Create(&history)
+		pruneConfigHistory(saved.ID)
+	}(cfg)
+
 	normalizeCustomConfig(&cfg)
 	OK(c, cfg)
 }

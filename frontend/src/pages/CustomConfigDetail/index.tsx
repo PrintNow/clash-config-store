@@ -42,6 +42,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import equal from 'fast-deep-equal'
 import { customConfigsApi } from '@/api/custom-configs'
+import { configHistoryApi } from '@/api/config-history'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { ruleSetsApi } from '@/api/rule-sets'
 import { providersApi } from '@/api/providers'
@@ -180,7 +182,19 @@ function SortableProxyGroupRow({
           <GripVertical className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="px-3 py-1.5 font-medium text-sm">{group.name}</td>
+      <td className="px-3 py-1.5 font-medium text-sm">
+        <div className="flex items-center gap-2">
+          {group.icon && (
+            <img
+              src={group.icon}
+              alt=""
+              className="h-5 w-5 shrink-0 rounded-sm object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+            />
+          )}
+          {group.name}
+        </div>
+      </td>
       <td className="hidden sm:table-cell px-3 py-1.5">
         <Badge variant="outline" className="text-xs">{group.type}</Badge>
       </td>
@@ -327,6 +341,11 @@ export function CustomConfigDetail() {
   const [selectedDiagnosticLine, setSelectedDiagnosticLine] = useState<number | null>(null)
   const [lastValidationState, setLastValidationState] = useState<'idle' | 'valid' | 'warning' | 'error'>('idle')
 
+  // 代理组批量编辑面板
+  const [batchEditOpen, setBatchEditOpen] = useState(false)
+  const [batchEditContent, setBatchEditContent] = useState('')
+  const [batchEditError, setBatchEditError] = useState('')
+
   // YAML 预览面板
   const [previewOpen, setPreviewOpen] = useState(false)
   const [diffPreviewOpen, setDiffPreviewOpen] = useState(false)
@@ -355,16 +374,23 @@ export function CustomConfigDetail() {
   const providerNames = allProviders.map((p) => p.name)
   const providerItems = allProviders.map((p) => ({ name: p.name, type: p.type }))
 
+  // 代理组自动保存后，抑制 refetch 重置规则草稿的 flag
+  const suppressRulesSyncRef = useRef(false)
+
   // 从服务端同步到表单：仅在「配置 id / 服务端版本」变化时执行，避免 React Query refetch
   // 返回新对象引用时误重置草稿，导致 isDirty 恒为 false、Context Save Bar 不出现。
+  // suppressRulesSyncRef 为 true 时跳过规则同步（代理组自动保存后保留规则草稿）。
   useEffect(() => {
     if (!config) return
     setName(config.name)
     setProxyGroups(config.proxy_groups || [])
-    setRules(config.rules || [])
-    setRulesText((config.rules || []).join('\n'))
-    setRuleProviderIds(config.rule_provider_ids || [])
-    setHostedRuleSetIds(config.hosted_rule_set_ids || [])
+    if (!suppressRulesSyncRef.current) {
+      setRules(config.rules || [])
+      setRulesText((config.rules || []).join('\n'))
+      setRuleProviderIds(config.rule_provider_ids || [])
+      setHostedRuleSetIds(config.hosted_rule_set_ids || [])
+    }
+    suppressRulesSyncRef.current = false
   }, [config?.id, config?.updated_at])
 
   useEffect(() => {
@@ -386,6 +412,30 @@ export function CustomConfigDetail() {
       setDiffPreviewOpen(false)
     },
     onError: () => toast.error(t('common.error')),
+  })
+
+  // 代理组自动保存：用服务端的规则状态，不保存规则草稿
+  const autoSaveGroupsMutation = useMutation({
+    mutationFn: ({ groups, savedConfig }: { groups: ProxyGroup[], savedConfig: NonNullable<typeof config> }) =>
+      customConfigsApi.update(configId, {
+        name,
+        proxy_groups: groups,
+        rules: savedConfig.rules || [],
+        rule_provider_ids: savedConfig.rule_provider_ids || [],
+        hosted_rule_set_ids: savedConfig.hosted_rule_set_ids || [],
+      }),
+    onMutate: () => {
+      suppressRulesSyncRef.current = true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-configs', configId] })
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      toast.success(t('customConfigs.proxyGroupsSaved'))
+    },
+    onError: () => {
+      suppressRulesSyncRef.current = false
+      toast.error(t('common.error'))
+    },
   })
 
   const isDirty = useMemo(() => {
@@ -481,6 +531,8 @@ export function CustomConfigDetail() {
 
   const handleSaveGroup = (group: ProxyGroup) => {
     const newName = group.name.trim()
+    let newGroups: ProxyGroup[]
+
     if (editingGroupIndex >= 0) {
       const oldName = editingGroup?.name.trim() ?? ''
       const renaming = oldName !== '' && oldName !== newName
@@ -499,27 +551,66 @@ export function CustomConfigDetail() {
           newName,
           { proxyGroups, rules, rulesText, rulesTextMode }
         )
-        setProxyGroups(pg.map((g, i) => (i === editingGroupIndex ? group : g)))
+        newGroups = pg.map((g, i) => (i === editingGroupIndex ? group : g))
         setRules(r)
         setRulesText(rt)
         if (replaceCount > 0) {
           toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
         }
       } else {
-        setProxyGroups((prev) => prev.map((g, i) => (i === editingGroupIndex ? group : g)))
+        newGroups = proxyGroups.map((g, i) => (i === editingGroupIndex ? group : g))
       }
     } else {
       if (hasProxyOrGroupNameConflict(newName, [], proxyGroups)) {
         toast.error(t('customConfigs.renameConflict'))
         return
       }
-      setProxyGroups((prev) => [...prev, group])
+      newGroups = [...proxyGroups, group]
     }
+
+    setProxyGroups(newGroups)
     setGroupDialogOpen(false)
+    if (config) {
+      autoSaveGroupsMutation.mutate({ groups: newGroups, savedConfig: config })
+    }
   }
 
   const handleDeleteGroup = (idx: number) => {
     setProxyGroups((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const openBatchEdit = () => {
+    const content = proxyGroups.length > 0
+      ? draftToYamlText(proxyGroups)
+      : '- name: PROXY\n  type: select\n  proxies:\n    - DIRECT\n'
+    setBatchEditContent(content)
+    setBatchEditError('')
+    setBatchEditOpen(true)
+  }
+
+  const handleApplyBatchEdit = () => {
+    try {
+      const parsed = yaml.load(batchEditContent)
+      if (!Array.isArray(parsed)) {
+        setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': YAML 必须是列表（数组）格式')
+        return
+      }
+      for (const group of parsed) {
+        if (!group || typeof group !== 'object' || !group.name || !group.type) {
+          setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': 每个代理组必须包含 name 和 type 字段')
+          return
+        }
+      }
+      const newGroups = parsed as ProxyGroup[]
+      setProxyGroups(newGroups)
+      setBatchEditError('')
+      setBatchEditOpen(false)
+      if (config) {
+        autoSaveGroupsMutation.mutate({ groups: newGroups, savedConfig: config })
+      }
+    } catch (e) {
+      setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': ' + (e as Error).message)
+    }
   }
 
   // ── DnD 传感器（移动端禁用拖拽） ──
@@ -634,14 +725,14 @@ export function CustomConfigDetail() {
         }
       ),
     }))
-    const firstError = nextRuleList.find((item) => item.analysis.status === 'error')
-    if (firstError?.lineNumber) {
-      setSelectedDiagnosticLine(firstError.lineNumber)
-      setLastValidationState('error')
-      toast.error(t('customConfigs.ruleTextFixErrorsFirst'))
-      return
+    const errorItems = nextRuleList.filter((item) => item.analysis.status === 'error')
+    const validRules = nextRuleList
+      .filter((item) => item.analysis.status !== 'error')
+      .map((item) => parsed.rules[item.sourceIndex])
+    if (errorItems.length > 0) {
+      toast.warning(t('customConfigs.ruleTextSwitchWithErrors', { count: errorItems.length }))
     }
-    setRules(parsed.rules)
+    setRules(validRules)
     setRulesTextMode(false)
     setSelectedDiagnosticLine(null)
   }
@@ -937,6 +1028,15 @@ export function CustomConfigDetail() {
     extraActions: saveBarExtraActions,
   })
 
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
+
   const shouldBlockNavigation = useCallback(
     ({
       currentLocation,
@@ -1079,6 +1179,9 @@ export function CustomConfigDetail() {
               <TabsTrigger value="yamlEdit">
                 YAML 编辑
               </TabsTrigger>
+              <TabsTrigger value="history">
+                {t('configHistory.tab')}
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -1101,7 +1204,11 @@ export function CustomConfigDetail() {
 
         {/* ── Tab 1: 代理组 ── */}
         <TabsContent value="proxyGroups" className="space-y-2.5 mt-2.5">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={openBatchEdit}>
+              <Edit className="mr-1.5 h-3.5 w-3.5" />
+              {t('customConfigs.batchEditProxyGroups')}
+            </Button>
             <Button size="sm" onClick={openAddGroup}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               {t('customConfigs.addProxyGroup')}
@@ -1754,6 +1861,9 @@ export function CustomConfigDetail() {
             />
           </div>
         </TabsContent>
+        {/* ── Tab 6: 变更历史 ── */}
+        <HistoryTabContent configId={configId} queryClient={queryClient} />
+
       </Tabs>
 
       {/* ── 代理组编辑弹窗 ── */}
@@ -1769,6 +1879,66 @@ export function CustomConfigDetail() {
         onClose={() => setGroupDialogOpen(false)}
         onSave={handleSaveGroup}
       />
+
+      {/* ── 代理组批量编辑 Sheet ── */}
+      <Sheet open={batchEditOpen} onOpenChange={setBatchEditOpen}>
+        <SheetContent
+          resizable
+          defaultWidth={600}
+          minWidth={420}
+          maxWidth={900}
+          showClose={false}
+          className="overflow-hidden"
+        >
+          <SheetHeader className="sticky top-0 z-10 shrink-0 bg-background">
+            <div className="flex items-start justify-between gap-4 pr-2">
+              <div className="space-y-1">
+                <SheetTitle>{t('customConfigs.batchEditProxyGroupsTitle')}</SheetTitle>
+                <p className="text-xs text-muted-foreground">{t('customConfigs.batchEditProxyGroupsHint')}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const content = proxyGroups.length > 0
+                      ? draftToYamlText(proxyGroups)
+                      : '- name: PROXY\n  type: select\n  proxies:\n    - DIRECT\n'
+                    setBatchEditContent(content)
+                    setBatchEditError('')
+                  }}
+                >
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.batchEditProxyGroupsReset')}
+                </Button>
+                <Button type="button" size="sm" onClick={handleApplyBatchEdit}>
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.batchEditProxyGroupsApply')}
+                </Button>
+                <SheetClose className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  <X className="h-5 w-5" />
+                  <span className="sr-only">{t('common.close')}</span>
+                </SheetClose>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 flex flex-col p-4 pt-3 gap-3">
+            {batchEditError && (
+              <div className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {batchEditError}
+              </div>
+            )}
+            <div className="flex-1 min-h-0" style={{ minHeight: '300px', maxHeight: 'calc(100vh - 200px)' }}>
+              <YamlEditor
+                value={batchEditContent}
+                onChange={(v) => { setBatchEditContent(v); setBatchEditError('') }}
+                height="100%"
+              />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ── YAML 预览 Sheet ── */}
       <ConfigPayloadDiffDialog
@@ -1847,6 +2017,120 @@ export function CustomConfigDetail() {
     </div>
     <CustomConfigLeaveDialog blocker={blocker} />
     </>
+  )
+}
+
+// ─────────────────────────────────────────────
+// 变更历史 Tab 内容
+// ─────────────────────────────────────────────
+
+interface HistoryTabContentProps {
+  configId: number
+  queryClient: QueryClient
+}
+
+function HistoryTabContent({ configId, queryClient }: HistoryTabContentProps) {
+  const { t } = useTranslation()
+  const [restoreTarget, setRestoreTarget] = useState<number | null>(null)
+  const [restoring, setRestoring] = useState(false)
+
+  const { data: histories = [], isLoading } = useQuery({
+    queryKey: ['custom-config-history', configId],
+    queryFn: () => configHistoryApi.list(configId),
+    enabled: !!configId,
+  })
+
+  const handleRestore = async () => {
+    if (restoreTarget === null) return
+    setRestoring(true)
+    try {
+      await configHistoryApi.restore(configId, restoreTarget)
+      queryClient.invalidateQueries({ queryKey: ['custom-configs', configId] })
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      queryClient.invalidateQueries({ queryKey: ['custom-config-history', configId] })
+      toast.success(t('configHistory.restoreSuccess'))
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setRestoring(false)
+      setRestoreTarget(null)
+    }
+  }
+
+  return (
+    <TabsContent value="history" className="space-y-3 mt-3">
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      ) : histories.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
+          {t('configHistory.empty')}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {histories.map((h) => (
+            <div
+              key={h.id}
+              className="flex items-center justify-between gap-4 rounded-lg border bg-background px-4 py-3"
+            >
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-sm font-medium truncate">{h.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('configHistory.timeLabel')}{' '}
+                  {new Date(h.created_at).toLocaleString()}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                    {h.proxy_groups.length} 代理组
+                  </Badge>
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                    {h.rules.length} 规则
+                  </Badge>
+                  {(h.rule_provider_ids.length + h.hosted_rule_set_ids.length) > 0 && (
+                    <Badge variant="outline" className="text-xs px-1.5 py-0">
+                      {h.rule_provider_ids.length + h.hosted_rule_set_ids.length} 规则集
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRestoreTarget(h.id)}
+              >
+                {t('configHistory.restoreBtn')}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 恢复确认弹窗 */}
+      <Dialog open={restoreTarget !== null} onOpenChange={(open) => { if (!open) setRestoreTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('configHistory.restoreTitle')}</DialogTitle>
+            <DialogDescription>{t('configHistory.restoreDesc')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setRestoreTarget(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={restoring}
+              onClick={handleRestore}
+            >
+              {restoring ? t('common.saving') : t('configHistory.restoreBtn')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TabsContent>
   )
 }
 

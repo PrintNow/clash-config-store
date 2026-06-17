@@ -28,6 +28,7 @@ func ApplySchema(db *gorm.DB) error {
 	}
 	return db.AutoMigrate(
 		&model.User{},
+		&model.SystemSetting{},
 		&model.UserAgent{},
 		&model.Provider{},
 		&model.ConfigTemplate{},
@@ -37,5 +38,6 @@ func ApplySchema(db *gorm.DB) error {
 		&model.Subscription{},
 		&model.AccessRestriction{},
 		&model.AccessLog{},
+		&model.ConfigHistory{},
 	)
 }
