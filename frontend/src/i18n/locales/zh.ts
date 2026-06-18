@@ -643,6 +643,11 @@ const zh = {
     restoreDesc: '当前配置将被替换为此历史快照，此操作不可撤销。',
     restoreSuccess: '已恢复到历史版本',
     timeLabel: '保存于',
+    diffBtn: '查看变更',
+    diffTitle: '变更对比',
+    diffNoChanges: '与上一版本内容无变化',
+    diffEarliest: '这是最早的版本，无上一版本可对比',
+    diffFold: '{{count}} 行未变化',
   },
 
   // 个人设置

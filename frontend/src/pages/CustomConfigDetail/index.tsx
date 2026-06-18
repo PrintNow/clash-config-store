@@ -69,6 +69,7 @@ import {
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { YamlEditor } from '@/components/YamlEditor'
 import { ConfigPayloadDiffDialog } from '@/components/ConfigPayloadDiffDialog'
+import { HistoryDiffDialog } from '@/components/HistoryDiffDialog'
 import { cn } from '@/lib/utils'
 import { useRegisterContextSaveBar } from '@/store/context-save-bar'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
@@ -2081,6 +2082,7 @@ function HistoryTabContent({ configId, queryClient }: HistoryTabContentProps) {
   const { t } = useTranslation()
   const [restoreTarget, setRestoreTarget] = useState<number | null>(null)
   const [restoring, setRestoring] = useState(false)
+  const [diffTargetIndex, setDiffTargetIndex] = useState<number | null>(null)
 
   const { data: histories = [], isLoading } = useQuery({
     queryKey: ['custom-config-history', configId],
@@ -2119,7 +2121,7 @@ function HistoryTabContent({ configId, queryClient }: HistoryTabContentProps) {
         </div>
       ) : (
         <div className="space-y-2">
-          {histories.map((h) => (
+          {histories.map((h, idx) => (
             <div
               key={h.id}
               className="flex items-center justify-between gap-4 rounded-lg border bg-background px-4 py-3"
@@ -2144,16 +2146,36 @@ function HistoryTabContent({ configId, queryClient }: HistoryTabContentProps) {
                   )}
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRestoreTarget(h.id)}
-              >
-                {t('configHistory.restoreBtn')}
-              </Button>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDiffTargetIndex(idx)}
+                >
+                  {t('configHistory.diffBtn')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRestoreTarget(h.id)}
+                >
+                  {t('configHistory.restoreBtn')}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* 变更 diff 弹窗 */}
+      {diffTargetIndex !== null && (
+        <HistoryDiffDialog
+          open={diffTargetIndex !== null}
+          onOpenChange={(open) => { if (!open) setDiffTargetIndex(null) }}
+          newSnapshot={histories[diffTargetIndex]}
+          oldSnapshot={diffTargetIndex + 1 < histories.length ? histories[diffTargetIndex + 1] : null}
+          savedAt={new Date(histories[diffTargetIndex].created_at).toLocaleString()}
+        />
       )}
 
       {/* 恢复确认弹窗 */}

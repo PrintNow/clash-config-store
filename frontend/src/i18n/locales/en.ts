@@ -630,6 +630,11 @@ const en = {
     restoreDesc: 'The current config will be replaced by this snapshot. This cannot be undone.',
     restoreSuccess: 'Restored to historical version',
     timeLabel: 'Saved at',
+    diffBtn: 'View changes',
+    diffTitle: 'Diff',
+    diffNoChanges: 'No changes from previous version',
+    diffEarliest: 'This is the earliest version, no previous version to compare',
+    diffFold: '{{count}} lines unchanged',
   },
 
   settings: {
