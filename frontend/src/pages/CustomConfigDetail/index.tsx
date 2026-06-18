@@ -80,6 +80,9 @@ import {
   insertRule,
   parseRule,
   parseRulesText,
+  parseRulesTextFull,
+  parseRulesWithComments,
+  serializeRulesWithComments,
   type RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
   ruleSupportsNoResolve,
@@ -282,7 +285,7 @@ export function CustomConfigDetail() {
     if (next === 'yamlEdit') {
       const draft = {
         'proxy-groups': proxyGroups,
-        rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+        rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
       }
       setYamlEditContent(draftToYamlText(draft))
       setYamlEditError('')
@@ -312,8 +315,10 @@ export function CustomConfigDetail() {
 
   // 代理组列表
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
-  // 规则列表（字符串数组）
+  // 规则列表（纯规则字符串，不含注释行）
   const [rules, setRules] = useState<string[]>([])
+  // 与 rules 一一对应的注释（不含 # 前缀），无注释时为 null
+  const [ruleComments, setRuleComments] = useState<(string | null)[]>([])
   // 已选规则集 ID
   const [ruleProviderIds, setRuleProviderIds] = useState<number[]>([])
   const [hostedRuleSetIds, setHostedRuleSetIds] = useState<number[]>([])
@@ -385,8 +390,10 @@ export function CustomConfigDetail() {
     setName(config.name)
     setProxyGroups(config.proxy_groups || [])
     if (!suppressRulesSyncRef.current) {
-      setRules(config.rules || [])
-      setRulesText((config.rules || []).join('\n'))
+      const { rules: parsedRules, comments } = parseRulesWithComments(config.rules || [])
+      setRules(parsedRules)
+      setRuleComments(comments)
+      setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
       setRuleProviderIds(config.rule_provider_ids || [])
       setHostedRuleSetIds(config.hosted_rule_set_ids || [])
     }
@@ -395,9 +402,9 @@ export function CustomConfigDetail() {
 
   useEffect(() => {
     if (!rulesTextMode) {
-      setRulesText(rules.join('\n'))
+      setRulesText(serializeRulesWithComments(rules, ruleComments).join('\n'))
     }
-  }, [rules, rulesTextMode])
+  }, [rules, ruleComments, rulesTextMode])
 
   // ── 保存 mutation ──
   const updateMutation = useMutation({
@@ -438,13 +445,19 @@ export function CustomConfigDetail() {
     },
   })
 
+  // 表格模式下的混合规则数组（纯规则 + # 注释行交错），用于持久化与脏检查
+  const mixedRules = useMemo(
+    () => serializeRulesWithComments(rules, ruleComments),
+    [rules, ruleComments]
+  )
+
   const isDirty = useMemo(() => {
     if (!config) return false
     const saved = savedPayloadFromConfig(config)
     const draft: CustomConfigDraftPayload = {
       name,
       proxy_groups: proxyGroups,
-      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
       rule_provider_ids: ruleProviderIds,
       hosted_rule_set_ids: hostedRuleSetIds,
     }
@@ -453,7 +466,7 @@ export function CustomConfigDetail() {
     config,
     name,
     proxyGroups,
-    rules,
+    mixedRules,
     ruleProviderIds,
     hostedRuleSetIds,
     rulesTextMode,
@@ -464,8 +477,10 @@ export function CustomConfigDetail() {
     if (!config) return
     setName(config.name)
     setProxyGroups(config.proxy_groups || [])
-    setRules(config.rules || [])
-    setRulesText((config.rules || []).join('\n'))
+    const { rules: parsedRules, comments } = parseRulesWithComments(config.rules || [])
+    setRules(parsedRules)
+    setRuleComments(comments)
+    setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
     setRuleProviderIds(config.rule_provider_ids || [])
     setHostedRuleSetIds(config.hosted_rule_set_ids || [])
     setEditingName(false)
@@ -482,11 +497,11 @@ export function CustomConfigDetail() {
     (): CustomConfigDraftPayload => ({
       name,
       proxy_groups: proxyGroups,
-      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
       rule_provider_ids: ruleProviderIds,
       hosted_rule_set_ids: hostedRuleSetIds,
     }),
-    [name, proxyGroups, rules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
+    [name, proxyGroups, mixedRules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
   )
 
   // ── YAML 预览 ──
@@ -646,6 +661,7 @@ export function CustomConfigDetail() {
       return arrayMove(prev, oldIndex, newIndex)
     })
     if (oldIndex < 0 || newIndex < 0) return
+    setRuleComments((prev) => arrayMove(prev, oldIndex, newIndex))
     setActiveRuleIndex((a) => remapRuleIndexAfterMove(a, oldIndex, newIndex))
   }
 
@@ -664,7 +680,16 @@ export function CustomConfigDetail() {
   const addRule = (template: keyof typeof RULE_TEMPLATE_MAP = 'DOMAIN') => {
     const result = insertRule(rules, template)
     setRules(result.rules)
-    setActiveRuleIndex(result.inserted ? result.insertIndex : null)
+    if (result.inserted) {
+      setRuleComments((prev) => {
+        const next = [...prev]
+        next.splice(result.insertIndex, 0, null)
+        return next
+      })
+      setActiveRuleIndex(result.insertIndex)
+    } else {
+      setActiveRuleIndex(null)
+    }
   }
 
   const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string | boolean) => {
@@ -695,6 +720,7 @@ export function CustomConfigDetail() {
 
   const deleteRule = (idx: number) => {
     setRules((prev) => prev.filter((_, i) => i !== idx))
+    setRuleComments((prev) => prev.filter((_, i) => i !== idx))
     setActiveRuleIndex((prev) => {
       if (prev === null) return null
       if (prev === idx) return null
@@ -702,15 +728,15 @@ export function CustomConfigDetail() {
     })
   }
 
-  // 切换到文本模式：把数组序列化为换行字符串
+  // 切换到文本模式：把规则+注释序列化为换行字符串（注释置于规则上方）
   const switchToTextMode = () => {
-    setRulesText(rules.join('\n'))
+    setRulesText(serializeRulesWithComments(rules, ruleComments).join('\n'))
     setRulesTextMode(true)
   }
 
-  // 切换回表格模式：解析文本
+  // 切换回表格模式：解析文本，保留注释关联
   const switchToTableMode = () => {
-    const parsed = parseRulesText(rulesText)
+    const parsed = parseRulesTextFull(rulesText)
     const nextRuleList = parsed.rules.map((rule, index) => ({
       sourceIndex: index,
       lineNumber: parsed.lineNumbers[index],
@@ -726,13 +752,14 @@ export function CustomConfigDetail() {
       ),
     }))
     const errorItems = nextRuleList.filter((item) => item.analysis.status === 'error')
-    const validRules = nextRuleList
+    const validIndices = nextRuleList
       .filter((item) => item.analysis.status !== 'error')
-      .map((item) => parsed.rules[item.sourceIndex])
+      .map((item) => item.sourceIndex)
     if (errorItems.length > 0) {
       toast.warning(t('customConfigs.ruleTextSwitchWithErrors', { count: errorItems.length }))
     }
-    setRules(validRules)
+    setRules(validIndices.map(i => parsed.rules[i]))
+    setRuleComments(validIndices.map(i => parsed.comments[i]))
     setRulesTextMode(false)
     setSelectedDiagnosticLine(null)
   }
@@ -742,11 +769,11 @@ export function CustomConfigDetail() {
   }
 
   const normalizeMatchRuleOrder = () => {
-    setRules((prev) => {
-      const matchRules = prev.filter((rule) => parseRule(rule).type === 'MATCH')
-      const otherRules = prev.filter((rule) => parseRule(rule).type !== 'MATCH')
-      return [...otherRules, ...matchRules]
-    })
+    const otherIdx = rules.reduce<number[]>((acc, r, i) => parseRule(r).type !== 'MATCH' ? [...acc, i] : acc, [])
+    const matchIdx = rules.reduce<number[]>((acc, r, i) => parseRule(r).type === 'MATCH' ? [...acc, i] : acc, [])
+    const newOrder = [...otherIdx, ...matchIdx]
+    setRules(newOrder.map(i => rules[i]))
+    setRuleComments(newOrder.map(i => ruleComments[i] ?? null))
   }
 
   const handleRuleQuickFix = (_sourceIndex: number, action: RuleQuickFixAction) => {
@@ -830,7 +857,12 @@ export function CustomConfigDetail() {
     ]),
     [proxyGroups]
   )
+  const updateRuleComment = useCallback((sourceIndex: number, comment: string) => {
+    setRuleComments((prev) => prev.map((c, i) => i === sourceIndex ? (comment.trim() || null) : c))
+  }, [])
+
   const parsedRulesText = useMemo(() => parseRulesText(rulesText), [rulesText])
+  const parsedRulesTextFull = useMemo(() => parseRulesTextFull(rulesText), [rulesText])
   const currentRuleStrings = rulesTextMode ? parsedRulesText.rules : rules
   const currentLineNumbers = rulesTextMode ? parsedRulesText.lineNumbers : undefined
   const ruleDuplicateCounts = useMemo(() => {
@@ -840,10 +872,12 @@ export function CustomConfigDetail() {
     })
     return counts
   }, [currentRuleStrings])
-  const ruleListItems = useMemo<RuleListItem[]>(() => (
-    currentRuleStrings.map((rule, index) => ({
+  const ruleListItems = useMemo<RuleListItem[]>(() => {
+    const commentsArr = rulesTextMode ? parsedRulesTextFull.comments : ruleComments
+    return currentRuleStrings.map((rule, index) => ({
       sourceIndex: index,
       lineNumber: currentLineNumbers?.[index],
+      comment: commentsArr[index] ?? undefined,
       analysis: buildRuleAnalysis(
         rule,
         {
@@ -855,13 +889,16 @@ export function CustomConfigDetail() {
         }
       ),
     }))
-  ), [
+  }, [
     availableRuleProviderNames,
     availableTargets,
     currentLineNumbers,
     currentRuleStrings,
     ruleDuplicateCounts,
     selectedRuleProviderNames,
+    ruleComments,
+    rulesTextMode,
+    parsedRulesTextFull.comments,
   ])
   const filteredRuleListItems = useMemo(() => (
     ruleListItems.filter(({ analysis }) => {
@@ -921,7 +958,11 @@ export function CustomConfigDetail() {
   ]), [proxyGroups, t])
   const visibleRuleCount = filteredRuleListItems.length
   const hasActiveFilters = ruleSearch.trim() !== '' || ruleFilter !== 'all' || showOnlyIssues
-  const saveHealth = buildRuleSaveChecklist(rulesFromDraft(rulesTextMode, rulesText, rules), currentRuleStrings, ruleListItems)
+  const saveHealth = buildRuleSaveChecklist(
+    rulesFromDraft(rulesTextMode, rulesText, mixedRules).filter(r => !r.trim().startsWith('#')),
+    currentRuleStrings,
+    ruleListItems
+  )
   const checklistItems = [
     {
       key: 'rulesets',
@@ -950,8 +991,12 @@ export function CustomConfigDetail() {
 
   const handleSave = useCallback(() => {
     if (!isDirty) return
-    const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
-    const issues = buildRuleSaveChecklist(finalRules, currentRuleStrings, ruleListItems)
+    const finalRules = rulesFromDraft(rulesTextMode, rulesText, mixedRules)
+    const issues = buildRuleSaveChecklist(
+      finalRules.filter(r => !r.trim().startsWith('#')),
+      currentRuleStrings,
+      ruleListItems
+    )
     if (issues === 'error') {
       setLastValidationState('error')
       toast.error(t('customConfigs.saveBlockedByErrors'))
@@ -969,7 +1014,7 @@ export function CustomConfigDetail() {
     isDirty,
     rulesTextMode,
     rulesText,
-    rules,
+    mixedRules,
     currentRuleStrings,
     ruleListItems,
     t,
@@ -988,10 +1033,12 @@ export function CustomConfigDetail() {
         return
       }
       const newGroups = (parsed['proxy-groups'] as ProxyGroup[]) || []
-      const newRules = (parsed['rules'] as string[]) || []
+      const newRulesRaw = (parsed['rules'] as string[]) || []
+      const { rules: parsedRules, comments } = parseRulesWithComments(newRulesRaw)
       setProxyGroups(newGroups)
-      setRules(newRules)
-      setRulesText(newRules.join('\n'))
+      setRules(parsedRules)
+      setRuleComments(comments)
+      setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
       setYamlEditError('')
       toast.success('已从 YAML 导入配置')
       handleDetailTabChange('proxyGroups')
@@ -1558,6 +1605,7 @@ export function CustomConfigDetail() {
                               onToggle={toggleRuleRow}
                               onFocus={setActiveRuleIndex}
                               onQuickFix={handleRuleQuickFix}
+                              onCommentChange={rulesTextMode ? undefined : updateRuleComment}
                               t={t}
                             />
                           ))}
@@ -1833,7 +1881,7 @@ export function CustomConfigDetail() {
                 onClick={() => {
                   const draft = {
                     'proxy-groups': proxyGroups,
-                    rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+                    rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
                   }
                   setYamlEditContent(draftToYamlText(draft))
                   setYamlEditError('')

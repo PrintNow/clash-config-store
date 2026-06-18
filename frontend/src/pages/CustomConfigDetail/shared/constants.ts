@@ -1,4 +1,4 @@
-import { parseRulesText } from '@/domain/rules'
+import { parseRulesTextFull } from '@/domain/rules'
 import type { RuleAnalysis } from '@/domain/rules'
 import type { CustomConfig } from '@/types'
 
@@ -20,15 +20,19 @@ export const sortableInstantReorder = {
 // 规则草稿工具函数
 // ─────────────────────────────────────────────
 
-/** 与保存 API 一致的规则草稿（表格模式用 rules，原文模式解析 rulesText） */
+/**
+ * 返回混合格式的规则数组（含 # 注释行）用于持久化。
+ * 表格模式：直接返回已序列化的 mixedRules。
+ * 原文模式：从 rulesText 重新解析，保留注释行。
+ */
 export function rulesFromDraft(
   rulesTextMode: boolean,
   rulesText: string,
-  rules: string[]
+  mixedRules: string[]
 ): string[] {
   return rulesTextMode
-    ? parseRulesText(rulesText).rules
-    : rules
+    ? parseRulesTextFull(rulesText).mixed
+    : mixedRules
 }
 
 /** 规则列表 arrayMove 后，将当前展开行的下标映射到新数组索引 */
@@ -86,6 +90,8 @@ export type RuleSetReferenceItem = {
 export interface RuleListItem {
   sourceIndex: number
   lineNumber?: number
+  /** 规则上方的行注释文本（不含 # 前缀），无注释时为 undefined */
+  comment?: string
   analysis: RuleAnalysis
 }
 

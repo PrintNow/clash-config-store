@@ -108,6 +108,9 @@ func validateMihomoRuleLine(line string) error {
 	if line == "" {
 		return fmt.Errorf("存在空规则行")
 	}
+	if strings.HasPrefix(line, "#") {
+		return nil
+	}
 	tp, payload, target, _ := parseRulePayload(line, true)
 	if tp == "" {
 		return fmt.Errorf("规则缺少类型: %q", line)
