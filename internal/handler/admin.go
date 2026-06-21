@@ -99,22 +99,63 @@ func ListAdminUsers(c *gin.Context) {
 		return
 	}
 
+	// 提取所有用户 ID，用于 IN 条件
+	userIDs := make([]uint, 0, len(users))
+	for _, u := range users {
+		userIDs = append(userIDs, u.ID)
+	}
+
+	// 聚合结构体（内部使用）
+	type countRow struct {
+		UserID uint  `gorm:"column:user_id"`
+		Cnt    int64 `gorm:"column:cnt"`
+	}
+
+	// 三次聚合查询
+	var provRows, subRows, cfgRows []countRow
+	if len(userIDs) > 0 {
+		repository.DB.Model(&model.Provider{}).
+			Select("user_id, COUNT(*) AS cnt").
+			Where("user_id IN ?", userIDs).
+			Group("user_id").
+			Scan(&provRows)
+		repository.DB.Model(&model.Subscription{}).
+			Select("user_id, COUNT(*) AS cnt").
+			Where("user_id IN ?", userIDs).
+			Group("user_id").
+			Scan(&subRows)
+		repository.DB.Model(&model.CustomConfig{}).
+			Select("user_id, COUNT(*) AS cnt").
+			Where("user_id IN ?", userIDs).
+			Group("user_id").
+			Scan(&cfgRows)
+	}
+
+	// 转换为 map 以便 O(1) 查找
+	provMap := make(map[uint]int64, len(provRows))
+	for _, r := range provRows {
+		provMap[r.UserID] = r.Cnt
+	}
+	subMap := make(map[uint]int64, len(subRows))
+	for _, r := range subRows {
+		subMap[r.UserID] = r.Cnt
+	}
+	cfgMap := make(map[uint]int64, len(cfgRows))
+	for _, r := range cfgRows {
+		cfgMap[r.UserID] = r.Cnt
+	}
+
 	items := make([]AdminUserItem, 0, len(users))
 	for _, u := range users {
-		var providerCount, subCount, configCount int64
-		repository.DB.Model(&model.Provider{}).Where("user_id = ?", u.ID).Count(&providerCount)
-		repository.DB.Model(&model.Subscription{}).Where("user_id = ?", u.ID).Count(&subCount)
-		repository.DB.Model(&model.CustomConfig{}).Where("user_id = ?", u.ID).Count(&configCount)
-
 		items = append(items, AdminUserItem{
 			ID:                u.ID,
 			Name:              u.Name,
 			Email:             u.Email,
 			IsAdmin:           u.IsAdmin,
 			CreatedAt:         u.CreatedAt,
-			ProviderCount:     providerCount,
-			SubscriptionCount: subCount,
-			CustomConfigCount: configCount,
+			ProviderCount:     provMap[u.ID],
+			SubscriptionCount: subMap[u.ID],
+			CustomConfigCount: cfgMap[u.ID],
 		})
 	}
 
@@ -136,9 +177,18 @@ func GetAdminUser(c *gin.Context) {
 	}
 
 	var providerCount, subCount, configCount int64
-	repository.DB.Model(&model.Provider{}).Where("user_id = ?", user.ID).Count(&providerCount)
-	repository.DB.Model(&model.Subscription{}).Where("user_id = ?", user.ID).Count(&subCount)
-	repository.DB.Model(&model.CustomConfig{}).Where("user_id = ?", user.ID).Count(&configCount)
+	if err := repository.DB.Model(&model.Provider{}).Where("user_id = ?", user.ID).Count(&providerCount).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	if err := repository.DB.Model(&model.Subscription{}).Where("user_id = ?", user.ID).Count(&subCount).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	if err := repository.DB.Model(&model.CustomConfig{}).Where("user_id = ?", user.ID).Count(&configCount).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
 
 	OK(c, AdminUserItem{
 		ID:                user.ID,
@@ -254,7 +304,10 @@ func CreateAdminUser(c *gin.Context) {
 	}
 
 	if req.IsAdmin {
-		repository.DB.Model(user).Update("is_admin", true)
+		if err := repository.DB.Model(user).Update("is_admin", true).Error; err != nil {
+			Fail(c, http.StatusInternalServerError, "设置管理员权限失败")
+			return
+		}
 		user.IsAdmin = true
 	}
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -97,7 +98,9 @@ func RestoreConfigHistory(c *gin.Context) {
 			RuleProviderIDs:  saved.RuleProviderIDs,
 			HostedRuleSetIDs: saved.HostedRuleSetIDs,
 		}
-		repository.DB.Create(&h)
+		if err := repository.DB.Create(&h).Error; err != nil {
+			slog.Error("保存恢复历史记录失败", slog.String("component", "config_history"), slog.Uint64("config_id", uint64(saved.ID)), slog.Any("err", err))
+		}
 		pruneConfigHistory(saved.ID)
 	}(cfg)
 
@@ -124,11 +127,16 @@ func normalizeConfigHistory(h *model.ConfigHistory) {
 // pruneConfigHistory 保留最近 20 条，删除更早的
 func pruneConfigHistory(configID uint) {
 	var oldest []model.ConfigHistory
-	repository.DB.Where("custom_config_id = ?", configID).
+	if err := repository.DB.Where("custom_config_id = ?", configID).
 		Order("created_at DESC").
 		Offset(20).
-		Find(&oldest)
+		Find(&oldest).Error; err != nil {
+		slog.Error("查询历史记录失败", slog.String("component", "config_history"), slog.Uint64("config_id", uint64(configID)), slog.Any("err", err))
+		return
+	}
 	for _, h := range oldest {
-		repository.DB.Delete(&h)
+		if err := repository.DB.Delete(&h).Error; err != nil {
+			slog.Error("删除历史记录失败", slog.String("component", "config_history"), slog.Uint64("history_id", uint64(h.ID)), slog.Any("err", err))
+		}
 	}
 }

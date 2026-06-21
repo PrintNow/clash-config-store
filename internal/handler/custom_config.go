@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -176,7 +177,9 @@ func UpdateCustomConfig(c *gin.Context) {
 			RuleProviderIDs:  saved.RuleProviderIDs,
 			HostedRuleSetIDs: saved.HostedRuleSetIDs,
 		}
-		repository.DB.Create(&history)
+		if err := repository.DB.Create(&history).Error; err != nil {
+			slog.Error("保存配置变更历史失败", slog.String("component", "config_history"), slog.Uint64("config_id", uint64(saved.ID)), slog.Any("err", err))
+		}
 		pruneConfigHistory(saved.ID)
 	}(cfg)
 

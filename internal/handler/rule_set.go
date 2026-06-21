@@ -300,6 +300,19 @@ func UpdateRuleSetCacheMode(c *gin.Context) {
 		return
 	}
 
+	// 预设规则集为全局共享资源，仅管理员可修改其缓存模式
+	if rp.IsPreset {
+		var currentUser model.User
+		if err := repository.DB.First(&currentUser, userID).Error; err != nil {
+			Fail(c, http.StatusInternalServerError, "获取用户信息失败")
+			return
+		}
+		if !currentUser.IsAdmin {
+			Fail(c, http.StatusForbidden, "无权限修改预设规则集缓存模式")
+			return
+		}
+	}
+
 	updates := map[string]interface{}{
 		"server_cache_enabled": req.ServerCacheEnabled,
 	}
