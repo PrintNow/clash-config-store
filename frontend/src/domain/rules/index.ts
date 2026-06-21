@@ -158,6 +158,76 @@ export function parseRulesText(text: string): ParsedRulesTextResult {
   return { rules, lineNumbers }
 }
 
+export interface ParsedRulesTextFullResult {
+  rules: string[]
+  lineNumbers: number[]
+  /** 与 rules 一一对应，存储每条规则上方紧邻的注释文本（不含前缀 #）*/
+  comments: (string | null)[]
+  /** 原样保留注释行的混合数组，可直接持久化 */
+  mixed: string[]
+}
+
+/** 解析文本，同时保留注释行与规则的关联关系 */
+export function parseRulesTextFull(text: string): ParsedRulesTextFullResult {
+  const rules: string[] = []
+  const lineNumbers: number[] = []
+  const comments: (string | null)[] = []
+  const mixed: string[] = []
+  const lines = text.split('\n')
+  let pending: string | null = null
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (!trimmed) continue
+    if (trimmed.startsWith('#')) {
+      pending = trimmed.slice(1).trim()
+      mixed.push(trimmed)
+    } else {
+      rules.push(trimmed)
+      lineNumbers.push(i + 1)
+      comments.push(pending)
+      mixed.push(trimmed)
+      pending = null
+    }
+  }
+  return { rules, lineNumbers, comments, mixed }
+}
+
+/** 将混合存储数组（含 # 注释行）拆分为纯规则数组与平行注释数组 */
+export function parseRulesWithComments(mixed: string[]): {
+  rules: string[]
+  comments: (string | null)[]
+} {
+  const rules: string[] = []
+  const comments: (string | null)[] = []
+  let pending: string | null = null
+  for (const raw of mixed) {
+    const line = raw.trim()
+    if (!line) continue
+    if (line.startsWith('#')) {
+      pending = line.slice(1).trim()
+    } else {
+      rules.push(line)
+      comments.push(pending)
+      pending = null
+    }
+  }
+  return { rules, comments }
+}
+
+/** 将纯规则数组与平行注释数组合并为混合存储数组 */
+export function serializeRulesWithComments(
+  rules: string[],
+  comments: (string | null)[]
+): string[] {
+  const result: string[] = []
+  for (let i = 0; i < rules.length; i++) {
+    const c = i < comments.length ? comments[i] : null
+    if (c) result.push(`# ${c}`)
+    result.push(rules[i])
+  }
+  return result
+}
+
 export function hasMatchRule(rules: string[]): boolean {
   return rules.some((rule) => parseRule(rule).type === 'MATCH')
 }

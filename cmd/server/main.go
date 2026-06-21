@@ -63,6 +63,7 @@ func main() {
 	// 公开路由：订阅下发，无需认证
 	r.GET("/sub/:token", handler.HandleSub)
 	r.GET("/ruleset/:token/:name", handler.HandleRuleSet)
+	r.GET("/rule-cache/:token", handler.HandleRuleProviderCache)
 
 	api := r.Group("/api")
 	{
@@ -97,6 +98,11 @@ func main() {
 			prov.PUT("/:id", handler.UpdateProvider)
 			prov.DELETE("/:id", handler.DeleteProvider)
 			prov.POST("/:id/refresh", handler.RefreshProvider)
+			// inline provider 节点管理
+			prov.GET("/:id/nodes", handler.GetProviderNodes)
+			prov.POST("/:id/nodes", handler.AddProviderNode)
+			prov.PUT("/:id/nodes/:nodeIndex", handler.UpdateProviderNode)
+			prov.DELETE("/:id/nodes/:nodeIndex", handler.DeleteProviderNode)
 
 			// 配置模板管理
 			ct := protected.Group("/config-templates")
@@ -105,22 +111,6 @@ func main() {
 			ct.GET("/:id", handler.GetConfigTemplate)
 			ct.PUT("/:id", handler.UpdateConfigTemplate)
 			ct.DELETE("/:id", handler.DeleteConfigTemplate)
-
-			// 规则集库管理
-			rp := protected.Group("/rule-providers")
-			rp.GET("", handler.ListRuleProviders)
-			rp.POST("", handler.CreateRuleProvider)
-			rp.GET("/:id", handler.GetRuleProvider)
-			rp.PUT("/:id", handler.UpdateRuleProvider)
-			rp.DELETE("/:id", handler.DeleteRuleProvider)
-
-			hrs := protected.Group("/hosted-rule-sets")
-			hrs.GET("", handler.ListHostedRuleSets)
-			hrs.POST("", handler.CreateHostedRuleSet)
-			hrs.GET("/:id", handler.GetHostedRuleSet)
-			hrs.PUT("/:id", handler.UpdateHostedRuleSet)
-			hrs.DELETE("/:id", handler.DeleteHostedRuleSet)
-			hrs.POST("/reset-tokens", handler.ResetHostedRuleSetTokens)
 
 			// 自定义配置管理
 			cc := protected.Group("/custom-configs")
@@ -133,6 +123,18 @@ func main() {
 			cc.POST("/:id/clone", handler.CloneCustomConfig)
 			cc.GET("/:id/export", handler.ExportCustomConfig)
 			cc.GET("/:id/preview", handler.PreviewCustomConfig)
+			cc.GET("/:id/history", handler.GetConfigHistories)
+			cc.POST("/:id/history/:hid/restore", handler.RestoreConfigHistory)
+
+			// 统一规则集管理（外部引用 + 自托管）
+			rs := protected.Group("/rule-sets")
+			rs.GET("", handler.ListRuleSets)
+			rs.POST("", handler.CreateRuleSet)
+			rs.GET("/:id", handler.GetRuleSet)
+			rs.PUT("/:id", handler.UpdateRuleSet)
+			rs.DELETE("/:id", handler.DeleteRuleSet)
+			rs.POST("/reset-hosted-tokens", handler.ResetHostedRuleSetTokens)
+			rs.PATCH("/:id/cache-mode", handler.UpdateRuleSetCacheMode)
 
 			// 订阅管理
 			sub := protected.Group("/subscriptions")
@@ -146,6 +148,17 @@ func main() {
 			sub.GET("/:id/restrictions", handler.ListRestrictions)
 			sub.POST("/:id/restrictions", handler.CreateRestriction)
 			sub.DELETE("/:id/restrictions/:rid", handler.DeleteRestriction)
+			sub.GET("/:id/components", handler.GetSubscriptionComponents)
+
+			// 管理后台（需管理员权限）
+			admin := protected.Group("/admin", middleware.Admin())
+			admin.GET("/settings", handler.GetSystemSettings)
+			admin.PUT("/settings", handler.UpdateSystemSettings)
+			admin.GET("/users", handler.ListAdminUsers)
+			admin.POST("/users", handler.CreateAdminUser)
+			admin.GET("/users/:id", handler.GetAdminUser)
+			admin.PUT("/users/:id", handler.UpdateAdminUser)
+			admin.DELETE("/users/:id", handler.DeleteAdminUser)
 		}
 	}
 

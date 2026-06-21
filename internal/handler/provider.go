@@ -35,14 +35,25 @@ func ListProviders(c *gin.Context) {
 	OK(c, providers)
 }
 
+// providerRequest 统一创建/更新请求体
 type providerRequest struct {
-	Name        string `json:"name" binding:"required"`
-	URL         string `json:"url" binding:"required,url"`
-	UserAgentID *uint  `json:"user_agent_id"`
-	CacheTTL    *int   `json:"cache_ttl"`
+	Name    string             `json:"name" binding:"required"`
+	Type    model.ProviderType `json:"type"` // 默认 http
+
+	// http 类型字段
+	URL           string `json:"url"`
+	UserAgentID   *uint  `json:"user_agent_id"`
+	CacheTTL      *int   `json:"cache_ttl"`
+	Filter        string `json:"filter"`
+	ExcludeFilter string `json:"exclude_filter"`
+	Prefix        string `json:"prefix"`
+	Suffix        string `json:"suffix"`
+
+	// inline 类型字段
+	Payload model.JSONPayload `json:"payload"`
 }
 
-// CreateProvider 创建 Provider
+// CreateProvider 同时支持 http 和 inline
 func CreateProvider(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	var req providerRequest
@@ -50,30 +61,38 @@ func CreateProvider(c *gin.Context) {
 		BindFail(c, err)
 		return
 	}
-
-	cacheTTL := 60
-	if req.CacheTTL != nil {
-		cacheTTL = *req.CacheTTL
+	if req.Type == "" {
+		req.Type = model.ProviderTypeHTTP
 	}
-
+	if req.Type == model.ProviderTypeHTTP && req.URL == "" {
+		Fail(c, http.StatusBadRequest, "http 类型必须提供 url")
+		return
+	}
 	if req.UserAgentID != nil && !userAgentSelectableByUser(userID, *req.UserAgentID) {
 		Fail(c, http.StatusBadRequest, "无效的 user_agent_id")
 		return
 	}
-
-	p := &model.Provider{
-		UserID:      userID,
-		Name:        req.Name,
-		URL:         req.URL,
-		UserAgentID: req.UserAgentID,
-		CacheTTL:    cacheTTL,
+	cacheTTL := 3600
+	if req.CacheTTL != nil {
+		cacheTTL = *req.CacheTTL
 	}
-
+	p := &model.Provider{
+		UserID:        userID,
+		Name:          req.Name,
+		Type:          req.Type,
+		URL:           req.URL,
+		UserAgentID:   req.UserAgentID,
+		CacheTTL:      cacheTTL,
+		Filter:        req.Filter,
+		ExcludeFilter: req.ExcludeFilter,
+		Prefix:        req.Prefix,
+		Suffix:        req.Suffix,
+		Payload:       req.Payload,
+	}
 	if err := repository.DB.Create(p).Error; err != nil {
 		Fail(c, http.StatusInternalServerError, "创建失败")
 		return
 	}
-
 	OK(c, p)
 }
 
@@ -98,14 +117,27 @@ func UpdateProvider(c *gin.Context) {
 		return
 	}
 
+	if req.Type == "" {
+		req.Type = p.Type
+	}
+	if req.Type == model.ProviderTypeHTTP && req.URL == "" {
+		Fail(c, http.StatusBadRequest, "http 类型必须提供 url")
+		return
+	}
 	if req.UserAgentID != nil && !userAgentSelectableByUser(userID, *req.UserAgentID) {
 		Fail(c, http.StatusBadRequest, "无效的 user_agent_id")
 		return
 	}
 
 	p.Name = req.Name
+	p.Type = req.Type
 	p.URL = req.URL
 	p.UserAgentID = req.UserAgentID
+	p.Filter = req.Filter
+	p.ExcludeFilter = req.ExcludeFilter
+	p.Prefix = req.Prefix
+	p.Suffix = req.Suffix
+	p.Payload = req.Payload
 	if req.CacheTTL != nil {
 		p.CacheTTL = *req.CacheTTL
 	}
@@ -156,6 +188,11 @@ func RefreshProvider(c *gin.Context) {
 		return
 	}
 
+	if p.Type == model.ProviderTypeInline {
+		OKMsg(c, "inline provider 无需刷新", p)
+		return
+	}
+
 	if err := service.FetchAndCache(uint(id)); err != nil {
 		Fail(c, http.StatusInternalServerError, "刷新失败: "+err.Error())
 		return
@@ -164,4 +201,116 @@ func RefreshProvider(c *gin.Context) {
 	// 重新查询返回最新数据
 	repository.DB.Preload("UserAgent").First(&p, id)
 	OKMsg(c, "刷新成功", p)
+}
+
+// --- inline provider 节点 CRUD ---
+
+// GetProviderNodes 获取 inline provider 节点列表
+func GetProviderNodes(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var p model.Provider
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&p).Error; err != nil {
+		Fail(c, http.StatusNotFound, "Provider 不存在")
+		return
+	}
+	if p.Type != model.ProviderTypeInline {
+		Fail(c, http.StatusBadRequest, "仅 inline provider 支持节点管理")
+		return
+	}
+	if p.Payload == nil {
+		p.Payload = model.JSONPayload{}
+	}
+	OK(c, p.Payload)
+}
+
+// AddProviderNode 向 inline provider 添加节点
+func AddProviderNode(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var p model.Provider
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&p).Error; err != nil {
+		Fail(c, http.StatusNotFound, "Provider 不存在")
+		return
+	}
+	if p.Type != model.ProviderTypeInline {
+		Fail(c, http.StatusBadRequest, "仅 inline provider 支持节点管理")
+		return
+	}
+	var node map[string]interface{}
+	if err := c.ShouldBindJSON(&node); err != nil {
+		BindFail(c, err)
+		return
+	}
+	p.Payload = append(p.Payload, node)
+	if err := repository.DB.Save(&p).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "保存失败")
+		return
+	}
+	OK(c, p.Payload)
+}
+
+// UpdateProviderNode 更新指定索引的节点
+func UpdateProviderNode(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	nodeIdx, err := strconv.Atoi(c.Param("nodeIndex"))
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的节点索引")
+		return
+	}
+	var p model.Provider
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&p).Error; err != nil {
+		Fail(c, http.StatusNotFound, "Provider 不存在")
+		return
+	}
+	if p.Type != model.ProviderTypeInline {
+		Fail(c, http.StatusBadRequest, "仅 inline provider 支持节点管理")
+		return
+	}
+	if nodeIdx < 0 || nodeIdx >= len(p.Payload) {
+		Fail(c, http.StatusBadRequest, "节点索引越界")
+		return
+	}
+	var node map[string]interface{}
+	if err := c.ShouldBindJSON(&node); err != nil {
+		BindFail(c, err)
+		return
+	}
+	p.Payload[nodeIdx] = node
+	if err := repository.DB.Save(&p).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "保存失败")
+		return
+	}
+	OK(c, p.Payload)
+}
+
+// DeleteProviderNode 删除指定索引的节点
+func DeleteProviderNode(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	nodeIdx, err := strconv.Atoi(c.Param("nodeIndex"))
+	if err != nil {
+		Fail(c, http.StatusBadRequest, "无效的节点索引")
+		return
+	}
+	var p model.Provider
+	if err := repository.DB.Where("id = ? AND user_id = ?", id, userID).First(&p).Error; err != nil {
+		Fail(c, http.StatusNotFound, "Provider 不存在")
+		return
+	}
+	if p.Type != model.ProviderTypeInline {
+		Fail(c, http.StatusBadRequest, "仅 inline provider 支持节点管理")
+		return
+	}
+	if nodeIdx < 0 || nodeIdx >= len(p.Payload) {
+		Fail(c, http.StatusBadRequest, "节点索引越界")
+		return
+	}
+	p.Payload = append(p.Payload[:nodeIdx], p.Payload[nodeIdx+1:]...)
+	if err := repository.DB.Save(&p).Error; err != nil {
+		Fail(c, http.StatusInternalServerError, "保存失败")
+		return
+	}
+	OK(c, p.Payload)
 }

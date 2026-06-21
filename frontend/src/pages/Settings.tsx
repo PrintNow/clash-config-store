@@ -14,18 +14,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 
 export function Settings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { setAuth, token } = useAuthStore()
 
-  // 个人信息表单
   const [profileForm, setProfileForm] = useState({ name: '', email: '' })
   const [profileErrors, setProfileErrors] = useState<{ name?: string; email?: string }>({})
 
-  // 密码表单
   const [passwordForm, setPasswordForm] = useState({
     old_password: '',
     new_password: '',
@@ -42,7 +39,6 @@ export function Settings() {
     queryFn: userApi.getProfile,
   })
 
-  // 初始化表单
   useEffect(() => {
     if (profile) {
       setProfileForm({ name: profile.name, email: profile.email })
@@ -53,7 +49,6 @@ export function Settings() {
     mutationFn: userApi.updateProfile,
     onSuccess: (updatedUser) => {
       queryClient.invalidateQueries({ queryKey: ['user-profile'] })
-      // 同步更新 auth store 中的用户信息
       if (token) {
         setAuth(token, updatedUser)
       }
@@ -107,35 +102,36 @@ export function Settings() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
+    <div className="space-y-4 max-w-xl">
+      <h1 className="text-xl font-bold">{t('settings.title')}</h1>
 
       {/* 基本信息 */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.basicInfo')}</CardTitle>
-          <CardDescription>
+        <CardHeader className="py-4 px-4 pb-3">
+          <CardTitle className="text-base">{t('settings.basicInfo')}</CardTitle>
+          <CardDescription className="text-xs">
             更新你的用户名和邮箱地址
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleProfileSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">{t('settings.username')}</Label>
+        <CardContent className="px-4 pb-4">
+          <form onSubmit={handleProfileSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="username" className="text-sm">{t('settings.username')}</Label>
               <Input
                 id="username"
                 value={profileForm.name}
                 onChange={(e) =>
                   setProfileForm((p) => ({ ...p, name: e.target.value }))
                 }
+                className="h-8 text-sm"
               />
               {profileErrors.name && (
-                <p className="text-sm text-destructive">{profileErrors.name}</p>
+                <p className="text-xs text-destructive">{profileErrors.name}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('settings.email')}</Label>
+            <div className="space-y-1">
+              <Label htmlFor="email" className="text-sm">{t('settings.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -143,33 +139,32 @@ export function Settings() {
                 onChange={(e) =>
                   setProfileForm((p) => ({ ...p, email: e.target.value }))
                 }
+                className="h-8 text-sm"
               />
               {profileErrors.email && (
-                <p className="text-sm text-destructive">{profileErrors.email}</p>
+                <p className="text-xs text-destructive">{profileErrors.email}</p>
               )}
             </div>
 
-            <Button type="submit" disabled={updateProfileMutation.isPending}>
+            <Button type="submit" size="sm" disabled={updateProfileMutation.isPending}>
               {updateProfileMutation.isPending ? t('common.saving') : t('settings.saveProfile')}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Separator />
-
       {/* 修改密码 */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.changePassword')}</CardTitle>
-          <CardDescription>
+        <CardHeader className="py-4 px-4 pb-3">
+          <CardTitle className="text-base">{t('settings.changePassword')}</CardTitle>
+          <CardDescription className="text-xs">
             使用强密码以保护账号安全
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="oldPassword">{t('settings.oldPassword')}</Label>
+        <CardContent className="px-4 pb-4">
+          <form onSubmit={handlePasswordSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="oldPassword" className="text-sm">{t('settings.oldPassword')}</Label>
               <Input
                 id="oldPassword"
                 type="password"
@@ -177,14 +172,15 @@ export function Settings() {
                 onChange={(e) =>
                   setPasswordForm((p) => ({ ...p, old_password: e.target.value }))
                 }
+                className="h-8 text-sm"
               />
               {passwordErrors.old_password && (
-                <p className="text-sm text-destructive">{passwordErrors.old_password}</p>
+                <p className="text-xs text-destructive">{passwordErrors.old_password}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">{t('settings.newPassword')}</Label>
+            <div className="space-y-1">
+              <Label htmlFor="newPassword" className="text-sm">{t('settings.newPassword')}</Label>
               <Input
                 id="newPassword"
                 type="password"
@@ -192,14 +188,15 @@ export function Settings() {
                 onChange={(e) =>
                   setPasswordForm((p) => ({ ...p, new_password: e.target.value }))
                 }
+                className="h-8 text-sm"
               />
               {passwordErrors.new_password && (
-                <p className="text-sm text-destructive">{passwordErrors.new_password}</p>
+                <p className="text-xs text-destructive">{passwordErrors.new_password}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmNewPassword">{t('settings.confirmNewPassword')}</Label>
+            <div className="space-y-1">
+              <Label htmlFor="confirmNewPassword" className="text-sm">{t('settings.confirmNewPassword')}</Label>
               <Input
                 id="confirmNewPassword"
                 type="password"
@@ -207,13 +204,14 @@ export function Settings() {
                 onChange={(e) =>
                   setPasswordForm((p) => ({ ...p, confirm_password: e.target.value }))
                 }
+                className="h-8 text-sm"
               />
               {passwordErrors.confirm_password && (
-                <p className="text-sm text-destructive">{passwordErrors.confirm_password}</p>
+                <p className="text-xs text-destructive">{passwordErrors.confirm_password}</p>
               )}
             </div>
 
-            <Button type="submit" disabled={changePasswordMutation.isPending}>
+            <Button type="submit" size="sm" disabled={changePasswordMutation.isPending}>
               {changePasswordMutation.isPending
                 ? t('common.submitting')
                 : t('settings.changePasswordBtn')}

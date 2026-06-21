@@ -1,45 +1,60 @@
 import client from './client'
 import type { Provider } from '@/types'
 
+type HttpProviderData = {
+  name: string
+  type: 'http'
+  url: string
+  user_agent_id?: number
+  cache_ttl?: number
+  filter?: string
+  exclude_filter?: string
+  prefix?: string
+  suffix?: string
+}
+
+type InlineProviderData = {
+  name: string
+  type: 'inline'
+  payload?: Record<string, unknown>[]
+}
+
+type CreateProviderData = HttpProviderData | InlineProviderData
+
 export const providersApi = {
-  // 获取订阅源列表
   list: async (): Promise<Provider[]> => {
     const res = await client.get<{ code: number; data: Provider[] }>('/providers')
     return res.data.data
   },
-
-  // 创建订阅源
-  create: async (data: {
-    name: string
-    url: string
-    user_agent_id?: number
-    cache_ttl?: number
-  }): Promise<Provider> => {
+  create: async (data: CreateProviderData): Promise<Provider> => {
     const res = await client.post<{ code: number; data: Provider }>('/providers', data)
     return res.data.data
   },
-
-  // 更新订阅源
-  update: async (
-    id: number,
-    data: {
-      name: string
-      url: string
-      user_agent_id?: number
-      cache_ttl?: number
-    }
-  ): Promise<Provider> => {
+  update: async (id: number, data: CreateProviderData): Promise<Provider> => {
     const res = await client.put<{ code: number; data: Provider }>(`/providers/${id}`, data)
     return res.data.data
   },
-
-  // 删除订阅源
   delete: async (id: number): Promise<void> => {
     await client.delete(`/providers/${id}`)
   },
-
-  // 手动刷新订阅源
   refresh: async (id: number): Promise<void> => {
     await client.post(`/providers/${id}/refresh`)
+  },
+  // inline provider 节点管理
+  getNodes: async (id: number): Promise<Record<string, unknown>[]> => {
+    const res = await client.get<{ code: number; data: Record<string, unknown>[] | null }>(`/providers/${id}/nodes`)
+    return res.data.data ?? []
+  },
+  addNode: async (id: number, node: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
+    const res = await client.post<{ code: number; data: Record<string, unknown>[] | null }>(`/providers/${id}/nodes`, node)
+    return res.data.data ?? []
+  },
+  updateNode: async (id: number, nodeIndex: number, node: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
+    const res = await client.put<{ code: number; data: Record<string, unknown>[] | null }>(`/providers/${id}/nodes/${nodeIndex}`, node)
+    return res.data.data ?? []
+  },
+  deleteNode: async (id: number, nodeIndex: number): Promise<Record<string, unknown>[]> => {
+    const res = await client.delete<{ code: number; data: Record<string, unknown>[] | null }>(`/providers/${id}/nodes/${nodeIndex}`)
+    return res.data.data ?? []
   },
 }

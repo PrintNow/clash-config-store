@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	domsub "clash-config-store/internal/domain/subscription"
 	"clash-config-store/internal/middleware"
 	"clash-config-store/internal/model"
 	"clash-config-store/internal/repository"
@@ -13,6 +13,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// applyDefaultTokenExpiry 当 expiredAt 为 nil 且配置了全局默认有效期时，计算并返回过期时间
+func applyDefaultTokenExpiry(expiredAt *time.Time) *time.Time {
+	if expiredAt != nil {
+		return expiredAt
+	}
+	days, _ := strconv.Atoi(repository.GetSetting("default_token_expiry_days", "0"))
+	if days <= 0 {
+		return nil
+	}
+	t := time.Now().AddDate(0, 0, days)
+	return &t
+}
 
 func fillSubscriptionURL(sub *model.Subscription) {
 	sub.SubscriptionURL = util.SubscriptionPublicURL(sub.Token)
@@ -60,7 +73,6 @@ func ListSubscriptions(c *gin.Context) {
 
 type subscriptionRequest struct {
 	Name               string     `json:"name" binding:"required"`
-	EnabledProviderIDs *[]uint    `json:"enabled_provider_ids"`
 	CustomConfigID     *uint      `json:"custom_config_id"`
 	ConfigTemplateID   *uint      `json:"config_template_id"`
 	RuleInsertMode     string     `json:"rule_insert_mode"`
@@ -83,11 +95,6 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	ids := []uint{}
-	if req.EnabledProviderIDs != nil {
-		ids = *req.EnabledProviderIDs
-	}
-
 	ruleInsertMode := req.RuleInsertMode
 	if ruleInsertMode == "" {
 		ruleInsertMode = string(model.RuleInsertPrepend)
@@ -97,8 +104,7 @@ func CreateSubscription(c *gin.Context) {
 		UserID:             userID,
 		Name:               req.Name,
 		Token:              token,
-		TokenExpiredAt:     req.TokenExpiredAt,
-		EnabledProviderIDs: domsub.EnabledProviderIDsToStore(ids),
+		TokenExpiredAt:     applyDefaultTokenExpiry(req.TokenExpiredAt),
 		CustomConfigID:     req.CustomConfigID,
 		ConfigTemplateID:   req.ConfigTemplateID,
 		RuleInsertMode:     model.RuleInsertMode(ruleInsertMode),
@@ -167,7 +173,6 @@ func UpdateSubscription(c *gin.Context) {
 	}
 
 	sub.Name = req.Name
-	sub.EnabledProviderIDs = domsub.PatchEnabledProviderIDs(sub.EnabledProviderIDs, req.EnabledProviderIDs)
 	sub.CustomConfigID = req.CustomConfigID
 	sub.ConfigTemplateID = req.ConfigTemplateID
 	sub.RuleInsertMode = model.RuleInsertMode(ruleInsertMode)
@@ -341,6 +346,137 @@ func CreateRestriction(c *gin.Context) {
 		return
 	}
 	OK(c, restriction)
+}
+
+// GetSubscriptionComponents 获取订阅的组成要素（节点源、自定义配置、规则集、模板）
+func GetSubscriptionComponents(c *gin.Context) {
+	userID := middleware.CurrentUserID(c)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	var sub model.Subscription
+	if err := repository.DB.
+		Preload("CustomConfig").
+		Preload("ConfigTemplate").
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&sub).Error; err != nil {
+		Fail(c, http.StatusNotFound, "订阅不存在")
+		return
+	}
+
+	// 节点源：从 CustomConfig 的 use: 字段推导
+	var providers []model.Provider
+	if sub.CustomConfig != nil {
+		referencedNames := extractProviderNamesFromGroups(sub.CustomConfig.ProxyGroups)
+		if len(referencedNames) > 0 {
+			repository.DB.Where("name IN ? AND user_id = ?", referencedNames, userID).Find(&providers)
+		}
+	}
+	if providers == nil {
+		providers = []model.Provider{}
+	}
+
+	// 从 custom_config.rules 推断规则集
+	var inferredRuleSets []UnifiedRuleSet
+	if sub.CustomConfig != nil {
+		ruleSetNames := extractRuleSetNames(sub.CustomConfig.Rules)
+		if len(ruleSetNames) > 0 {
+			// 先查 rule_providers
+			var rps []model.RuleProvider
+			repository.DB.Where("name IN ? AND (user_id = ? OR is_preset = ?)", ruleSetNames, userID, true).Find(&rps)
+			for _, rp := range rps {
+				inferredRuleSets = append(inferredRuleSets, UnifiedRuleSet{
+					ID:         rp.ID,
+					Name:       rp.Name,
+					SourceType: "external",
+					Behavior:   rp.Behavior,
+					Format:     rp.Format,
+					URL:        rp.URL,
+					IsPreset:   rp.IsPreset,
+					PresetTag:  rp.PresetTag,
+				})
+			}
+			// 再查 hosted_rule_sets
+			var hrss []model.HostedRuleSet
+			repository.DB.Where("name IN ? AND user_id = ?", ruleSetNames, userID).Find(&hrss)
+			for _, hrs := range hrss {
+				inferredRuleSets = append(inferredRuleSets, UnifiedRuleSet{
+					ID:         hrs.ID,
+					Name:       hrs.Name,
+					SourceType: "hosted",
+					Behavior:   hrs.Behavior,
+					Format:     hrs.Format,
+					HrsURL:     util.RuleSetPublicURL(hrs.Token, hrs.Name),
+				})
+			}
+		}
+	}
+	if inferredRuleSets == nil {
+		inferredRuleSets = []UnifiedRuleSet{}
+	}
+
+	type Components struct {
+		Providers    []model.Provider      `json:"providers"`
+		CustomConfig *model.CustomConfig   `json:"custom_config"`
+		RuleSets     []UnifiedRuleSet      `json:"rule_sets"`
+		Template     *model.ConfigTemplate `json:"template"`
+	}
+
+	OK(c, Components{
+		Providers:    providers,
+		CustomConfig: sub.CustomConfig,
+		RuleSets:     inferredRuleSets,
+		Template:     sub.ConfigTemplate,
+	})
+}
+
+// extractProviderNamesFromGroups 从代理组的 use: 字段中提取被引用的 Provider 名（去重）
+func extractProviderNamesFromGroups(groups []map[string]interface{}) []string {
+	seen := make(map[string]struct{})
+	names := make([]string, 0)
+	for _, g := range groups {
+		use, ok := g["use"]
+		if !ok {
+			continue
+		}
+		switch v := use.(type) {
+		case []interface{}:
+			for _, item := range v {
+				if name, ok := item.(string); ok && name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		case []string:
+			for _, name := range v {
+				if name != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		}
+	}
+	return names
+}
+
+// extractRuleSetNames 从规则列表中提取 RULE-SET 引用的规则集名称
+func extractRuleSetNames(rules []string) []string {
+	names := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, rule := range rules {
+		parts := strings.SplitN(rule, ",", 3)
+		if len(parts) >= 2 && strings.ToUpper(parts[0]) == "RULE-SET" {
+			name := strings.TrimSpace(parts[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 // DeleteRestriction 删除指定访问限制规则

@@ -3,6 +3,7 @@ export interface User {
   id: number
   email: string
   name: string
+  is_admin: boolean
   created_at: string
 }
 
@@ -22,12 +23,20 @@ export interface Provider {
   id: number
   user_id: number
   name: string
-  url: string
+  type: 'http' | 'inline'
+  // http 类型字段
+  url?: string
   user_agent_id?: number
   cache_ttl: number
   last_fetched_at?: string
   fetch_error?: string
   user_agent?: UserAgent
+  filter?: string
+  exclude_filter?: string
+  prefix?: string
+  suffix?: string
+  // inline 类型字段
+  payload?: Record<string, unknown>[]
 }
 
 // 代理节点（结构化）
@@ -49,6 +58,7 @@ export interface ProxyGroup {
   interval?: number
   tolerance?: number
   strategy?: string
+  icon?: string
   [key: string]: unknown
 }
 
@@ -63,34 +73,33 @@ export interface ConfigTemplate {
   updated_at: string
 }
 
-export interface HostedRuleSet {
+// 统一规则集类型（外部引用 + 自托管）
+export interface RuleSet {
   id: number
-  user_id: number
   name: string
+  source_type: 'external' | 'hosted'
   behavior: 'domain' | 'ipcidr' | 'classical'
-  format: 'yaml' | 'text'
-  content?: string
-  token?: string
+  format: 'yaml' | 'text' | 'mrs'
+  rule_count?: number
+  // external 字段
   url?: string
+  interval?: number
+  is_preset?: boolean
+  preset_tag?: string
+  server_cache_enabled?: boolean
+  // hosted 字段
+  token?: string
+  hrs_url?: string
+  content?: string
   created_at: string
   updated_at: string
 }
 
-// 规则集库条目
-export interface RuleProvider {
-  id: number
-  /** 系统预设为 null */
-  user_id: number | null
-  name: string
-  type: 'http' | 'file'
-  url: string
-  behavior: 'domain' | 'ipcidr' | 'classical'
-  format: 'yaml' | 'text' | 'mrs'
-  interval: number
-  is_preset: boolean
-  preset_tag: string
-  created_at: string
-  updated_at: string
+export interface SubscriptionComponents {
+  providers: Provider[]
+  custom_config: CustomConfig | null
+  rule_sets: RuleSet[]
+  template: ConfigTemplate | null
 }
 
 // 自定义配置（结构化）
@@ -98,7 +107,6 @@ export interface CustomConfig {
   id: number
   user_id: number
   name: string
-  proxies: ProxyNode[]
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]
@@ -109,7 +117,6 @@ export interface CustomConfig {
 
 export interface CustomConfigTransferPayload {
   name: string
-  proxies: ProxyNode[]
   proxy_groups: ProxyGroup[]
   rules: string[]
   rule_provider_ids: number[]
@@ -127,7 +134,6 @@ export interface Subscription {
   /** 列表接口聚合的访问日志条数 */
   access_log_count?: number
   token_expired_at?: string
-  enabled_provider_ids: number[]
   custom_config_id?: number
   config_template_id?: number
   rule_insert_mode: 'prepend' | 'append' | 'replace'
@@ -150,10 +156,12 @@ export interface AccessRestriction {
 export interface AccessLog {
   id: number
   subscription_id: number
+  subscription_name: string
   ip: string
   country: string
   country_code: string
   city: string
+  user_agent?: string
   allowed: boolean
   deny_reason?: string
   created_at: string
@@ -163,7 +171,9 @@ export interface AccessLog {
 export interface ProviderStatus {
   id: number
   name: string
+  type: 'http' | 'inline'
   url: string
+  updated_at: string
   last_fetched_at?: string
   fetch_error: string
   cache_stale: boolean
@@ -206,4 +216,34 @@ export interface PagedResponse<T> {
   total: number
   page: number
   page_size: number
+}
+
+// 外部规则集（rule-providers）
+export interface RuleProvider {
+  id: number
+  user_id: number | null
+  name: string
+  type: 'http' | 'file'
+  url: string
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text' | 'mrs'
+  interval: number
+  is_preset: boolean
+  preset_tag: string
+  created_at: string
+}
+
+// 自托管规则集（hosted-rule-sets）
+export interface HostedRuleSet {
+  id: number
+  user_id: number
+  name: string
+  behavior: 'domain' | 'ipcidr' | 'classical'
+  format: 'yaml' | 'text'
+  content: string
+  content_sha256: string
+  token: string
+  url: string
+  created_at: string
+  updated_at: string
 }

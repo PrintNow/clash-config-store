@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,13 +24,15 @@ func ListCustomConfigs(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
+	for i := range configs {
+		normalizeCustomConfig(&configs[i])
+	}
 	OK(c, configs)
 }
 
 // customConfigRequest 创建/更新自定义配置的请求体
 type customConfigRequest struct {
 	Name             string                   `json:"name" binding:"required"`
-	Proxies          []map[string]interface{} `json:"proxies"`
 	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
 	Rules            []string                 `json:"rules"`
 	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
@@ -38,7 +41,6 @@ type customConfigRequest struct {
 
 type customConfigTransferPayload struct {
 	Name             string                   `json:"name"`
-	Proxies          []map[string]interface{} `json:"proxies"`
 	ProxyGroups      []map[string]interface{} `json:"proxy_groups"`
 	Rules            []string                 `json:"rules"`
 	RuleProviderIDs  []uint                   `json:"rule_provider_ids"`
@@ -63,7 +65,6 @@ func CreateCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             req.Name,
-		Proxies:          nullSliceMaps(req.Proxies),
 		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
 		Rules:            nullSliceStrings(req.Rules),
 		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
@@ -95,7 +96,6 @@ func CloneCustomConfig(c *gin.Context) {
 	clone := &model.CustomConfig{
 		UserID:           userID,
 		Name:             uniqueCustomConfigName(userID, cfg.Name+" - 副本"),
-		Proxies:          cloneSliceMaps(cfg.Proxies),
 		ProxyGroups:      cloneSliceMaps(cfg.ProxyGroups),
 		Rules:            cloneSliceStrings(cfg.Rules),
 		RuleProviderIDs:  cloneSliceUints(cfg.RuleProviderIDs),
@@ -106,6 +106,7 @@ func CloneCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "克隆失败")
 		return
 	}
+	normalizeCustomConfig(clone)
 	OK(c, clone)
 }
 
@@ -123,6 +124,7 @@ func GetCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusNotFound, "配置不存在或无权限")
 		return
 	}
+	normalizeCustomConfig(&cfg)
 	OK(c, cfg)
 }
 
@@ -154,7 +156,6 @@ func UpdateCustomConfig(c *gin.Context) {
 	req.RuleProviderIDs, req.HostedRuleSetIDs, _ = normalizeCustomConfigRuleSetRefs(userID, req.RuleProviderIDs, req.HostedRuleSetIDs)
 
 	cfg.Name = req.Name
-	cfg.Proxies = nullSliceMaps(req.Proxies)
 	cfg.ProxyGroups = nullSliceMaps(req.ProxyGroups)
 	cfg.Rules = nullSliceStrings(req.Rules)
 	cfg.RuleProviderIDs = nullSliceUints(req.RuleProviderIDs)
@@ -164,6 +165,25 @@ func UpdateCustomConfig(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
+
+	// 保存变更历史（异步，不影响响应）
+	go func(saved model.CustomConfig) {
+		history := model.ConfigHistory{
+			CustomConfigID:   saved.ID,
+			UserID:           saved.UserID,
+			Name:             saved.Name,
+			ProxyGroups:      saved.ProxyGroups,
+			Rules:            saved.Rules,
+			RuleProviderIDs:  saved.RuleProviderIDs,
+			HostedRuleSetIDs: saved.HostedRuleSetIDs,
+		}
+		if err := repository.DB.Create(&history).Error; err != nil {
+			slog.Error("保存配置变更历史失败", slog.String("component", "config_history"), slog.Uint64("config_id", uint64(saved.ID)), slog.Any("err", err))
+		}
+		pruneConfigHistory(saved.ID)
+	}(cfg)
+
+	normalizeCustomConfig(&cfg)
 	OK(c, cfg)
 }
 
@@ -206,7 +226,6 @@ func ExportCustomConfig(c *gin.Context) {
 
 	payload := customConfigTransferPayload{
 		Name:             cfg.Name,
-		Proxies:          nullSliceMaps(cfg.Proxies),
 		ProxyGroups:      nullSliceMaps(cfg.ProxyGroups),
 		Rules:            nullSliceStrings(cfg.Rules),
 		RuleProviderIDs:  nullSliceUints(cfg.RuleProviderIDs),
@@ -240,7 +259,6 @@ func ImportCustomConfig(c *gin.Context) {
 
 	createReq := customConfigRequest{
 		Name:             uniqueCustomConfigName(userID, req.Name),
-		Proxies:          nullSliceMaps(req.Proxies),
 		ProxyGroups:      nullSliceMaps(req.ProxyGroups),
 		Rules:            nullSliceStrings(req.Rules),
 		RuleProviderIDs:  nullSliceUints(req.RuleProviderIDs),
@@ -255,7 +273,6 @@ func ImportCustomConfig(c *gin.Context) {
 	cfg := &model.CustomConfig{
 		UserID:           userID,
 		Name:             createReq.Name,
-		Proxies:          createReq.Proxies,
 		ProxyGroups:      createReq.ProxyGroups,
 		Rules:            createReq.Rules,
 		RuleProviderIDs:  createReq.RuleProviderIDs,
@@ -295,7 +312,6 @@ func PreviewCustomConfig(c *gin.Context) {
 	yamlBytes, err := util.BuildMihomoConfig(
 		"",
 		nil,
-		cfg.Proxies,
 		cfg.ProxyGroups,
 		cfg.Rules,
 		"append",
@@ -312,16 +328,6 @@ func PreviewCustomConfig(c *gin.Context) {
 
 // validateCustomConfigRequest 校验自定义配置请求
 func validateCustomConfigRequest(userID uint, req *customConfigRequest) error {
-	for i, p := range req.Proxies {
-		name, _ := p["name"].(string)
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("proxies[%d] 缺少非空 name", i)
-		}
-		typ, _ := p["type"].(string)
-		if strings.TrimSpace(typ) == "" {
-			return fmt.Errorf("proxies[%d] 缺少非空 type", i)
-		}
-	}
 	for i, g := range req.ProxyGroups {
 		name, _ := g["name"].(string)
 		if strings.TrimSpace(name) == "" {
@@ -341,6 +347,14 @@ func validateCustomConfigRequest(userID uint, req *customConfigRequest) error {
 		return err
 	}
 	return nil
+}
+
+// normalizeCustomConfig 将所有 nil 切片字段替换为空切片，避免 JSON 输出 null
+func normalizeCustomConfig(cfg *model.CustomConfig) {
+	cfg.ProxyGroups = nullSliceMaps(cfg.ProxyGroups)
+	cfg.Rules = nullSliceStrings(cfg.Rules)
+	cfg.RuleProviderIDs = nullSliceUints(cfg.RuleProviderIDs)
+	cfg.HostedRuleSetIDs = nullSliceUints(cfg.HostedRuleSetIDs)
 }
 
 // nullSliceMaps 将 nil 切片统一为空切片，避免 JSON 输出 null

@@ -1,4 +1,4 @@
-import { parseRulesText } from '@/domain/rules'
+import { parseRulesTextFull } from '@/domain/rules'
 import type { RuleAnalysis } from '@/domain/rules'
 import type { CustomConfig } from '@/types'
 
@@ -20,15 +20,19 @@ export const sortableInstantReorder = {
 // 规则草稿工具函数
 // ─────────────────────────────────────────────
 
-/** 与保存 API 一致的规则草稿（表格模式用 rules，原文模式解析 rulesText） */
+/**
+ * 返回混合格式的规则数组（含 # 注释行）用于持久化。
+ * 表格模式：直接返回已序列化的 mixedRules。
+ * 原文模式：从 rulesText 重新解析，保留注释行。
+ */
 export function rulesFromDraft(
   rulesTextMode: boolean,
   rulesText: string,
-  rules: string[]
+  mixedRules: string[]
 ): string[] {
   return rulesTextMode
-    ? parseRulesText(rulesText).rules
-    : rules
+    ? parseRulesTextFull(rulesText).mixed
+    : mixedRules
 }
 
 /** 规则列表 arrayMove 后，将当前展开行的下标映射到新数组索引 */
@@ -54,13 +58,12 @@ export function remapRuleIndexAfterMove(
 /** 用于脏检查与提交的 payload 形状 */
 export type CustomConfigDraftPayload = Pick<
   CustomConfig,
-  'name' | 'proxies' | 'proxy_groups' | 'rules' | 'rule_provider_ids' | 'hosted_rule_set_ids'
+  'name' | 'proxy_groups' | 'rules' | 'rule_provider_ids' | 'hosted_rule_set_ids'
 >
 
 export function savedPayloadFromConfig(c: CustomConfig): CustomConfigDraftPayload {
   return {
     name: c.name,
-    proxies: c.proxies || [],
     proxy_groups: c.proxy_groups || [],
     rules: c.rules || [],
     rule_provider_ids: c.rule_provider_ids || [],
@@ -87,6 +90,8 @@ export type RuleSetReferenceItem = {
 export interface RuleListItem {
   sourceIndex: number
   lineNumber?: number
+  /** 规则上方的行注释文本（不含 # 前缀），无注释时为 undefined */
+  comment?: string
   analysis: RuleAnalysis
 }
 
@@ -117,12 +122,12 @@ export const BUILTIN_PROXIES = ['DIRECT', 'REJECT']
 // ─────────────────────────────────────────────
 
 // 自定义配置详情页 Tab，与 URL ?tab= 同步以便刷新保留
-export const CONFIG_DETAIL_TABS = ['proxies', 'proxyGroups', 'rules', 'ruleSets'] as const
+export const CONFIG_DETAIL_TABS = ['proxyGroups', 'rules', 'ruleSets', 'yamlEdit', 'history'] as const
 export type ConfigDetailTab = (typeof CONFIG_DETAIL_TABS)[number]
 
 export function parseConfigDetailTab(raw: string | null): ConfigDetailTab {
   if (raw && (CONFIG_DETAIL_TABS as readonly string[]).includes(raw)) {
     return raw as ConfigDetailTab
   }
-  return 'proxies'
+  return 'proxyGroups'
 }

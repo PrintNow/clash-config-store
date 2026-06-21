@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { Outlet, Navigate, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -11,11 +11,13 @@ import {
   Languages,
   LogOut,
   User,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { useThemeStore } from '@/store/theme'
 import { userApi } from '@/api/user'
+import { useBreadcrumbStore } from '@/store/breadcrumb'
 import { Sidebar } from './Sidebar'
 import { SidebarBrand } from './SidebarBrand'
 import { SidebarFooter } from './SidebarFooter'
@@ -39,6 +41,7 @@ export function AppLayout() {
   const { user, token, logout, setAuth } = useAuthStore()
   const { theme, setTheme } = useThemeStore()
   const { t, i18n } = useTranslation()
+  const breadcrumbItems = useBreadcrumbStore((s) => s.items)
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -187,15 +190,36 @@ export function AppLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* 顶部导航栏 */}
         <header className="flex h-16 items-center border-b bg-background px-4 gap-2">
-          <div className="flex min-w-0 flex-1 items-center justify-start">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="md:hidden shrink-0"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </Button>
+            {breadcrumbItems.length > 0 && (
+              <nav className="hidden md:flex min-w-0 items-center gap-1 text-sm">
+                {breadcrumbItems.map((item, idx) => (
+                  <span key={idx} className="flex items-center gap-1 min-w-0">
+                    {idx > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
+                    {item.href && idx < breadcrumbItems.length - 1 ? (
+                      <Link
+                        to={item.href}
+                        className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-[12rem]"
+                      >
+                        {item.label}
+                      </Link>
+                    ) : idx === breadcrumbItems.length - 1 ? (
+                      <span className="font-medium text-foreground truncate max-w-[16rem]">{item.label}</span>
+                    ) : (
+                      <span className="text-muted-foreground truncate max-w-[16rem]">{item.label}</span>
+                    )}
+                  </span>
+                ))}
+              </nav>
+            )}
           </div>
 
           <div className="flex shrink-0 justify-center px-2">

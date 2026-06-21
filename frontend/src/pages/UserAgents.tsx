@@ -24,6 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // 常用 UA 预设
@@ -121,23 +122,25 @@ export function UserAgents() {
   const isSubmitting = createMutation.isPending || updateMutation.isPending
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 标题区 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('userAgents.title')}</h1>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
+        <h1 className="text-xl font-semibold">{t('userAgents.title')}</h1>
+        <Button size="sm" onClick={openCreateDialog}>
+          <Plus className="mr-1.5 h-4 w-4" />
           {t('userAgents.addUA')}
         </Button>
       </div>
 
-      <div className="rounded-lg border">
+      {/* 桌面端表格 */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t('userAgents.uaName')}</TableHead>
               <TableHead>{t('userAgents.uaValue')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[120px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -179,6 +182,7 @@ export function UserAgents() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => openEditDialog(ua)}
                         >
                           <Pencil className="h-4 w-4" />
@@ -186,8 +190,8 @@ export function UserAgents() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => openDeleteDialog(ua)}
-                          className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -199,6 +203,63 @@ export function UserAgents() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* 移动端卡片列表 */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-3 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+            </Card>
+          ))
+        ) : userAgents.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noData')}</p>
+        ) : (
+          userAgents.map((ua) => (
+            <Card key={ua.id}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{ua.name}</span>
+                      {ua.is_preset && (
+                        <Badge variant="secondary" className="text-xs">{t('ruleProviders.presetBadge')}</Badge>
+                      )}
+                    </div>
+                    <p className="font-mono text-xs text-muted-foreground truncate">{ua.value}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(ua.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {!ua.is_preset && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEditDialog(ua)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => openDeleteDialog(ua)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* 创建/编辑 Dialog */}

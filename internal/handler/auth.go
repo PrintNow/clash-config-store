@@ -48,7 +48,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	token, user, err := service.Register(req.Email, req.Name, password)
+	token, user, err := service.Register(req.Email, req.Name, password, false)
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return

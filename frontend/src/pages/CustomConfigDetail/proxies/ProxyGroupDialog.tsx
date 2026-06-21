@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import yaml from 'js-yaml'
 import {
   DndContext,
   closestCorners,
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -33,15 +35,40 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select'
-import { X, GripVertical } from 'lucide-react'
+import { X, GripVertical, Code2, FormInput } from 'lucide-react'
 import { sortableInstantReorder, BUILTIN_PROXIES } from '../shared/constants'
+import { IconPicker } from '@/components/IconPicker'
+
+function groupToYaml(group: Partial<ProxyGroup> & { name: string; type: string }): string {
+  return yaml.dump(group, { indent: 2, lineWidth: -1 })
+}
+
+function formToGroupObject(form: GroupFormState): Record<string, unknown> {
+  const g: Record<string, unknown> = { name: form.name, type: form.type }
+  if (form.proxies.length > 0) g.proxies = form.proxies
+  if (form.useProviders.length > 0) g.use = form.useProviders
+  if (form.type === 'url-test' || form.type === 'fallback' || form.type === 'load-balance') {
+    g.url = form.url
+    g.interval = parseInt(form.interval) || 300
+    g.tolerance = parseInt(form.tolerance) || 50
+  }
+  if (form.type === 'load-balance') g.strategy = form.strategy
+  if (form.icon) g.icon = form.icon
+  return g
+}
+
+export interface ProviderItem {
+  name: string
+  type: 'http' | 'inline'
+}
 
 export interface ProxyGroupDialogProps {
   open: boolean
   initialGroup: ProxyGroup | null
   proxyNames: string[]    // 所有代理节点名称
   groupNames: string[]    // 其他代理组名称（排除自身）
-  providerNames: string[] // 可供 use: 引用的订阅源名称
+  providerNames: string[] // 可供 use: 引用的订阅源名称（兼容旧接口）
+  providerItems?: ProviderItem[] // 带类型信息的订阅源（优先使用）
   onClose: () => void
   onSave: (group: ProxyGroup) => void
 }
@@ -59,6 +86,7 @@ interface GroupFormState {
   interval: string
   tolerance: string
   strategy: string
+  icon: string
 }
 
 const defaultGroupForm: GroupFormState = {
@@ -70,6 +98,7 @@ const defaultGroupForm: GroupFormState = {
   interval: '300',
   tolerance: '50',
   strategy: 'consistent-hashing',
+  icon: '',
 }
 
 function groupToForm(g: ProxyGroup): GroupFormState {
@@ -82,6 +111,7 @@ function groupToForm(g: ProxyGroup): GroupFormState {
     interval: String(g.interval ?? 300),
     tolerance: String(g.tolerance ?? 50),
     strategy: g.strategy || 'consistent-hashing',
+    icon: g.icon || '',
   }
 }
 
@@ -113,7 +143,7 @@ function SortableGroupMemberRow({ id, name, onRemove }: SortableGroupMemberRowPr
     >
       <button
         type="button"
-        className="flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        className="hidden md:flex h-8 w-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
@@ -134,16 +164,43 @@ function SortableGroupMemberRow({ id, name, onRemove }: SortableGroupMemberRowPr
 }
 
 export function ProxyGroupDialog({
-  open, initialGroup, proxyNames, groupNames, providerNames, onClose, onSave,
+  open, initialGroup, proxyNames, groupNames, providerNames, providerItems, onClose, onSave,
 }: ProxyGroupDialogProps) {
+  const resolvedProviderItems: ProviderItem[] = providerItems
+    ?? providerNames.map((name) => ({ name, type: 'http' as const }))
   const { t } = useTranslation()
   const [form, setForm] = useState<GroupFormState>(defaultGroupForm)
+  const [yamlMode, setYamlMode] = useState(false)
+  const [yamlText, setYamlText] = useState('')
+  const [yamlError, setYamlError] = useState('')
 
   useEffect(() => {
     if (open) {
-      setForm(initialGroup ? groupToForm(initialGroup) : defaultGroupForm)
+      const f = initialGroup ? groupToForm(initialGroup) : defaultGroupForm
+      setForm(f)
+      setYamlMode(false)
+      setYamlText('')
+      setYamlError('')
     }
   }, [open, initialGroup])
+
+  const switchToYaml = () => {
+    setYamlText(groupToYaml(formToGroupObject(form) as Parameters<typeof groupToYaml>[0]))
+    setYamlError('')
+    setYamlMode(true)
+  }
+
+  const switchToForm = () => {
+    try {
+      const parsed = yaml.load(yamlText) as Record<string, unknown>
+      if (!parsed || typeof parsed !== 'object') throw new Error('无效的 YAML')
+      setForm(groupToForm(parsed as ProxyGroup))
+      setYamlError('')
+      setYamlMode(false)
+    } catch (e) {
+      setYamlError('YAML 解析失败: ' + (e as Error).message)
+    }
+  }
 
   const set = <K extends keyof GroupFormState>(key: K, val: GroupFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }))
@@ -164,8 +221,9 @@ export function ProxyGroupDialog({
     }))
   }
 
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   const groupMemberSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: isMobile ? Infinity : 5 } })
   )
 
   const handleGroupMembersDragEnd = (event: DragEndEvent) => {
@@ -190,11 +248,21 @@ export function ProxyGroupDialog({
   }
 
   const handleSave = () => {
+    if (yamlMode) {
+      try {
+        const parsed = yaml.load(yamlText) as Record<string, unknown>
+        if (!parsed || typeof parsed !== 'object') throw new Error('无效的 YAML')
+        if (!parsed.name || !parsed.type) throw new Error('缺少 name 或 type 字段')
+        onSave(parsed as ProxyGroup)
+      } catch (e) {
+        setYamlError('YAML 解析失败: ' + (e as Error).message)
+      }
+      return
+    }
     if (!form.name.trim()) {
       toast.error(t('customConfigs.groupName') + ' ' + t('common.required'))
       return
     }
-
     const group: ProxyGroup = {
       name: form.name,
       type: form.type,
@@ -209,6 +277,7 @@ export function ProxyGroupDialog({
     if (form.type === 'load-balance') {
       group.strategy = form.strategy
     }
+    if (form.icon) group.icon = form.icon
     onSave(group)
   }
 
@@ -219,7 +288,7 @@ export function ProxyGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[95vh] overflow-y-auto sm:max-h-[85vh]">
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -228,16 +297,52 @@ export function ProxyGroupDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {initialGroup ? t('customConfigs.editProxyGroup') : t('customConfigs.addProxyGroup')}
-            </DialogTitle>
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle>
+                {initialGroup ? t('customConfigs.editProxyGroup') : t('customConfigs.addProxyGroup')}
+              </DialogTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={yamlMode ? switchToForm : switchToYaml}
+              >
+                {yamlMode
+                  ? <><FormInput className="h-3 w-3" /> 表单模式</>
+                  : <><Code2 className="h-3 w-3" /> YAML 模式</>
+                }
+              </Button>
+            </div>
           </DialogHeader>
 
+          {yamlMode ? (
+            <div className="space-y-2 py-2">
+              {yamlError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {yamlError}
+                </div>
+              )}
+              <Textarea
+                value={yamlText}
+                onChange={(e) => { setYamlText(e.target.value); setYamlError('') }}
+                className="min-h-[320px] font-mono text-xs"
+                spellCheck={false}
+              />
+              <p className="text-xs text-muted-foreground">直接编辑代理组 YAML，保存时自动解析。</p>
+            </div>
+          ) : (
           <div className="space-y-4 py-2">
             {/* 名称 */}
             <div className="space-y-1">
               <Label>{t('customConfigs.groupName')}</Label>
               <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
+            </div>
+
+            {/* 图标 */}
+            <div className="space-y-1.5">
+              <Label>图标</Label>
+              <IconPicker value={form.icon} onChange={(v) => set('icon', v)} />
             </div>
 
           {/* 类型 */}
@@ -313,30 +418,30 @@ export function ProxyGroupDialog({
           {/* 引用订阅源（复选框多选） */}
           <div className="space-y-1">
             <Label>{t('customConfigs.groupUse')}</Label>
-            {providerNames.length === 0 ? (
+            {resolvedProviderItems.length === 0 ? (
               <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
                 {t('subscriptions.noProviders')}
               </p>
             ) : (
               <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
-                {providerNames.map((pName) => (
-                  <div key={pName} className="flex items-center gap-2">
+                {resolvedProviderItems.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2">
                     <Checkbox
-                      id={`use-${pName}`}
-                      checked={form.useProviders.includes(pName)}
-                      onCheckedChange={() => toggleProvider(pName)}
+                      id={`use-${item.name}`}
+                      checked={form.useProviders.includes(item.name)}
+                      onCheckedChange={() => toggleProvider(item.name)}
                     />
-                    <label htmlFor={`use-${pName}`} className="text-sm cursor-pointer">{pName}</label>
+                    <label htmlFor={`use-${item.name}`} className="text-sm cursor-pointer flex items-center gap-1.5">
+                      {item.name}
+                      {item.type === 'inline' && (
+                        <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">(inline)</span>
+                      )}
+                    </label>
                   </div>
                 ))}
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t('customConfigs.groupUseHint')}</p>
-            {form.useProviders.length > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠️ 请确保在订阅管理 →「订阅源」Tab 中同时启用这些订阅源，否则生成时节点为空。
-              </p>
-            )}
           </div>
 
           {/* 条件字段：url-test / fallback / load-balance */}
@@ -371,6 +476,7 @@ export function ProxyGroupDialog({
             </div>
           )}
           </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>

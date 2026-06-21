@@ -9,6 +9,7 @@ type HostedRuleSet struct {
 	Content       string `gorm:"type:longtext;not null" json:"content"`
 	ContentSHA256 string `gorm:"type:char(64);not null;default:''" json:"content_sha256"`
 	Token         string `gorm:"type:char(64);uniqueIndex" json:"token"`
+	RuleCount     int    `gorm:"default:0" json:"rule_count"`
 
 	URL string `gorm:"-" json:"url"`
 

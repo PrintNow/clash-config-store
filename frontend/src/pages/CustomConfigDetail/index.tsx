@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useParams, useNavigate, useSearchParams, useBlocker } from 'react-router-dom'
+import { useParams, useSearchParams, useBlocker } from 'react-router-dom'
+import { useBreadcrumb } from '@/store/breadcrumb'
 import type { Blocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import yaml from 'js-yaml'
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   Edit,
@@ -41,10 +42,12 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import equal from 'fast-deep-equal'
 import { customConfigsApi } from '@/api/custom-configs'
-import { ruleProvidersApi } from '@/api/rule-providers'
-import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
+import { configHistoryApi } from '@/api/config-history'
+import type { QueryClient } from '@tanstack/react-query'
+
+import { ruleSetsApi } from '@/api/rule-sets'
 import { providersApi } from '@/api/providers'
-import type { ProxyNode, ProxyGroup } from '@/types'
+import type { ProxyGroup } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -66,17 +69,21 @@ import {
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { YamlEditor } from '@/components/YamlEditor'
 import { ConfigPayloadDiffDialog } from '@/components/ConfigPayloadDiffDialog'
+import { HistoryDiffDialog } from '@/components/HistoryDiffDialog'
 import { cn } from '@/lib/utils'
 import { useRegisterContextSaveBar } from '@/store/context-save-bar'
 import { hasProxyOrGroupNameConflict, renameProxyOrGroupRefs } from '@/lib/rename-refs'
+import type { ParsedRule } from '@/domain/rules'
 import {
   buildRuleAnalysis,
   canUseMatchType,
   hasMatchRule as hasMatchRuleInList,
   insertRule,
   parseRule,
-  type ParsedRule,
   parseRulesText,
+  parseRulesTextFull,
+  parseRulesWithComments,
+  serializeRulesWithComments,
   type RuleQuickFixAction,
   RULE_TEMPLATE_MAP,
   ruleSupportsNoResolve,
@@ -87,12 +94,7 @@ import {
 import { getRuleTypeMeta } from './rules/RuleTypeMeta'
 import { RuleStatusIndicator } from './rules/RuleStatusIndicator'
 import { SortableRuleRow } from './rules/SortableRuleRow'
-import { ProxyDialog } from './proxies/ProxyDialog'
 import { ProxyGroupDialog } from './proxies/ProxyGroupDialog'
-import {
-  makeUniqueDuplicateProxyName,
-  buildDuplicatedProxyNode,
-} from './proxies/proxy-form'
 import {
   SORTABLE_TABLE_LAYOUT,
   sortableInstantReorder,
@@ -109,6 +111,14 @@ import {
   type CustomConfigDraftPayload,
 } from './shared/constants'
 
+
+function draftToYamlText(obj: object): string {
+  try {
+    return yaml.dump(obj, { lineWidth: -1, quotingType: '"', forceQuotes: false })
+  } catch {
+    return JSON.stringify(obj, null, 2)
+  }
+}
 
 function buildRuleSaveChecklist(
   finalRules: string[],
@@ -166,7 +176,7 @@ function SortableProxyGroupRow({
       )}
       onClick={() => onEdit(group, idx)}
     >
-      <td className="px-1 py-2 w-[28px]" onClick={(e) => e.stopPropagation()}>
+      <td className="hidden md:table-cell px-1 py-1.5 w-[28px]" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded"
@@ -176,15 +186,31 @@ function SortableProxyGroupRow({
           <GripVertical className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="px-4 py-2 font-medium">{group.name}</td>
-      <td className="px-4 py-2">
-        <Badge variant="outline">{group.type}</Badge>
+      <td className="px-3 py-1.5 font-medium text-sm">
+        <div className="flex items-center gap-2">
+          {group.icon && (
+            <img
+              src={group.icon}
+              alt=""
+              className="h-5 w-5 shrink-0 rounded-sm object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+            />
+          )}
+          {group.name}
+        </div>
       </td>
-      <td className="px-4 py-2 text-muted-foreground text-xs">
+      <td className="hidden sm:table-cell px-3 py-1.5">
+        <Badge variant="outline" className="text-xs">{group.type}</Badge>
+      </td>
+      <td className="hidden lg:table-cell px-3 py-1.5 text-muted-foreground text-xs">
         {(group.proxies || []).slice(0, 3).join(', ')}
         {(group.proxies || []).length > 3 && ` +${(group.proxies || []).length - 3}`}
       </td>
-      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+      {/* 移动端紧凑信息列 */}
+      <td className="sm:hidden px-3 py-1.5">
+        <Badge variant="outline" className="text-xs">{group.type}</Badge>
+      </td>
+      <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">
           <Button
             variant="ghost"
@@ -249,7 +275,6 @@ function CustomConfigLeaveDialog({ blocker }: { blocker: Blocker }) {
 
 export function CustomConfigDetail() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -258,10 +283,18 @@ export function CustomConfigDetail() {
 
   const handleDetailTabChange = (value: string) => {
     const next = parseConfigDetailTab(value)
+    if (next === 'yamlEdit') {
+      const draft = {
+        'proxy-groups': proxyGroups,
+        rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
+      }
+      setYamlEditContent(draftToYamlText(draft))
+      setYamlEditError('')
+    }
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev)
-        if (next === 'proxies') {
+        if (next === 'proxyGroups') {
           p.delete('tab')
         } else {
           p.set('tab', next)
@@ -276,20 +309,24 @@ export function CustomConfigDetail() {
   const [editingName, setEditingName] = useState(false)
   const [name, setName] = useState('')
 
-  // 代理节点列表
-  const [proxies, setProxies] = useState<ProxyNode[]>([])
+  useBreadcrumb([
+    { label: t('nav.customConfigs'), href: '/custom-configs' },
+    { label: name || '...' },
+  ])
+
   // 代理组列表
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([])
-  // 规则列表（字符串数组）
+  // 规则列表（纯规则字符串，不含注释行）
   const [rules, setRules] = useState<string[]>([])
+  // 与 rules 一一对应的注释（不含 # 前缀），无注释时为 null
+  const [ruleComments, setRuleComments] = useState<(string | null)[]>([])
   // 已选规则集 ID
   const [ruleProviderIds, setRuleProviderIds] = useState<number[]>([])
   const [hostedRuleSetIds, setHostedRuleSetIds] = useState<number[]>([])
 
-  // 代理节点弹窗状态
-  const [proxyDialogOpen, setProxyDialogOpen] = useState(false)
-  const [editingProxy, setEditingProxy] = useState<ProxyNode | null>(null)
-  const [editingProxyIndex, setEditingProxyIndex] = useState<number>(-1)
+  // YAML 编辑 tab 状态
+  const [yamlEditContent, setYamlEditContent] = useState('')
+  const [yamlEditError, setYamlEditError] = useState('')
 
   // 代理组弹窗状态
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
@@ -310,6 +347,11 @@ export function CustomConfigDetail() {
   const [selectedDiagnosticLine, setSelectedDiagnosticLine] = useState<number | null>(null)
   const [lastValidationState, setLastValidationState] = useState<'idle' | 'valid' | 'warning' | 'error'>('idle')
 
+  // 代理组批量编辑面板
+  const [batchEditOpen, setBatchEditOpen] = useState(false)
+  const [batchEditContent, setBatchEditContent] = useState('')
+  const [batchEditError, setBatchEditError] = useState('')
+
   // YAML 预览面板
   const [previewOpen, setPreviewOpen] = useState(false)
   const [diffPreviewOpen, setDiffPreviewOpen] = useState(false)
@@ -323,14 +365,12 @@ export function CustomConfigDetail() {
     enabled: !!configId,
   })
 
-  const { data: allRuleProviders = [] } = useQuery({
-    queryKey: ['rule-providers'],
-    queryFn: ruleProvidersApi.list,
+  const { data: _allRuleSets = [] } = useQuery({
+    queryKey: ['rule-sets'],
+    queryFn: (): Promise<import('@/types').RuleSet[]> => ruleSetsApi.list(),
   })
-  const { data: allHostedRuleSets = [] } = useQuery({
-    queryKey: ['hosted-rule-sets'],
-    queryFn: hostedRuleSetsApi.list,
-  })
+  const allRuleProviders = useMemo(() => _allRuleSets.filter((rs) => rs.source_type === 'external'), [_allRuleSets])
+  const allHostedRuleSets = useMemo(() => _allRuleSets.filter((rs) => rs.source_type === 'hosted'), [_allRuleSets])
 
   // 加载所有订阅源，供代理组"引用订阅源"选择
   const { data: allProviders = [] } = useQuery({
@@ -338,25 +378,34 @@ export function CustomConfigDetail() {
     queryFn: providersApi.list,
   })
   const providerNames = allProviders.map((p) => p.name)
+  const providerItems = allProviders.map((p) => ({ name: p.name, type: p.type }))
+
+  // 代理组自动保存后，抑制 refetch 重置规则草稿的 flag
+  const suppressRulesSyncRef = useRef(false)
 
   // 从服务端同步到表单：仅在「配置 id / 服务端版本」变化时执行，避免 React Query refetch
   // 返回新对象引用时误重置草稿，导致 isDirty 恒为 false、Context Save Bar 不出现。
+  // suppressRulesSyncRef 为 true 时跳过规则同步（代理组自动保存后保留规则草稿）。
   useEffect(() => {
     if (!config) return
     setName(config.name)
-    setProxies(config.proxies || [])
     setProxyGroups(config.proxy_groups || [])
-    setRules(config.rules || [])
-    setRulesText((config.rules || []).join('\n'))
-    setRuleProviderIds(config.rule_provider_ids || [])
-    setHostedRuleSetIds(config.hosted_rule_set_ids || [])
+    if (!suppressRulesSyncRef.current) {
+      const { rules: parsedRules, comments } = parseRulesWithComments(config.rules || [])
+      setRules(parsedRules)
+      setRuleComments(comments)
+      setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
+      setRuleProviderIds(config.rule_provider_ids || [])
+      setHostedRuleSetIds(config.hosted_rule_set_ids || [])
+    }
+    suppressRulesSyncRef.current = false
   }, [config?.id, config?.updated_at])
 
   useEffect(() => {
     if (!rulesTextMode) {
-      setRulesText(rules.join('\n'))
+      setRulesText(serializeRulesWithComments(rules, ruleComments).join('\n'))
     }
-  }, [rules, rulesTextMode])
+  }, [rules, ruleComments, rulesTextMode])
 
   // ── 保存 mutation ──
   const updateMutation = useMutation({
@@ -373,14 +422,43 @@ export function CustomConfigDetail() {
     onError: () => toast.error(t('common.error')),
   })
 
+  // 代理组自动保存：用服务端的规则状态，不保存规则草稿
+  const autoSaveGroupsMutation = useMutation({
+    mutationFn: ({ groups, savedConfig }: { groups: ProxyGroup[], savedConfig: NonNullable<typeof config> }) =>
+      customConfigsApi.update(configId, {
+        name,
+        proxy_groups: groups,
+        rules: savedConfig.rules || [],
+        rule_provider_ids: savedConfig.rule_provider_ids || [],
+        hosted_rule_set_ids: savedConfig.hosted_rule_set_ids || [],
+      }),
+    onMutate: () => {
+      suppressRulesSyncRef.current = true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-configs', configId] })
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      toast.success(t('customConfigs.proxyGroupsSaved'))
+    },
+    onError: () => {
+      suppressRulesSyncRef.current = false
+      toast.error(t('common.error'))
+    },
+  })
+
+  // 表格模式下的混合规则数组（纯规则 + # 注释行交错），用于持久化与脏检查
+  const mixedRules = useMemo(
+    () => serializeRulesWithComments(rules, ruleComments),
+    [rules, ruleComments]
+  )
+
   const isDirty = useMemo(() => {
     if (!config) return false
     const saved = savedPayloadFromConfig(config)
     const draft: CustomConfigDraftPayload = {
       name,
-      proxies,
       proxy_groups: proxyGroups,
-      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
       rule_provider_ids: ruleProviderIds,
       hosted_rule_set_ids: hostedRuleSetIds,
     }
@@ -388,9 +466,8 @@ export function CustomConfigDetail() {
   }, [
     config,
     name,
-    proxies,
     proxyGroups,
-    rules,
+    mixedRules,
     ruleProviderIds,
     hostedRuleSetIds,
     rulesTextMode,
@@ -400,10 +477,11 @@ export function CustomConfigDetail() {
   const handleDiscard = useCallback(() => {
     if (!config) return
     setName(config.name)
-    setProxies(config.proxies || [])
     setProxyGroups(config.proxy_groups || [])
-    setRules(config.rules || [])
-    setRulesText((config.rules || []).join('\n'))
+    const { rules: parsedRules, comments } = parseRulesWithComments(config.rules || [])
+    setRules(parsedRules)
+    setRuleComments(comments)
+    setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
     setRuleProviderIds(config.rule_provider_ids || [])
     setHostedRuleSetIds(config.hosted_rule_set_ids || [])
     setEditingName(false)
@@ -419,13 +497,12 @@ export function CustomConfigDetail() {
   const draftPayload = useMemo(
     (): CustomConfigDraftPayload => ({
       name,
-      proxies,
       proxy_groups: proxyGroups,
-      rules: rulesFromDraft(rulesTextMode, rulesText, rules),
+      rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
       rule_provider_ids: ruleProviderIds,
       hosted_rule_set_ids: hostedRuleSetIds,
     }),
-    [name, proxies, proxyGroups, rules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
+    [name, proxyGroups, mixedRules, ruleProviderIds, hostedRuleSetIds, rulesTextMode, rulesText]
   )
 
   // ── YAML 预览 ──
@@ -455,71 +532,6 @@ export function CustomConfigDetail() {
     }
   }
 
-  // ── 代理节点操作 ──
-  const openAddProxy = () => {
-    setEditingProxy(null)
-    setEditingProxyIndex(-1)
-    setProxyDialogOpen(true)
-  }
-
-  const openEditProxy = (node: ProxyNode, idx: number) => {
-    setEditingProxy(node)
-    setEditingProxyIndex(idx)
-    setProxyDialogOpen(true)
-  }
-
-  const handleSaveProxy = (node: ProxyNode) => {
-    const newName = node.name.trim()
-    if (editingProxyIndex >= 0) {
-      const oldName = editingProxy?.name.trim() ?? ''
-      const renaming = oldName !== '' && oldName !== newName
-      if (renaming) {
-        if (
-          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
-            kind: 'proxy',
-            index: editingProxyIndex,
-          })
-        ) {
-          toast.error(t('customConfigs.renameConflict'))
-          return
-        }
-        const { proxyGroups: pg, rules: r, rulesText: rt, replaceCount } = renameProxyOrGroupRefs(
-          oldName,
-          newName,
-          { proxyGroups, rules, rulesText, rulesTextMode }
-        )
-        setProxyGroups(pg)
-        setRules(r)
-        setRulesText(rt)
-        if (replaceCount > 0) {
-          toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
-        }
-      }
-      setProxies((prev) => prev.map((p, i) => (i === editingProxyIndex ? node : p)))
-    } else {
-      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
-        toast.error(t('customConfigs.renameConflict'))
-        return
-      }
-      setProxies((prev) => [...prev, node])
-    }
-    setProxyDialogOpen(false)
-  }
-
-  const handleDeleteProxy = (idx: number) => {
-    setProxies((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleDuplicateProxy = (idx: number) => {
-    const proxy = proxies[idx]
-    if (!proxy) return
-    const suffix = t('customConfigs.proxyCopySuffix')
-    const newName = makeUniqueDuplicateProxyName(proxy.name, suffix, proxies, proxyGroups)
-    const node = buildDuplicatedProxyNode(proxy, newName)
-    setProxies((prev) => [...prev.slice(0, idx + 1), node, ...prev.slice(idx + 1)])
-    toast.success(t('customConfigs.proxyDuplicated'))
-  }
-
   // ── 代理组操作 ──
   const openAddGroup = () => {
     setEditingGroup(null)
@@ -535,12 +547,14 @@ export function CustomConfigDetail() {
 
   const handleSaveGroup = (group: ProxyGroup) => {
     const newName = group.name.trim()
+    let newGroups: ProxyGroup[]
+
     if (editingGroupIndex >= 0) {
       const oldName = editingGroup?.name.trim() ?? ''
       const renaming = oldName !== '' && oldName !== newName
       if (renaming) {
         if (
-          hasProxyOrGroupNameConflict(newName, proxies, proxyGroups, {
+          hasProxyOrGroupNameConflict(newName, [], proxyGroups, {
             kind: 'group',
             index: editingGroupIndex,
           })
@@ -553,32 +567,72 @@ export function CustomConfigDetail() {
           newName,
           { proxyGroups, rules, rulesText, rulesTextMode }
         )
-        setProxyGroups(pg.map((g, i) => (i === editingGroupIndex ? group : g)))
+        newGroups = pg.map((g, i) => (i === editingGroupIndex ? group : g))
         setRules(r)
         setRulesText(rt)
         if (replaceCount > 0) {
           toast.success(t('customConfigs.renameRefsSynced', { count: replaceCount }))
         }
       } else {
-        setProxyGroups((prev) => prev.map((g, i) => (i === editingGroupIndex ? group : g)))
+        newGroups = proxyGroups.map((g, i) => (i === editingGroupIndex ? group : g))
       }
     } else {
-      if (hasProxyOrGroupNameConflict(newName, proxies, proxyGroups)) {
+      if (hasProxyOrGroupNameConflict(newName, [], proxyGroups)) {
         toast.error(t('customConfigs.renameConflict'))
         return
       }
-      setProxyGroups((prev) => [...prev, group])
+      newGroups = [...proxyGroups, group]
     }
+
+    setProxyGroups(newGroups)
     setGroupDialogOpen(false)
+    if (config) {
+      autoSaveGroupsMutation.mutate({ groups: newGroups, savedConfig: config })
+    }
   }
 
   const handleDeleteGroup = (idx: number) => {
     setProxyGroups((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  // ── DnD 传感器 ──
+  const openBatchEdit = () => {
+    const content = proxyGroups.length > 0
+      ? draftToYamlText(proxyGroups)
+      : '- name: PROXY\n  type: select\n  proxies:\n    - DIRECT\n'
+    setBatchEditContent(content)
+    setBatchEditError('')
+    setBatchEditOpen(true)
+  }
+
+  const handleApplyBatchEdit = () => {
+    try {
+      const parsed = yaml.load(batchEditContent)
+      if (!Array.isArray(parsed)) {
+        setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': YAML 必须是列表（数组）格式')
+        return
+      }
+      for (const group of parsed) {
+        if (!group || typeof group !== 'object' || !group.name || !group.type) {
+          setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': 每个代理组必须包含 name 和 type 字段')
+          return
+        }
+      }
+      const newGroups = parsed as ProxyGroup[]
+      setProxyGroups(newGroups)
+      setBatchEditError('')
+      setBatchEditOpen(false)
+      if (config) {
+        autoSaveGroupsMutation.mutate({ groups: newGroups, savedConfig: config })
+      }
+    } catch (e) {
+      setBatchEditError(t('customConfigs.batchEditProxyGroupsError') + ': ' + (e as Error).message)
+    }
+  }
+
+  // ── DnD 传感器（移动端禁用拖拽） ──
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   const sensors = useSensors(useSensor(PointerSensor, {
-    activationConstraint: { distance: 5 },
+    activationConstraint: { distance: isMobile ? Infinity : 5 },
   }))
 
   const toggleRuleRow = useCallback((sourceIndex: number) => {
@@ -608,6 +662,7 @@ export function CustomConfigDetail() {
       return arrayMove(prev, oldIndex, newIndex)
     })
     if (oldIndex < 0 || newIndex < 0) return
+    setRuleComments((prev) => arrayMove(prev, oldIndex, newIndex))
     setActiveRuleIndex((a) => remapRuleIndexAfterMove(a, oldIndex, newIndex))
   }
 
@@ -626,7 +681,16 @@ export function CustomConfigDetail() {
   const addRule = (template: keyof typeof RULE_TEMPLATE_MAP = 'DOMAIN') => {
     const result = insertRule(rules, template)
     setRules(result.rules)
-    setActiveRuleIndex(result.inserted ? result.insertIndex : null)
+    if (result.inserted) {
+      setRuleComments((prev) => {
+        const next = [...prev]
+        next.splice(result.insertIndex, 0, null)
+        return next
+      })
+      setActiveRuleIndex(result.insertIndex)
+    } else {
+      setActiveRuleIndex(null)
+    }
   }
 
   const updateParsedRule = (idx: number, field: keyof ParsedRule, value: string | boolean) => {
@@ -657,6 +721,7 @@ export function CustomConfigDetail() {
 
   const deleteRule = (idx: number) => {
     setRules((prev) => prev.filter((_, i) => i !== idx))
+    setRuleComments((prev) => prev.filter((_, i) => i !== idx))
     setActiveRuleIndex((prev) => {
       if (prev === null) return null
       if (prev === idx) return null
@@ -664,15 +729,15 @@ export function CustomConfigDetail() {
     })
   }
 
-  // 切换到文本模式：把数组序列化为换行字符串
+  // 切换到文本模式：把规则+注释序列化为换行字符串（注释置于规则上方）
   const switchToTextMode = () => {
-    setRulesText(rules.join('\n'))
+    setRulesText(serializeRulesWithComments(rules, ruleComments).join('\n'))
     setRulesTextMode(true)
   }
 
-  // 切换回表格模式：解析文本
+  // 切换回表格模式：解析文本，保留注释关联
   const switchToTableMode = () => {
-    const parsed = parseRulesText(rulesText)
+    const parsed = parseRulesTextFull(rulesText)
     const nextRuleList = parsed.rules.map((rule, index) => ({
       sourceIndex: index,
       lineNumber: parsed.lineNumbers[index],
@@ -687,14 +752,15 @@ export function CustomConfigDetail() {
         }
       ),
     }))
-    const firstError = nextRuleList.find((item) => item.analysis.status === 'error')
-    if (firstError?.lineNumber) {
-      setSelectedDiagnosticLine(firstError.lineNumber)
-      setLastValidationState('error')
-      toast.error(t('customConfigs.ruleTextFixErrorsFirst'))
-      return
+    const errorItems = nextRuleList.filter((item) => item.analysis.status === 'error')
+    const validIndices = nextRuleList
+      .filter((item) => item.analysis.status !== 'error')
+      .map((item) => item.sourceIndex)
+    if (errorItems.length > 0) {
+      toast.warning(t('customConfigs.ruleTextSwitchWithErrors', { count: errorItems.length }))
     }
-    setRules(parsed.rules)
+    setRules(validIndices.map(i => parsed.rules[i]))
+    setRuleComments(validIndices.map(i => parsed.comments[i]))
     setRulesTextMode(false)
     setSelectedDiagnosticLine(null)
   }
@@ -704,11 +770,11 @@ export function CustomConfigDetail() {
   }
 
   const normalizeMatchRuleOrder = () => {
-    setRules((prev) => {
-      const matchRules = prev.filter((rule) => parseRule(rule).type === 'MATCH')
-      const otherRules = prev.filter((rule) => parseRule(rule).type !== 'MATCH')
-      return [...otherRules, ...matchRules]
-    })
+    const otherIdx = rules.reduce<number[]>((acc, r, i) => parseRule(r).type !== 'MATCH' ? [...acc, i] : acc, [])
+    const matchIdx = rules.reduce<number[]>((acc, r, i) => parseRule(r).type === 'MATCH' ? [...acc, i] : acc, [])
+    const newOrder = [...otherIdx, ...matchIdx]
+    setRules(newOrder.map(i => rules[i]))
+    setRuleComments(newOrder.map(i => ruleComments[i] ?? null))
   }
 
   const handleRuleQuickFix = (_sourceIndex: number, action: RuleQuickFixAction) => {
@@ -726,7 +792,7 @@ export function CustomConfigDetail() {
       return
     }
     if (action === 'go-target-proxies') {
-      handleDetailTabChange('proxies')
+      handleDetailTabChange('proxyGroups')
     }
   }
 
@@ -743,7 +809,7 @@ export function CustomConfigDetail() {
         id: rs.id,
         name: rs.name,
         behavior: rs.behavior,
-        url: rs.url,
+        url: rs.hrs_url,
         source: 'hosted' as const,
       })),
     ],
@@ -777,8 +843,6 @@ export function CustomConfigDetail() {
     ))
   }
 
-  // 所有代理节点名称（供代理组选择使用）
-  const proxyNames = proxies.map((p) => p.name)
   const selectedRuleProviderNames = useMemo(() => new Set<string>([
     ...allRuleProviders.filter((rp) => ruleProviderIds.includes(rp.id)).map((rp) => rp.name),
     ...allHostedRuleSets.filter((rs) => hostedRuleSetIds.includes(rs.id)).map((rs) => rs.name),
@@ -791,11 +855,15 @@ export function CustomConfigDetail() {
     () => new Set([
       ...BUILTIN_PROXIES,
       ...proxyGroups.map((g) => g.name),
-      ...proxies.map((p) => p.name),
     ]),
-    [proxyGroups, proxies]
+    [proxyGroups]
   )
+  const updateRuleComment = useCallback((sourceIndex: number, comment: string) => {
+    setRuleComments((prev) => prev.map((c, i) => i === sourceIndex ? (comment.trim() || null) : c))
+  }, [])
+
   const parsedRulesText = useMemo(() => parseRulesText(rulesText), [rulesText])
+  const parsedRulesTextFull = useMemo(() => parseRulesTextFull(rulesText), [rulesText])
   const currentRuleStrings = rulesTextMode ? parsedRulesText.rules : rules
   const currentLineNumbers = rulesTextMode ? parsedRulesText.lineNumbers : undefined
   const ruleDuplicateCounts = useMemo(() => {
@@ -805,10 +873,12 @@ export function CustomConfigDetail() {
     })
     return counts
   }, [currentRuleStrings])
-  const ruleListItems = useMemo<RuleListItem[]>(() => (
-    currentRuleStrings.map((rule, index) => ({
+  const ruleListItems = useMemo<RuleListItem[]>(() => {
+    const commentsArr = rulesTextMode ? parsedRulesTextFull.comments : ruleComments
+    return currentRuleStrings.map((rule, index) => ({
       sourceIndex: index,
       lineNumber: currentLineNumbers?.[index],
+      comment: commentsArr[index] ?? undefined,
       analysis: buildRuleAnalysis(
         rule,
         {
@@ -820,13 +890,16 @@ export function CustomConfigDetail() {
         }
       ),
     }))
-  ), [
+  }, [
     availableRuleProviderNames,
     availableTargets,
     currentLineNumbers,
     currentRuleStrings,
     ruleDuplicateCounts,
     selectedRuleProviderNames,
+    ruleComments,
+    rulesTextMode,
+    parsedRulesTextFull.comments,
   ])
   const filteredRuleListItems = useMemo(() => (
     ruleListItems.filter(({ analysis }) => {
@@ -883,11 +956,14 @@ export function CustomConfigDetail() {
   const targetOptionGroups = useMemo<RuleTargetOptionGroup[]>(() => ([
     { key: 'builtin', label: t('customConfigs.targetBuiltin'), values: BUILTIN_PROXIES },
     { key: 'groups', label: t('customConfigs.targetProxyGroups'), values: proxyGroups.map((g) => g.name) },
-    { key: 'proxies', label: t('customConfigs.targetProxies'), values: proxies.map((p) => p.name) },
-  ]), [proxyGroups, proxies, t])
+  ]), [proxyGroups, t])
   const visibleRuleCount = filteredRuleListItems.length
   const hasActiveFilters = ruleSearch.trim() !== '' || ruleFilter !== 'all' || showOnlyIssues
-  const saveHealth = buildRuleSaveChecklist(rulesFromDraft(rulesTextMode, rulesText, rules), currentRuleStrings, ruleListItems)
+  const saveHealth = buildRuleSaveChecklist(
+    rulesFromDraft(rulesTextMode, rulesText, mixedRules).filter(r => !r.trim().startsWith('#')),
+    currentRuleStrings,
+    ruleListItems
+  )
   const checklistItems = [
     {
       key: 'rulesets',
@@ -916,8 +992,12 @@ export function CustomConfigDetail() {
 
   const handleSave = useCallback(() => {
     if (!isDirty) return
-    const finalRules = rulesFromDraft(rulesTextMode, rulesText, rules)
-    const issues = buildRuleSaveChecklist(finalRules, currentRuleStrings, ruleListItems)
+    const finalRules = rulesFromDraft(rulesTextMode, rulesText, mixedRules)
+    const issues = buildRuleSaveChecklist(
+      finalRules.filter(r => !r.trim().startsWith('#')),
+      currentRuleStrings,
+      ruleListItems
+    )
     if (issues === 'error') {
       setLastValidationState('error')
       toast.error(t('customConfigs.saveBlockedByErrors'))
@@ -926,7 +1006,6 @@ export function CustomConfigDetail() {
     setLastValidationState(issues)
     updateMutation.mutate({
       name,
-      proxies,
       proxy_groups: proxyGroups,
       rules: finalRules,
       rule_provider_ids: ruleProviderIds,
@@ -936,17 +1015,39 @@ export function CustomConfigDetail() {
     isDirty,
     rulesTextMode,
     rulesText,
-    rules,
+    mixedRules,
     currentRuleStrings,
     ruleListItems,
     t,
     updateMutation,
     name,
-    proxies,
     proxyGroups,
     ruleProviderIds,
     hostedRuleSetIds,
   ])
+
+  const handleApplyYamlEdit = useCallback(() => {
+    try {
+      const parsed = yaml.load(yamlEditContent) as Record<string, unknown>
+      if (!parsed || typeof parsed !== 'object') {
+        setYamlEditError('YAML 解析结果不是对象')
+        return
+      }
+      const newGroups = (parsed['proxy-groups'] as ProxyGroup[]) || []
+      const newRulesRaw = (parsed['rules'] as string[]) || []
+      const { rules: parsedRules, comments } = parseRulesWithComments(newRulesRaw)
+      setProxyGroups(newGroups)
+      setRules(parsedRules)
+      setRuleComments(comments)
+      setRulesText(serializeRulesWithComments(parsedRules, comments).join('\n'))
+      setYamlEditError('')
+      toast.success('已从 YAML 导入配置')
+      handleDetailTabChange('proxyGroups')
+    } catch (e) {
+      setYamlEditError('YAML 解析失败: ' + (e as Error).message)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yamlEditContent])
 
   const saveBarExtraActions = useMemo(
     () =>
@@ -974,6 +1075,15 @@ export function CustomConfigDetail() {
     onDiscard: handleDiscard,
     extraActions: saveBarExtraActions,
   })
+
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   const shouldBlockNavigation = useCallback(
     ({
@@ -1017,243 +1127,144 @@ export function CustomConfigDetail() {
 
   return (
     <>
-    <div className="space-y-4">
-      {/* ── 顶部操作栏 ── */}
-      <div className="rounded-xl border bg-background/95 p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-2.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="-ml-1 mt-0.5"
-              onClick={() => navigate('/custom-configs')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="space-y-1.5">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-8 text-base font-bold"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSave()
-                      if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
-                    }}
-                    autoFocus
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={!isDirty || updateMutation.isPending}
-                    onClick={() => handleSave()}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => { setName(config.name); setEditingName(false) }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <h1
-                    className="text-xl font-bold leading-tight cursor-pointer rounded-sm outline-offset-2 hover:text-primary/90"
-                    title={t('customConfigs.clickToEditTitle')}
-                    onClick={() => setEditingName(true)}
-                  >
-                    {name}
-                  </h1>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => setEditingName(true)}
-                    aria-label={t('customConfigs.clickToEditTitle')}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-              {/* 固定一行高度，避免切到「规则」tab 时徽章出现导致整块变高、右侧按钮上下漂移 */}
-              <div className="flex min-h-6 flex-wrap items-center gap-1.5">
-                {activeTab === 'rules' && (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'border',
-                      saveHealth === 'error' && 'border-destructive/40 text-destructive',
-                      saveHealth === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                      saveHealth === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                    )}
-                  >
-                    {saveHealth === 'error'
-                      ? t('customConfigs.validationErrorsBadge', { count: ruleStats.errors })
-                      : saveHealth === 'warning'
-                        ? t('customConfigs.validationWarningsBadge', { count: ruleStats.warnings })
-                        : t('customConfigs.validationReady')}
-                  </Badge>
-                )}
-                {lastValidationState !== 'idle' && (
-                  <Badge variant="outline" className={cn(
-                    lastValidationState === 'error' && 'border-destructive/40 text-destructive',
-                    lastValidationState === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                    lastValidationState === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                  )}>
-                    {lastValidationState === 'error'
-                      ? t('customConfigs.lastCheckError')
-                      : lastValidationState === 'warning'
-                        ? t('customConfigs.lastCheckWarning')
-                        : t('customConfigs.lastCheckValid')}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-            <Button variant="outline" size="sm" onClick={handleOpenPreview}>
-              <Eye className="mr-1.5 h-3.5 w-3.5" />
-              {t('customConfigs.previewYaml')}
-            </Button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-3">
       {/* ── 主体 Tabs（与 ?tab= 同步，刷新保留当前页） ── */}
-      <Tabs value={activeTab} onValueChange={handleDetailTabChange}>
-        <div className="overflow-x-auto pb-0.5">
-          <TabsList className="h-9 gap-0.5 p-0.5">
-            <TabsTrigger value="proxies">
-              {t('customConfigs.tabProxies')}
-              {proxies.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxies.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="proxyGroups">
-              {t('customConfigs.tabProxyGroups')}
-              {proxyGroups.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="rules">
-              {t('customConfigs.tabRules')}
-              {rules.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="ruleSets">
-              {t('customConfigs.tabRuleSets')}
-              {ruleProviderIds.length + hostedRuleSetIds.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                  {ruleProviderIds.length + hostedRuleSetIds.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+      <Tabs value={activeTab} onValueChange={handleDetailTabChange} className="flex flex-col">
+        {/* 标题行 + tabs 合并为一行 */}
+        <div className="shrink-0 flex items-center gap-3">
+          {/* 名称编辑区 */}
+          <div className="flex min-w-0 items-center gap-1">
+            {editingName ? (
+              <>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-7 w-48 text-sm font-semibold"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSave()
+                    if (e.key === 'Escape') { setName(config.name); setEditingName(false) }
+                  }}
+                  autoFocus
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0"
+                  disabled={!isDirty || updateMutation.isPending} onClick={() => handleSave()}>
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0"
+                  onClick={() => { setName(config.name); setEditingName(false) }}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : (
+              <button
+                className="flex items-center gap-1.5 rounded-md px-1 py-0.5 text-sm font-semibold hover:bg-muted/60 transition-colors"
+                title={t('customConfigs.clickToEditTitle')}
+                onClick={() => setEditingName(true)}
+              >
+                <span className="truncate max-w-[14rem]">{name}</span>
+                <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* 状态 badge */}
+          <div className="flex items-center gap-1.5">
+            {activeTab === 'rules' && (
+              <Badge variant="outline" className={cn(
+                'text-xs border',
+                saveHealth === 'error' && 'border-destructive/40 text-destructive',
+                saveHealth === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                saveHealth === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              )}>
+                {saveHealth === 'error'
+                  ? t('customConfigs.validationErrorsBadge', { count: ruleStats.errors })
+                  : saveHealth === 'warning'
+                    ? t('customConfigs.validationWarningsBadge', { count: ruleStats.warnings })
+                    : t('customConfigs.validationReady')}
+              </Badge>
+            )}
+            {lastValidationState !== 'idle' && (
+              <Badge variant="outline" className={cn(
+                'text-xs',
+                lastValidationState === 'error' && 'border-destructive/40 text-destructive',
+                lastValidationState === 'warning' && 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                lastValidationState === 'valid' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              )}>
+                {lastValidationState === 'error'
+                  ? t('customConfigs.lastCheckError')
+                  : lastValidationState === 'warning'
+                    ? t('customConfigs.lastCheckWarning')
+                    : t('customConfigs.lastCheckValid')}
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Tabs 靠右对齐，和右侧按钮同行 */}
+          <div className="overflow-x-auto">
+            <TabsList className="h-8 gap-0.5 p-0.5">
+              <TabsTrigger value="proxyGroups">
+                {t('customConfigs.tabProxyGroups')}
+                {proxyGroups.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{proxyGroups.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="rules">
+                {t('customConfigs.tabRules')}
+                {rules.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{rules.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ruleSets">
+                {t('customConfigs.tabRuleSets')}
+                {ruleProviderIds.length + hostedRuleSetIds.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                    {ruleProviderIds.length + hostedRuleSetIds.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="yamlEdit">
+                YAML 编辑
+              </TabsTrigger>
+              <TabsTrigger value="history">
+                {t('configHistory.tab')}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={handleOpenPreview}>
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
+            {t('customConfigs.previewYaml')}
+          </Button>
         </div>
 
-        <div className="mt-3 rounded-lg border bg-muted/20 p-3">
-          <div className="flex items-start gap-2">
-            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t('customConfigs.detailGuideTitle')}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {t('customConfigs.detailGuideDescription')}
-              </p>
-            </div>
+        <div className="shrink-0 mt-2 rounded-lg border bg-muted/20 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground/80">{t('customConfigs.detailGuideTitle')}</span>
+              {' · '}
+              {t('customConfigs.detailGuideDescription')}
+            </p>
           </div>
         </div>
 
-        {/* ── Tab 1: 代理节点 ── */}
-        <TabsContent value="proxies" className="space-y-3 mt-3">
-          <div className="flex justify-end">
-            <Button onClick={openAddProxy}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('customConfigs.addProxy')}
+        {/* ── Tab 1: 代理组 ── */}
+        <TabsContent value="proxyGroups" className="space-y-2.5 mt-2.5">
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={openBatchEdit}>
+              <Edit className="mr-1.5 h-3.5 w-3.5" />
+              {t('customConfigs.batchEditProxyGroups')}
             </Button>
-          </div>
-
-          {proxies.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
-              {t('common.noData')}
-            </div>
-          ) : (
-            <div className="border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyName')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.proxyType')}</th>
-                    <th className="w-[132px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proxies.map((proxy, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => openEditProxy(proxy, idx)}
-                    >
-                      <td className="px-4 py-2 font-medium whitespace-nowrap">{proxy.name}</td>
-                      <td className="px-4 py-2">
-                        <Badge variant="secondary">{proxy.type}</Badge>
-                      </td>
-                      <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openEditProxy(proxy, idx)}
-                            aria-label={t('customConfigs.editProxy')}
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleDuplicateProxy(idx)}
-                            aria-label={t('customConfigs.duplicateProxy')}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDeleteProxy(idx)}
-                            aria-label={t('customConfigs.deleteProxy')}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Tab 2: 代理组 ── */}
-        <TabsContent value="proxyGroups" className="space-y-3 mt-3">
-          <div className="flex justify-end">
-            <Button onClick={openAddGroup}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button size="sm" onClick={openAddGroup}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               {t('customConfigs.addProxyGroup')}
             </Button>
           </div>
 
           {proxyGroups.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
+            <div className="text-center py-10 text-muted-foreground text-sm border rounded-lg">
               {t('common.noData')}
             </div>
           ) : (
@@ -1261,11 +1272,13 @@ export function CustomConfigDetail() {
               <table className={SORTABLE_TABLE_LAYOUT}>
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="w-[28px] px-1 py-2" aria-hidden />
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupName')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupType')}</th>
-                    <th className="text-left px-4 py-2 font-medium">{t('customConfigs.groupProxies')}</th>
-                    <th className="w-[100px] px-4 py-2 font-medium text-right">{t('common.actions')}</th>
+                    <th className="hidden md:table-cell w-[28px] px-1 py-1.5" aria-hidden />
+                    <th className="text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupName')}</th>
+                    <th className="hidden sm:table-cell text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupType')}</th>
+                    <th className="hidden lg:table-cell text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupProxies')}</th>
+                    {/* 移动端类型列占位 */}
+                    <th className="sm:hidden text-left px-3 py-1.5 text-sm font-medium">{t('customConfigs.groupType')}</th>
+                    <th className="w-[88px] px-3 py-1.5 text-sm font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <DndContext
@@ -1297,7 +1310,7 @@ export function CustomConfigDetail() {
         </TabsContent>
 
         {/* ── Tab 3: 规则 ── */}
-        <TabsContent value="rules" className="space-y-3 mt-2.5">
+        <TabsContent value="rules" className="space-y-2.5 mt-2.5">
           <TooltipProvider delayDuration={300}>
           <div className="space-y-3">
             <div className="space-y-3">
@@ -1448,49 +1461,49 @@ export function CustomConfigDetail() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-muted/20"
                   onClick={() => {
                     setRuleFilter('all')
                     setShowOnlyIssues(false)
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatTotal')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.total}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{ruleStats.total}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-muted/20"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-muted/20"
                   onClick={() => setRuleFilter('rule-set')}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatRuleSets')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{ruleStats.selectedRuleSets}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{ruleStats.selectedRuleSets}</p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-amber-50"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-amber-50"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatWarnings')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-amber-600 dark:text-amber-300">
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-amber-600 dark:text-amber-300">
                     {ruleStats.warnings}
                   </p>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border bg-muted/10 p-2.5 text-left transition-colors hover:bg-destructive/5"
+                  className="rounded-lg border bg-muted/10 px-2.5 py-2 text-left transition-colors hover:bg-destructive/5"
                   onClick={() => {
                     setShowOnlyIssues(true)
                     setRuleFilter('all')
                   }}
                 >
                   <p className="text-xs text-muted-foreground">{t('customConfigs.ruleStatErrors')}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-destructive">{ruleStats.errors}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-destructive">{ruleStats.errors}</p>
                 </button>
               </div>
 
@@ -1502,7 +1515,7 @@ export function CustomConfigDetail() {
                         <YamlEditor
                           value={rulesText}
                           onChange={handleRulesTextChange}
-                          minHeight="420px"
+                          height="420px"
                           highlightedLine={selectedDiagnosticLine}
                           placeholder={'DOMAIN,example.com,DIRECT\nGEOIP,CN,DIRECT\nMATCH,PROXY'}
                         />
@@ -1593,6 +1606,7 @@ export function CustomConfigDetail() {
                               onToggle={toggleRuleRow}
                               onFocus={setActiveRuleIndex}
                               onQuickFix={handleRuleQuickFix}
+                              onCommentChange={rulesTextMode ? undefined : updateRuleComment}
                               t={t}
                             />
                           ))}
@@ -1722,15 +1736,14 @@ export function CustomConfigDetail() {
                           referencedTargets.map((name) => {
                             const isBuiltin = BUILTIN_PROXIES.includes(name)
                             const isGroup = proxyGroups.some((group) => group.name === name)
-                            const isProxy = proxies.some((proxy) => proxy.name === name)
                             return (
                               <button
                                 key={name}
                                 type="button"
-                                onClick={() => handleDetailTabChange(isProxy ? 'proxies' : 'proxyGroups')}
+                                onClick={() => handleDetailTabChange('proxyGroups')}
                                 className={cn(
                                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                                  !isBuiltin && !isGroup && !isProxy && 'border-destructive/40 text-destructive'
+                                  !isBuiltin && !isGroup && 'border-destructive/40 text-destructive'
                                 )}
                               >
                                 {name}
@@ -1738,9 +1751,7 @@ export function CustomConfigDetail() {
                                   ? ` · ${t('customConfigs.targetBuiltin')}`
                                   : isGroup
                                     ? ` · ${t('customConfigs.targetProxyGroups')}`
-                                    : isProxy
-                                      ? ` · ${t('customConfigs.targetProxies')}`
-                                      : ` · ${t('customConfigs.ruleTargetMissing')}`}
+                                    : ` · ${t('customConfigs.ruleTargetMissing')}`}
                               </button>
                             )
                           })
@@ -1857,28 +1868,126 @@ export function CustomConfigDetail() {
             </>
           )}
         </TabsContent>
-      </Tabs>
 
-      {/* ── 代理节点编辑弹窗 ── */}
-      <ProxyDialog
-        open={proxyDialogOpen}
-        initialNode={editingProxy}
-        onClose={() => setProxyDialogOpen(false)}
-        onSave={handleSaveProxy}
-      />
+        {/* ── Tab 5: YAML 编辑 ── */}
+        <TabsContent value="yamlEdit" className="mt-3 flex flex-col gap-3">
+          <div className="shrink-0 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              编辑代理组和规则，点击"应用"后更新配置。
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const draft = {
+                    'proxy-groups': proxyGroups,
+                    rules: rulesFromDraft(rulesTextMode, rulesText, mixedRules),
+                  }
+                  setYamlEditContent(draftToYamlText(draft))
+                  setYamlEditError('')
+                }}
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                重置
+              </Button>
+              <Button size="sm" onClick={handleApplyYamlEdit}>
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                应用到配置
+              </Button>
+            </div>
+          </div>
+          {yamlEditError && (
+            <div className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {yamlEditError}
+            </div>
+          )}
+          <div style={{ height: 'calc(100vh - 270px)' }}>
+            <YamlEditor
+              value={yamlEditContent}
+              onChange={setYamlEditContent}
+              height="100%"
+            />
+          </div>
+        </TabsContent>
+        {/* ── Tab 6: 变更历史 ── */}
+        <HistoryTabContent configId={configId} queryClient={queryClient} />
+
+      </Tabs>
 
       {/* ── 代理组编辑弹窗 ── */}
       <ProxyGroupDialog
         open={groupDialogOpen}
         initialGroup={editingGroup}
-        proxyNames={proxyNames}
+        proxyNames={[]}
         groupNames={proxyGroups
           .map((g) => g.name)
           .filter((_, i) => i !== editingGroupIndex)}
         providerNames={providerNames}
+        providerItems={providerItems}
         onClose={() => setGroupDialogOpen(false)}
         onSave={handleSaveGroup}
       />
+
+      {/* ── 代理组批量编辑 Sheet ── */}
+      <Sheet open={batchEditOpen} onOpenChange={setBatchEditOpen}>
+        <SheetContent
+          resizable
+          defaultWidth={600}
+          minWidth={420}
+          maxWidth={900}
+          showClose={false}
+          className="overflow-hidden"
+        >
+          <SheetHeader className="sticky top-0 z-10 shrink-0 bg-background">
+            <div className="flex items-start justify-between gap-4 pr-2">
+              <div className="space-y-1">
+                <SheetTitle>{t('customConfigs.batchEditProxyGroupsTitle')}</SheetTitle>
+                <p className="text-xs text-muted-foreground">{t('customConfigs.batchEditProxyGroupsHint')}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const content = proxyGroups.length > 0
+                      ? draftToYamlText(proxyGroups)
+                      : '- name: PROXY\n  type: select\n  proxies:\n    - DIRECT\n'
+                    setBatchEditContent(content)
+                    setBatchEditError('')
+                  }}
+                >
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.batchEditProxyGroupsReset')}
+                </Button>
+                <Button type="button" size="sm" onClick={handleApplyBatchEdit}>
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  {t('customConfigs.batchEditProxyGroupsApply')}
+                </Button>
+                <SheetClose className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  <X className="h-5 w-5" />
+                  <span className="sr-only">{t('common.close')}</span>
+                </SheetClose>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 flex flex-col p-4 pt-3 gap-3">
+            {batchEditError && (
+              <div className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {batchEditError}
+              </div>
+            )}
+            <div className="flex-1 min-h-0" style={{ minHeight: '300px', maxHeight: 'calc(100vh - 200px)' }}>
+              <YamlEditor
+                value={batchEditContent}
+                onChange={(v) => { setBatchEditContent(v); setBatchEditError('') }}
+                height="100%"
+              />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ── YAML 预览 Sheet ── */}
       <ConfigPayloadDiffDialog
@@ -1931,7 +2040,7 @@ export function CustomConfigDetail() {
               </div>
             </div>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto p-6 pt-4">
+          <div className="flex-1 min-h-0 flex flex-col p-6 pt-4">
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -1942,12 +2051,14 @@ export function CustomConfigDetail() {
                 </p>
               </div>
             ) : (
-              <YamlEditor
-                value={previewYaml}
-                readOnly
-                minHeight="480px"
-                className="bg-muted/30"
-              />
+              <div className="flex-1 min-h-0 flex flex-col">
+                <YamlEditor
+                  value={previewYaml}
+                  readOnly
+                  height="100%"
+                  className="bg-muted/30 h-full"
+                />
+              </div>
             )}
           </div>
         </SheetContent>
@@ -1955,6 +2066,141 @@ export function CustomConfigDetail() {
     </div>
     <CustomConfigLeaveDialog blocker={blocker} />
     </>
+  )
+}
+
+// ─────────────────────────────────────────────
+// 变更历史 Tab 内容
+// ─────────────────────────────────────────────
+
+interface HistoryTabContentProps {
+  configId: number
+  queryClient: QueryClient
+}
+
+function HistoryTabContent({ configId, queryClient }: HistoryTabContentProps) {
+  const { t } = useTranslation()
+  const [restoreTarget, setRestoreTarget] = useState<number | null>(null)
+  const [restoring, setRestoring] = useState(false)
+  const [diffTargetIndex, setDiffTargetIndex] = useState<number | null>(null)
+
+  const { data: histories = [], isLoading } = useQuery({
+    queryKey: ['custom-config-history', configId],
+    queryFn: () => configHistoryApi.list(configId),
+    enabled: !!configId,
+  })
+
+  const handleRestore = async () => {
+    if (restoreTarget === null) return
+    setRestoring(true)
+    try {
+      await configHistoryApi.restore(configId, restoreTarget)
+      queryClient.invalidateQueries({ queryKey: ['custom-configs', configId] })
+      queryClient.invalidateQueries({ queryKey: ['custom-configs'] })
+      queryClient.invalidateQueries({ queryKey: ['custom-config-history', configId] })
+      toast.success(t('configHistory.restoreSuccess'))
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setRestoring(false)
+      setRestoreTarget(null)
+    }
+  }
+
+  return (
+    <TabsContent value="history" className="space-y-3 mt-3">
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      ) : histories.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg">
+          {t('configHistory.empty')}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {histories.map((h, idx) => (
+            <div
+              key={h.id}
+              className="flex items-center justify-between gap-4 rounded-lg border bg-background px-4 py-3"
+            >
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-sm font-medium truncate">{h.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('configHistory.timeLabel')}{' '}
+                  {new Date(h.created_at).toLocaleString()}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                    {h.proxy_groups.length} 代理组
+                  </Badge>
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                    {h.rules.length} 规则
+                  </Badge>
+                  {(h.rule_provider_ids.length + h.hosted_rule_set_ids.length) > 0 && (
+                    <Badge variant="outline" className="text-xs px-1.5 py-0">
+                      {h.rule_provider_ids.length + h.hosted_rule_set_ids.length} 规则集
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDiffTargetIndex(idx)}
+                >
+                  {t('configHistory.diffBtn')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRestoreTarget(h.id)}
+                >
+                  {t('configHistory.restoreBtn')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 变更 diff 弹窗 */}
+      {diffTargetIndex !== null && (
+        <HistoryDiffDialog
+          open={diffTargetIndex !== null}
+          onOpenChange={(open) => { if (!open) setDiffTargetIndex(null) }}
+          newSnapshot={histories[diffTargetIndex]}
+          oldSnapshot={diffTargetIndex + 1 < histories.length ? histories[diffTargetIndex + 1] : null}
+          savedAt={new Date(histories[diffTargetIndex].created_at).toLocaleString()}
+        />
+      )}
+
+      {/* 恢复确认弹窗 */}
+      <Dialog open={restoreTarget !== null} onOpenChange={(open) => { if (!open) setRestoreTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('configHistory.restoreTitle')}</DialogTitle>
+            <DialogDescription>{t('configHistory.restoreDesc')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setRestoreTarget(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={restoring}
+              onClick={handleRestore}
+            >
+              {restoring ? t('common.saving') : t('configHistory.restoreBtn')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TabsContent>
   )
 }
 
@@ -1972,11 +2218,11 @@ interface RuleProviderGroupProps {
 function RuleProviderGroup({ providers, ruleProviderIds, hostedRuleSetIds, onToggle }: RuleProviderGroupProps) {
   const { t } = useTranslation()
   return (
-    <div className="border rounded-lg overflow-hidden">
-      {providers.map((rp, idx) => (
+    <div className="grid grid-cols-2 gap-2">
+      {providers.map((rp) => (
         <div
           key={rp.id}
-          className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${idx !== 0 ? 'border-t' : ''}`}
+          className="flex items-center gap-3 px-4 py-3 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
           onClick={() => onToggle(rp)}
         >
           <Checkbox

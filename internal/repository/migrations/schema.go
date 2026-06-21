@@ -10,8 +10,9 @@ import (
 
 func init() {
 	register(Migration{
-		Version: 1,
-		Up:      applySchemaUp,
+		Version:     1,
+		Description: "initial schema: all tables",
+		Up:          applySchemaUp,
 	})
 }
 
@@ -27,6 +28,7 @@ func ApplySchema(db *gorm.DB) error {
 	}
 	return db.AutoMigrate(
 		&model.User{},
+		&model.SystemSetting{},
 		&model.UserAgent{},
 		&model.Provider{},
 		&model.ConfigTemplate{},
@@ -36,5 +38,6 @@ func ApplySchema(db *gorm.DB) error {
 		&model.Subscription{},
 		&model.AccessRestriction{},
 		&model.AccessLog{},
+		&model.ConfigHistory{},
 	)
 }

@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react'
 import type { ParsedRule, RuleQuickFixAction } from '@/domain/rules'
 import { RULE_TYPES, ruleSupportsNoResolve } from '@/domain/rules'
 import { cn } from '@/lib/utils'
@@ -29,15 +30,97 @@ export interface SortableRuleRowProps {
   onUpdate: (sourceIndex: number, field: keyof ParsedRule, value: string | boolean) => void
   onDelete: (sourceIndex: number) => void
   isActive: boolean
-  /** 点击标题栏切换展开/收起 */
   onToggle: (sourceIndex: number) => void
   onFocus: (sourceIndex: number) => void
   onQuickFix: (sourceIndex: number, action: RuleQuickFixAction) => void
+  onCommentChange?: (sourceIndex: number, comment: string) => void
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
+function RuleCommentCell({
+  comment,
+  sourceIndex,
+  onCommentChange,
+}: {
+  comment?: string
+  sourceIndex: number
+  onCommentChange?: (sourceIndex: number, comment: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(comment ?? '')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setValue(comment ?? '')
+  }, [comment])
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!onCommentChange) return
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const commit = () => {
+    setEditing(false)
+    onCommentChange?.(sourceIndex, value.trim())
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.currentTarget.blur()
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="h-6 w-44 rounded border border-border/60 bg-background px-1.5 font-mono text-[11px] text-muted-foreground outline-none focus:border-primary/50"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        onClick={(e) => e.stopPropagation()}
+        placeholder="添加注释..."
+      />
+    )
+  }
+
+  if (comment) {
+    return (
+      <span
+        role={onCommentChange ? 'button' : undefined}
+        tabIndex={onCommentChange ? 0 : undefined}
+        className={cn(
+          'max-w-[260px] truncate font-mono text-[11px] text-muted-foreground/55',
+          onCommentChange && 'cursor-text hover:text-muted-foreground/80'
+        )}
+        onClick={startEdit}
+        onKeyDown={(e) => { if (e.key === 'Enter') startEdit(e as unknown as React.MouseEvent) }}
+      >
+        // {comment}
+      </span>
+    )
+  }
+
+  if (!onCommentChange) return null
+
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className="cursor-text font-mono text-[11px] text-muted-foreground/20 opacity-0 transition-opacity group-hover:opacity-100"
+      onClick={startEdit}
+      onKeyDown={(e) => { if (e.key === 'Enter') startEdit(e as unknown as React.MouseEvent) }}
+    >
+      // 注释
+    </span>
+  )
+}
+
 export function SortableRuleRow({
-  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onToggle, onFocus, onQuickFix, t,
+  id, item, allRuleSets, targetOptionGroups, onUpdate, onDelete, isActive, onToggle, onFocus, onQuickFix, onCommentChange, t,
 }: SortableRuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, ...sortableInstantReorder })
@@ -48,7 +131,7 @@ export function SortableRuleRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const { analysis, sourceIndex, lineNumber } = item
+  const { analysis, sourceIndex, lineNumber, comment } = item
   const parsed = analysis.parsed
   const meta = getRuleTypeMeta(parsed.type)
   const ruleProviderExists = allRuleSets.some((rp) => rp.name === parsed.payload)
@@ -72,7 +155,6 @@ export function SortableRuleRow({
         'group rounded-lg border bg-background transition-colors',
         analysis.status === 'valid' && 'border-border/70',
         !isActive && 'hover:bg-muted/50',
-        // 展开时仅用边框区分当前行，避免整块底色与 hover 叠加显得脏
         isActive && 'border-primary/40 shadow-sm dark:border-primary/35',
         analysis.status === 'error' && 'border-destructive/40',
         analysis.status === 'warning' && 'border-amber-500/40',
@@ -83,7 +165,7 @@ export function SortableRuleRow({
         className="flex cursor-pointer items-center gap-1.5 border-b border-border/60 px-2 py-1.5"
         onClick={() => onToggle(sourceIndex)}
       >
-        <div className="flex items-center gap-1 self-stretch">
+        <div className="hidden md:flex items-center gap-1 self-stretch">
           <button
             type="button"
             className={cn(
@@ -97,7 +179,9 @@ export function SortableRuleRow({
             <GripVertical className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="min-w-0 flex-1">
+
+        {/* 规则信息 */}
+        <div className="min-w-0 shrink-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex shrink-0 items-center gap-1">
               <RuleStatusIndicator status={analysis.status} t={t} />
@@ -124,8 +208,18 @@ export function SortableRuleRow({
               </Badge>
             )}
           </div>
-          </div>
-          <Button
+        </div>
+
+        {/* 注释区（桌面端可见；点击注释文字触发编辑，点击空白仍展开行） */}
+        <div className="hidden md:flex min-w-0 flex-1 items-center px-2">
+          <RuleCommentCell
+            comment={comment}
+            sourceIndex={sourceIndex}
+            onCommentChange={onCommentChange}
+          />
+        </div>
+
+        <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
@@ -133,13 +227,13 @@ export function SortableRuleRow({
             e.stopPropagation()
             onDelete(sourceIndex)
           }}
-          >
+        >
           <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-          </div>
+        </Button>
+      </div>
 
-          {isActive && (
-          <div className="space-y-1.5 px-2 pb-1.5 pt-1">
+      {isActive && (
+        <div className="space-y-1.5 px-2 pb-1.5 pt-1">
           <div className="grid gap-x-2 gap-y-1.5 lg:grid-cols-[200px_minmax(180px,1fr)_minmax(160px,1fr)] lg:items-start">
 
             <div className="space-y-0.5 min-w-0">
@@ -247,6 +341,19 @@ export function SortableRuleRow({
               </NativeSelect>
             </div>
           </div>
+
+          {/* 注释编辑（展开状态，移动端也可见） */}
+          {onCommentChange && (
+            <div className="space-y-0.5">
+              <Label className="text-[11px] leading-tight text-muted-foreground">注释</Label>
+              <Input
+                className="h-8 font-mono text-[13px] text-muted-foreground"
+                value={comment ?? ''}
+                onChange={(e) => onCommentChange(sourceIndex, e.target.value)}
+                placeholder="可选注释，保存时以 # 开头存储..."
+              />
+            </div>
+          )}
 
           {parsed.type !== 'MATCH' && ruleSupportsNoResolve(parsed.type) && (
             <div className="flex w-full gap-2.5 rounded-md border border-border/60 bg-muted/10 px-2 py-1.5">

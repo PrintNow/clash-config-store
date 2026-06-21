@@ -28,3 +28,4 @@ data/
 *.swp
 *.swo
 bin/
+.claude/

@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Trash2, Edit, Copy, RotateCcw } from 'lucide-react'
-import { hostedRuleSetsApi } from '@/api/hosted-rule-sets'
-import type { HostedRuleSet } from '@/types'
+import { Plus, Trash2, Edit, Copy, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
+import { ruleSetsApi } from '@/api/rule-sets'
+import type { RuleSet } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { YamlEditor } from '@/components/YamlEditor'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   NativeSelect,
   NativeSelectOption,
@@ -34,8 +35,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const emptyForm = {
   name: '',
-  behavior: 'domain' as HostedRuleSet['behavior'],
-  format: 'yaml' as HostedRuleSet['format'],
+  behavior: 'domain' as RuleSet['behavior'],
+  format: 'yaml' as RuleSet['format'],
   content: '',
 }
 
@@ -63,18 +64,20 @@ export function HostedRuleSets() {
   const queryClient = useQueryClient()
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['hosted-rule-sets'],
-    queryFn: hostedRuleSetsApi.list,
+    queryKey: ['rule-sets', 'hosted'],
+    queryFn: () => ruleSetsApi.list('hosted'),
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<HostedRuleSet | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<HostedRuleSet | null>(null)
+  const [dialogFullscreen, setDialogFullscreen] = useState(false)
+  const [editingItem, setEditingItem] = useState<RuleSet | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<RuleSet | null>(null)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
   const closeDialog = () => {
     setDialogOpen(false)
+    setDialogFullscreen(false)
     setEditingItem(null)
     setForm(emptyForm)
   }
@@ -82,11 +85,13 @@ export function HostedRuleSets() {
   const openCreate = () => {
     setEditingItem(null)
     setForm(emptyForm)
+    setDialogFullscreen(false)
     setDialogOpen(true)
   }
 
-  const openEdit = (it: HostedRuleSet) => {
+  const openEdit = (it: RuleSet) => {
     setEditingItem(it)
+    setDialogFullscreen(false)
     setForm({
       name: it.name,
       behavior: it.behavior,
@@ -94,8 +99,8 @@ export function HostedRuleSets() {
       content: '',
     })
     setDialogOpen(true)
-    hostedRuleSetsApi
-      .get(it.id)
+    ruleSetsApi
+      .get(it.id, 'hosted')
       .then((full) => {
         setForm((f) => ({ ...f, content: full.content ?? '' }))
       })
@@ -123,11 +128,11 @@ export function HostedRuleSets() {
         content: form.content,
       }
       return editingItem
-        ? hostedRuleSetsApi.update(editingItem.id, payload)
-        : hostedRuleSetsApi.create(payload)
+        ? ruleSetsApi.update(editingItem.id, { source_type: 'hosted', ...payload })
+        : ruleSetsApi.create({ source_type: 'hosted', ...payload })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       closeDialog()
     },
@@ -135,9 +140,9 @@ export function HostedRuleSets() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => hostedRuleSetsApi.delete(id),
+    mutationFn: (id: number) => ruleSetsApi.delete(id, 'hosted'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       setDeleteTarget(null)
     },
@@ -145,19 +150,19 @@ export function HostedRuleSets() {
   })
 
   const resetTokensMutation = useMutation({
-    mutationFn: hostedRuleSetsApi.resetTokens,
+    mutationFn: ruleSetsApi.resetTokens,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hosted-rule-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['rule-sets', 'hosted'] })
       toast.success(t('common.success'))
       setResetDialogOpen(false)
     },
     onError: (err: Error) => toast.error(err.message),
   })
 
-  const copyUrl = async (it: HostedRuleSet) => {
+  const copyUrl = async (it: RuleSet) => {
     try {
-      if (!it.url) return
-      await navigator.clipboard.writeText(it.url)
+      if (!it.hrs_url) return
+      await navigator.clipboard.writeText(it.hrs_url)
       toast.success(t('common.copied'))
     } catch {
       toast.error(t('common.error'))
@@ -165,38 +170,42 @@ export function HostedRuleSets() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('hostedRuleSets.title')}</h1>
+    <div className="space-y-4">
+      {/* 标题区 */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{t('hostedRuleSets.title')}</h1>
         <div className="flex items-center gap-2">
-          <Button variant="destructive" onClick={() => setResetDialogOpen(true)} disabled={items.length === 0}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            {t('hostedRuleSets.resetAllTokens')}
+          <Button variant="destructive" size="sm" onClick={() => setResetDialogOpen(true)} disabled={items.length === 0}>
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('hostedRuleSets.resetAllTokens')}</span>
+            <span className="sm:hidden">{t('common.reset') || 'Reset'}</span>
           </Button>
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-1.5 h-4 w-4" />
             {t('hostedRuleSets.add')}
           </Button>
         </div>
       </div>
 
-      <div className="rounded-lg border">
+      {/* 桌面端表格 */}
+      <div className="hidden sm:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t('common.name')}</TableHead>
               <TableHead>{t('ruleProviders.providerBehavior')}</TableHead>
               <TableHead>{t('ruleProviders.providerFormat')}</TableHead>
+              <TableHead className="w-[80px] text-right">{t('ruleSets.ruleCount')}</TableHead>
               <TableHead className="w-[260px]">{t('hostedRuleSets.url')}</TableHead>
               <TableHead>{t('common.createdAt')}</TableHead>
-              <TableHead className="w-[140px]">{t('common.actions')}</TableHead>
+              <TableHead className="w-[120px]">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
@@ -205,7 +214,7 @@ export function HostedRuleSets() {
               ))
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   {t('common.noData')}
                 </TableCell>
               </TableRow>
@@ -215,9 +224,12 @@ export function HostedRuleSets() {
                   <TableCell className="font-medium">{it.name}</TableCell>
                   <TableCell><BehaviorBadge behavior={it.behavior} t={t} /></TableCell>
                   <TableCell><FormatBadge format={it.format} t={t} /></TableCell>
+                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                    {it.rule_count ? it.rule_count.toLocaleString() : '-'}
+                  </TableCell>
                   <TableCell className="max-w-[260px]">
-                    {it.url ? (
-                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.url}</code>
+                    {it.hrs_url ? (
+                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
                     ) : (
                       <span className="text-sm text-muted-foreground">-</span>
                     )}
@@ -227,17 +239,17 @@ export function HostedRuleSets() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => copyUrl(it)} disabled={!it.url} aria-label={t('common.copy')}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.hrs_url} aria-label={t('common.copy')}>
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label={t('common.edit')}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)} aria-label={t('common.edit')}>
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeleteTarget(it)}
-                        className="text-destructive hover:text-destructive"
                         aria-label={t('common.delete')}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -251,71 +263,156 @@ export function HostedRuleSets() {
         </Table>
       </div>
 
+      {/* 移动端卡片列表 */}
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-3 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+            </Card>
+          ))
+        ) : items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noData')}</p>
+        ) : (
+          items.map((it) => (
+            <Card key={it.id}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{it.name}</span>
+                      <BehaviorBadge behavior={it.behavior} t={t} />
+                      <FormatBadge format={it.format} t={t} />
+                      {(it.rule_count ?? 0) > 0 && (
+                        <span className="text-xs text-muted-foreground">{it.rule_count!.toLocaleString()} 条</span>
+                      )}
+                    </div>
+                    {it.hrs_url && (
+                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs">{it.hrs_url}</code>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(it.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyUrl(it)} disabled={!it.hrs_url}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(it)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(it)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* 创建/编辑弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent
+          className={dialogFullscreen
+            ? 'fixed inset-2 max-w-none w-auto h-auto rounded-lg flex flex-col overflow-hidden translate-x-0 translate-y-0 top-2 left-2 right-2 bottom-2'
+            : 'sm:max-w-[900px] max-h-[85vh] overflow-y-auto'
+          }
+          onEscapeKeyDown={(e) => {
+            if (dialogFullscreen) {
+              e.preventDefault()
+              setDialogFullscreen(false)
+            }
+          }}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <form
-            className="flex flex-col gap-4"
+            className={dialogFullscreen ? 'flex flex-col h-full gap-4 overflow-hidden' : 'flex flex-col gap-4'}
             onSubmit={(e) => {
               e.preventDefault()
               if (isFormValid && !saveMutation.isPending) saveMutation.mutate()
             }}
           >
-            <DialogHeader>
-              <DialogTitle>{editingItem ? t('hostedRuleSets.edit') : t('hostedRuleSets.add')}</DialogTitle>
-              <DialogDescription>{t('hostedRuleSets.nameHint')}</DialogDescription>
+            <DialogHeader className="flex-none">
+              <div className="flex items-center justify-between pr-8">
+                <div>
+                  <DialogTitle>{editingItem ? t('hostedRuleSets.edit') : t('hostedRuleSets.add')}</DialogTitle>
+                  <DialogDescription>{t('hostedRuleSets.nameHint')}</DialogDescription>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDialogFullscreen(f => !f)}
+                  className="rounded p-1 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  title={dialogFullscreen ? '退出全屏' : '全屏编辑'}
+                >
+                  {dialogFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+              </div>
             </DialogHeader>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="hrs-name">{t('common.name')}</Label>
-                <Input
-                  id="hrs-name"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="my_ruleset"
+            <div className={dialogFullscreen ? 'flex flex-col flex-1 gap-4 overflow-y-auto min-h-0' : 'grid gap-4 md:grid-cols-2'}>
+              <div className={dialogFullscreen ? 'grid gap-4 grid-cols-3 flex-none' : 'contents'}>
+                <div className="space-y-1.5">
+                  <Label htmlFor="hrs-name">{t('common.name')}</Label>
+                  <Input
+                    id="hrs-name"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="my_ruleset"
+                  />
+                  {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t('ruleProviders.providerBehavior')}</Label>
+                  <NativeSelect
+                    value={form.behavior}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, behavior: e.target.value as RuleSet['behavior'] }))
+                    }
+                  >
+                    <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
+                    <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
+                    <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
+                  </NativeSelect>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t('ruleProviders.providerFormat')}</Label>
+                  <NativeSelect
+                    value={form.format}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, format: e.target.value as RuleSet['format'] }))
+                    }
+                  >
+                    <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
+                    <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
+                  </NativeSelect>
+                </div>
+              </div>
+
+              <div className={dialogFullscreen ? 'flex flex-col flex-1 space-y-1.5 min-h-0' : 'space-y-1.5 md:col-span-2'}>
+                <Label htmlFor="hrs-content">{t('hostedRuleSets.content')}</Label>
+                <YamlEditor
+                  value={form.content}
+                  onChange={(v) => setForm((f) => ({ ...f, content: v }))}
+                  language={form.format === 'yaml' ? 'yaml' : 'text'}
+                  minHeight={dialogFullscreen ? 'calc(100vh - 300px)' : '200px'}
+                  maxHeight={dialogFullscreen ? 'calc(100vh - 300px)' : '45vh'}
                 />
-                {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t('ruleProviders.providerBehavior')}</Label>
-                <NativeSelect
-                  value={form.behavior}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, behavior: e.target.value as HostedRuleSet['behavior'] }))
-                  }
-                >
-                  <NativeSelectOption value="domain">{t('ruleProviders.behaviorDomain')}</NativeSelectOption>
-                  <NativeSelectOption value="ipcidr">{t('ruleProviders.behaviorIpcidr')}</NativeSelectOption>
-                  <NativeSelectOption value="classical">{t('ruleProviders.behaviorClassical')}</NativeSelectOption>
-                </NativeSelect>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t('ruleProviders.providerFormat')}</Label>
-                <NativeSelect
-                  value={form.format}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, format: e.target.value as HostedRuleSet['format'] }))
-                  }
-                >
-                  <NativeSelectOption value="yaml">{t('ruleProviders.formatYaml')}</NativeSelectOption>
-                  <NativeSelectOption value="text">{t('ruleProviders.formatText')}</NativeSelectOption>
-                </NativeSelect>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="hrs-content">{t('hostedRuleSets.content')}</Label>
-              <Textarea
-                id="hrs-content"
-                value={form.content}
-                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                className="min-h-[260px] font-mono"
-              />
-            </div>
-
-            <DialogFooter>
+            <DialogFooter className="flex-none">
               <Button type="button" variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={!isFormValid || saveMutation.isPending}>
                 {saveMutation.isPending ? t('common.saving') : t('common.save')}
@@ -325,6 +422,7 @@ export function HostedRuleSets() {
         </DialogContent>
       </Dialog>
 
+      {/* 删除确认弹窗 */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -340,6 +438,7 @@ export function HostedRuleSets() {
         </DialogContent>
       </Dialog>
 
+      {/* 重置 Token 确认弹窗 */}
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>

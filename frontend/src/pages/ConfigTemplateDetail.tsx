@@ -5,9 +5,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Save, FileCode2 } from 'lucide-react'
 import { configTemplatesApi } from '@/api/config-templates'
+import { useBreadcrumb } from '@/store/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { YamlEditor } from '@/components/YamlEditor'
 
@@ -18,11 +20,15 @@ export function ConfigTemplateDetail() {
   const { id } = useParams<{ id: string }>()
   const templateId = Number(id)
 
-  // 编辑状态
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
   const [nameError, setNameError] = useState('')
+
+  useBreadcrumb([
+    { label: t('nav.configTemplates'), href: '/config-templates' },
+    { label: name || '...' },
+  ])
 
   const { data: template, isLoading } = useQuery({
     queryKey: ['config-templates', templateId],
@@ -30,7 +36,6 @@ export function ConfigTemplateDetail() {
     enabled: !isNaN(templateId),
   })
 
-  // 数据加载后初始化表单
   useEffect(() => {
     if (template) {
       setName(template.name)
@@ -66,12 +71,12 @@ export function ConfigTemplateDetail() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-9 w-20" />
-          <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-9 w-64" />
-          <Skeleton className="h-9 w-20 ml-auto" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="h-8 w-16 ml-auto" />
         </div>
         <Skeleton className="h-96 w-full" />
       </div>
@@ -92,21 +97,21 @@ export function ConfigTemplateDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 顶部操作栏：返回 + 名称 + 描述 + 保存 */}
-      <div className="flex flex-wrap items-start gap-3">
+    <div className="flex flex-col h-full gap-4">
+      {/* 顶部操作栏 */}
+      <div className="flex flex-wrap items-end gap-2 shrink-0">
         <Button
           variant="outline"
           size="sm"
           onClick={() => navigate('/config-templates')}
-          className="shrink-0 self-center"
+          className="shrink-0 self-end"
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           {t('common.back')}
         </Button>
 
-        {/* 名称输入 */}
-        <div className="flex flex-col gap-1 min-w-[160px]">
+        {/* 名称 + 描述 行内排列，移动端换行 */}
+        <div className="flex flex-col gap-1 min-w-[140px]">
           <Label className="text-xs text-muted-foreground">
             {t('configTemplates.templateName')}
           </Label>
@@ -116,54 +121,54 @@ export function ConfigTemplateDetail() {
               setName(e.target.value)
               setNameError('')
             }}
-            className="h-9"
+            className="h-8 text-sm"
           />
           {nameError && <p className="text-xs text-destructive">{nameError}</p>}
         </div>
 
-        {/* 描述输入 */}
-        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
           <Label className="text-xs text-muted-foreground">
             {t('configTemplates.templateDescription')}
-            <span className="ml-1">({t('common.optional')})</span>
+            <span className="ml-1 opacity-60">({t('common.optional')})</span>
           </Label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('configTemplates.descriptionPlaceholder')}
-            className="h-9"
+            className="h-8 text-sm"
           />
         </div>
 
-        {/* 保存按钮 */}
         <Button
+          size="sm"
           onClick={handleSave}
           disabled={updateMutation.isPending}
           className="shrink-0 self-end"
         >
-          <Save className="mr-2 h-4 w-4" />
+          <Save className="mr-1.5 h-4 w-4" />
           {updateMutation.isPending ? t('common.saving') : t('common.save')}
         </Button>
       </div>
 
-      {/* YAML 内容编辑区域 */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>{t('configTemplates.templateContent')}</Label>
-        </div>
-
-        {/* 内容提示 */}
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {t('configTemplates.contentHint')}
-        </p>
-
-        <YamlEditor
-          value={content}
-          onChange={setContent}
-          placeholder={t('configTemplates.contentPlaceholder')}
-          minHeight="24rem"
-        />
-      </div>
+      {/* YAML 编辑区，撑满剩余高度 */}
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="flex-1 min-h-0 flex flex-col p-3 sm:p-4">
+          <div className="flex items-center justify-between mb-1 shrink-0">
+            <Label className="text-sm">{t('configTemplates.templateContent')}</Label>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed mb-2 shrink-0">
+            {t('configTemplates.contentHint')}
+          </p>
+          <div style={{ height: 'calc(100vh - 280px)' }}>
+            <YamlEditor
+              value={content}
+              onChange={setContent}
+              placeholder={t('configTemplates.contentPlaceholder')}
+              height="100%"
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

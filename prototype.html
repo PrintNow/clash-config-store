@@ -1,0 +1,2208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clash Config Store — UI/UX 原型</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #161b22;
+  --bg3: #21262d;
+  --bg4: #30363d;
+  --border: #30363d;
+  --border2: #3d4450;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --text3: #6e7681;
+  --accent: #2f81f7;
+  --accent-dim: #1f4f9e;
+  --green: #3fb950;
+  --green-dim: #1a4a25;
+  --orange: #d29922;
+  --orange-dim: #4a3800;
+  --red: #f85149;
+  --red-dim: #4a1a18;
+  --purple: #bc8cff;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 6px;
+  --sidebar-w: 220px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; height: 100vh; overflow: hidden; display: flex; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; height: 100vh; overflow-y: auto;
+  user-select: none;
+}
+.sidebar-logo {
+  padding: 16px 16px 12px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.logo-icon { width: 26px; height: 26px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.logo-text { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
+.logo-text span { font-size: 11px; color: var(--text2); font-weight: 400; }
+
+.nav-section { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.nav-section:last-child { border-bottom: none; flex: 1; }
+.nav-label {
+  padding: 6px 16px 4px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text3);
+}
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px; cursor: pointer; border-radius: 0;
+  color: var(--text2); font-size: 13px; text-decoration: none;
+  transition: background 0.1s, color 0.1s;
+  position: relative;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--bg3); color: var(--text); }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+  width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;
+}
+.nav-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+.nav-badge {
+  margin-left: auto; font-size: 10px; background: var(--bg4);
+  color: var(--text2); border-radius: 10px; padding: 1px 6px;
+}
+.nav-badge.error { background: var(--red-dim); color: var(--red); }
+
+.flow-hint {
+  margin: 8px 10px; padding: 8px 10px;
+  background: var(--bg3); border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 11px; color: var(--text3); line-height: 1.8;
+}
+.flow-hint .step { display: flex; align-items: center; gap: 6px; }
+.flow-hint .arrow { color: var(--border2); font-size: 10px; padding-left: 4px; }
+.flow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.flow-dot.green { background: var(--green); }
+.flow-dot.orange { background: var(--orange); }
+
+/* ── Main layout ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 48px; min-height: 48px; background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 12px;
+}
+.topbar-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.topbar-sub { font-size: 12px; color: var(--text3); }
+.topbar-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.content { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent; transition: all 0.1s; line-height: 1.5;
+  text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #388ae5; border-color: #388ae5; }
+.btn-secondary { background: var(--bg3); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg4); border-color: var(--border2); }
+.btn-ghost { background: transparent; color: var(--text2); border-color: transparent; }
+.btn-ghost:hover { background: var(--bg3); color: var(--text); }
+.btn-danger { background: var(--red-dim); color: var(--red); border-color: var(--red-dim); }
+.btn-danger:hover { background: #6b2020; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+
+/* ── Cards & Tables ── */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); }
+.card-header {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.card-title { font-size: 13px; font-weight: 600; }
+.card-body { padding: 16px; }
+
+.table { width: 100%; border-collapse: collapse; }
+.table th {
+  padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text3); border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  vertical-align: middle; font-size: 12px;
+}
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: var(--bg3); }
+.table .mono { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500;
+}
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-orange { background: var(--orange-dim); color: var(--orange); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-blue { background: var(--accent-dim); color: var(--accent); }
+.badge-gray { background: var(--bg4); color: var(--text2); }
+.badge-purple { background: #2d1f52; color: var(--purple); }
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.dot-green { background: var(--green); }
+.dot-gray { background: var(--text3); }
+.dot-orange { background: var(--orange); }
+.dot-red { background: var(--red); }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab {
+  padding: 8px 16px; font-size: 12px; font-weight: 500; cursor: pointer;
+  color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all 0.1s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ── Forms ── */
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.form-label { font-size: 11px; font-weight: 600; color: var(--text2); }
+.form-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 12px; padding: 6px 10px; font-family: var(--sans);
+  transition: border-color 0.1s; outline: none;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input.mono { font-family: var(--mono); }
+.form-hint { font-size: 11px; color: var(--text3); }
+select.form-input { cursor: pointer; }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px;
+  width: 520px; max-width: 95vw; max-height: 90vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-wide { width: 720px; }
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-size: 14px; font-weight: 600; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.close-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 18px; line-height: 1; }
+.close-btn:hover { color: var(--text); }
+
+/* ── Stat cards ── */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.stat-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+/* ── Flow diagram (Dashboard) ── */
+.flow-diagram {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+}
+.flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.flow-box {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px;
+  font-size: 12px; color: var(--text);
+  display: flex; flex-direction: column; gap: 2px; min-width: 100px;
+}
+.flow-box .box-label { font-size: 10px; color: var(--text3); font-weight: 600; text-transform: uppercase; }
+.flow-box.active-box { border-color: var(--accent); background: var(--accent-dim); }
+.flow-arrow { color: var(--text3); font-size: 18px; }
+.flow-plus {
+  color: var(--text3); font-size: 16px; display: flex; align-items: center;
+}
+.flow-group { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Code preview ── */
+.code-block {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; font-family: var(--mono); font-size: 11px;
+  color: var(--text2); line-height: 1.7; overflow-x: auto;
+}
+.code-key { color: #7ee787; }
+.code-str { color: #a5d6ff; }
+.code-num { color: #f2cc60; }
+.code-comment { color: var(--text3); font-style: italic; }
+
+/* ── Inline edit tag ── */
+.tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 8px; font-size: 11px; color: var(--text2);
+  font-family: var(--mono);
+}
+.tag.blue { background: var(--accent-dim); border-color: var(--accent-dim); color: var(--accent); }
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center; padding: 48px 20px; color: var(--text3);
+}
+.empty-icon { font-size: 32px; margin-bottom: 10px; }
+.empty-title { font-size: 14px; color: var(--text2); margin-bottom: 6px; }
+
+/* ── Page visibility ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Drag handle ── */
+.drag-handle { color: var(--text3); cursor: grab; padding: 0 4px; }
+.drag-handle:hover { color: var(--text2); }
+
+/* ── Rule item ── */
+.rule-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.rule-row:last-child { border-bottom: none; }
+.rule-index { color: var(--text3); font-size: 11px; width: 24px; text-align: right; flex-shrink: 0; font-family: var(--mono); }
+.rule-type { font-family: var(--mono); font-size: 11px; color: var(--purple); min-width: 80px; }
+.rule-value { font-family: var(--mono); font-size: 11px; color: var(--text); flex: 1; }
+.rule-target { font-family: var(--mono); font-size: 11px; }
+.rule-target.direct { color: var(--green); }
+.rule-target.proxy { color: var(--orange); }
+.rule-target.reject { color: var(--red); }
+.rule-actions { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity 0.1s; }
+.rule-row:hover .rule-actions { opacity: 1; }
+
+/* ── Provider card ── */
+.provider-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.1s;
+}
+.provider-card:hover { border-color: var(--border2); }
+.provider-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+.provider-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.provider-name { font-size: 13px; font-weight: 600; }
+.provider-url { font-family: var(--mono); font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.provider-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text3); }
+.provider-meta span { display: flex; align-items: center; gap: 4px; }
+
+/* ── Sub card ── */
+.sub-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; margin-bottom: 10px;
+}
+.sub-card-header {
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  cursor: pointer; transition: background 0.1s;
+}
+.sub-card-header:hover { background: var(--bg3); }
+.sub-name { font-size: 14px; font-weight: 600; }
+.sub-body { padding: 0 16px 16px; border-top: 1px solid var(--border); display: none; }
+.sub-body.open { display: block; padding-top: 14px; }
+.sub-url-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; font-family: var(--mono); font-size: 11px; color: var(--accent);
+  word-break: break-all; display: flex; align-items: flex-start; gap: 10px;
+}
+.sub-components { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.sub-component-block {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.sub-component-title { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── Proxy group item ── */
+.group-item {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.group-header {
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer;
+}
+.group-header:hover { background: var(--bg3); border-radius: var(--radius); }
+.group-name { font-size: 13px; font-weight: 600; flex: 1; }
+.group-type-badge { font-size: 10px; font-family: var(--mono); }
+.group-body { padding: 0 14px 12px; display: none; }
+.group-body.open { display: block; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 20px; right: 20px; z-index: 200;
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius);
+  padding: 10px 16px; font-size: 12px; color: var(--text);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  opacity: 0; transform: translateY(8px); transition: all 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* ── Section header ── */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-title { font-size: 14px; font-weight: 600; }
+.section-meta { font-size: 12px; color: var(--text3); }
+
+/* ── Quick action bar ── */
+.quick-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 14px; font-size: 12px;
+}
+.quick-bar-label { color: var(--text3); }
+.quick-bar-sep { color: var(--border2); }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">C</div>
+    <div class="logo-text">Config Store<br><span>Mihomo 订阅编排</span></div>
+  </div>
+
+  <div class="nav-section">
+    <a class="nav-item active" onclick="showPage('dashboard')">
+      <span class="nav-icon">⬡</span> 概览
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">来源素材</div>
+    <a class="nav-item" onclick="showPage('providers')">
+      <span class="nav-icon">📡</span> 节点源
+      <span class="nav-badge">4</span>
+    </a>
+    <a class="nav-item" onclick="showPage('rulesets')">
+      <span class="nav-icon">📋</span> 规则集
+      <span class="nav-badge">8</span>
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">配置编排</div>
+    <a class="nav-item" onclick="showPage('config')">
+      <span class="nav-icon">⚙️</span> 自定义配置
+    </a>
+    <a class="nav-item" onclick="showPage('templates')">
+      <span class="nav-icon">📄</span> 配置模板
+      <span class="nav-badge">2</span>
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">发布</div>
+    <a class="nav-item" onclick="showPage('subscriptions')">
+      <span class="nav-icon">🔗</span> 订阅管理
+      <span class="nav-badge">2</span>
+    </a>
+  </div>
+
+  <div class="nav-section" style="border-bottom:none; margin-top:auto;">
+    <a class="nav-item" onclick="showPage('ua')">
+      <span class="nav-icon">🤖</span> UA 库
+    </a>
+    <a class="nav-item" onclick="showPage('settings')">
+      <span class="nav-icon">⚙</span> 设置
+    </a>
+  </div>
+
+  <!-- Flow hint -->
+  <div style="padding: 10px 10px 14px;">
+    <div class="flow-hint">
+      <div class="step"><span class="flow-dot"></span> 节点源 → proxy-providers</div>
+      <div class="step"><span class="flow-dot"></span> 规则集 → rule-providers</div>
+      <div class="arrow">↓</div>
+      <div class="step"><span class="flow-dot green"></span> 自定义配置组装</div>
+      <div class="arrow">↓</div>
+      <div class="step"><span class="flow-dot orange"></span> 订阅链接下发</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: Dashboard
+  ══════════════════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="topbar">
+      <div class="topbar-title">概览</div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="showModal('modal-new-sub')">+ 新建订阅</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">节点源</div>
+          <div class="stat-value">3</div>
+          <div class="stat-sub">2 个在线 · 1 个待刷新</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">规则集</div>
+          <div class="stat-value">8</div>
+          <div class="stat-sub">5 外部引用 · 3 自托管</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">发布订阅</div>
+          <div class="stat-value">2</div>
+          <div class="stat-sub">上次下发 2 分钟前</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">节点总数</div>
+          <div class="stat-value">47</div>
+          <div class="stat-sub">来自 3 个节点源</div>
+        </div>
+      </div>
+
+      <!-- Config flow diagram -->
+      <div class="flow-diagram">
+        <div style="font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:14px;">配置生成流程</div>
+        <div class="flow-row">
+          <div class="flow-group">
+            <div class="flow-box">
+              <span class="box-label">节点源</span>
+              <span>ISP-A 机场 <span class="badge badge-green" style="font-size:9px;">在线</span></span>
+              <span>ISP-B 机场 <span class="badge badge-green" style="font-size:9px;">在线</span></span>
+              <span style="color:var(--text3); font-size:11px;">+ 1 个源</span>
+            </div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box active-box" style="min-width:140px;">
+            <span class="box-label">自定义配置</span>
+            <span>3 个代理组</span>
+            <span>34 条规则</span>
+            <span style="color:var(--text3); font-size:11px;">special</span>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-group">
+            <div class="flow-box">
+              <span class="box-label">规则集</span>
+              <span>MUST-Proxy · LLM</span>
+              <span>SZ-Home · google</span>
+              <span style="color:var(--text3); font-size:11px;">共 8 个引用</span>
+            </div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="min-width:160px; border-color:var(--green);">
+            <span class="box-label">输出订阅</span>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--accent);">/sub/abc123…</span>
+            <span style="color:var(--text3); font-size:11px;">2 个活跃链接</span>
+          </div>
+        </div>
+        <div style="margin-top:12px; font-size:11px; color:var(--text3);">
+          💡 修改任意环节后，订阅链接下发的 YAML 会实时更新——无需手动同步。
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">节点源状态</span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="showPage('providers')">查看全部 →</button>
+          </div>
+          <table class="table">
+            <thead><tr><th>名称</th><th>节点数</th><th>状态</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>ISP-A 机场</strong></td>
+                <td class="mono">23</td>
+                <td><span class="badge badge-green"><span class="dot dot-green"></span>正常</span></td>
+                <td><button class="btn btn-ghost btn-sm">↻</button></td>
+              </tr>
+              <tr>
+                <td><strong>ISP-B 机场</strong></td>
+                <td class="mono">18</td>
+                <td><span class="badge badge-green"><span class="dot dot-green"></span>正常</span></td>
+                <td><button class="btn btn-ghost btn-sm">↻</button></td>
+              </tr>
+              <tr>
+                <td><strong>Free-Nodes</strong></td>
+                <td class="mono">6</td>
+                <td><span class="badge badge-orange"><span class="dot dot-orange"></span>过期</span></td>
+                <td><button class="btn btn-ghost btn-sm">↻</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">最近下发记录</span>
+          </div>
+          <table class="table">
+            <thead><tr><th>订阅</th><th>IP</th><th>时间</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="tag blue">主力</span></td>
+                <td class="mono">183.12.x.x</td>
+                <td class="mono" style="color:var(--text3);">2 分钟前</td>
+              </tr>
+              <tr>
+                <td><span class="tag blue">主力</span></td>
+                <td class="mono">183.12.x.x</td>
+                <td class="mono" style="color:var(--text3);">1 小时前</td>
+              </tr>
+              <tr>
+                <td><span class="tag">备用</span></td>
+                <td class="mono">110.84.x.x</td>
+                <td class="mono" style="color:var(--text3);">3 小时前</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 节点源 (proxy-providers)
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-providers">
+    <div class="topbar">
+      <div class="topbar-title">节点源</div>
+      <div class="topbar-sub">proxy-providers · 支持 http 订阅 / inline 私有节点 / file 本地文件</div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm">↻ 全部刷新</button>
+        <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-provider')">+ 添加节点源</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="quick-bar">
+        <span class="quick-bar-label">💡 节点源刷新后自动更新所有引用了它的订阅</span>
+        <span class="quick-bar-sep">|</span>
+        <span style="color:var(--text2);">更换节点源：先添加新源，在<strong style="color:var(--text);">订阅管理</strong>里替换引用，删除旧源即可</span>
+      </div>
+
+      <div class="provider-card" onclick="toggleProviderDetail(this)">
+        <div class="provider-header">
+          <span class="dot dot-green"></span>
+          <span class="provider-name">ISP-A 机场</span>
+          <span class="badge badge-blue" style="font-family:var(--mono);">http</span>
+          <span class="badge badge-green">23 个节点</span>
+          <span style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">↻ 刷新</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showModal('modal-edit-provider')">编辑</button>
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">删除</button>
+          </span>
+        </div>
+        <div class="provider-url">https://example-isp-a.com/sub?token=xxxxxx&amp;flag=mihomo</div>
+        <div class="provider-meta" style="margin-top:8px;">
+          <span>⏱ 上次刷新：2 分钟前</span>
+          <span>🔄 自动更新：3600s</span>
+          <span>🤖 UA：Mihomo/1.18</span>
+          <span>🏷 前缀：[A]</span>
+        </div>
+        <div class="provider-detail" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <div style="font-size:11px; color:var(--text3); margin-bottom:8px;">过滤规则 &amp; 覆写</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="tag">filter: 港|HK</div>
+            <div class="tag">exclude: 过期</div>
+            <div class="tag">override: udp=true</div>
+          </div>
+          <div style="margin-top:10px; font-size:11px; color:var(--text3);">被引用于：</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <span class="badge badge-blue">订阅「主力」</span>
+            <span class="badge badge-gray">订阅「备用」</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="provider-card" onclick="toggleProviderDetail(this)">
+        <div class="provider-header">
+          <span class="dot dot-green"></span>
+          <span class="provider-name">ISP-B 机场</span>
+          <span class="badge badge-blue" style="font-family:var(--mono);">http</span>
+          <span class="badge badge-green">18 个节点</span>
+          <span style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">↻ 刷新</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">删除</button>
+          </span>
+        </div>
+        <div class="provider-url">https://example-isp-b.net/api/v1/client/subscribe?token=yyyyyy</div>
+        <div class="provider-meta" style="margin-top:8px;">
+          <span>⏱ 上次刷新：1 小时前</span>
+          <span>🔄 自动更新：7200s</span>
+          <span>🤖 UA：默认</span>
+        </div>
+      </div>
+
+      <div class="provider-card" onclick="toggleProviderDetail(this)">
+        <div class="provider-header">
+          <span class="dot dot-orange"></span>
+          <span class="provider-name">Free-Nodes</span>
+          <span class="badge badge-blue" style="font-family:var(--mono);">http</span>
+          <span class="badge badge-orange">节点已过期</span>
+          <span style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">↻ 刷新试试</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">删除</button>
+          </span>
+        </div>
+        <div class="provider-url">https://free-nodes.example.org/clash</div>
+        <div class="provider-meta" style="margin-top:8px;">
+          <span>⏱ 上次刷新：3 天前</span>
+          <span>⚠️ 健康检查全部失败</span>
+        </div>
+      </div>
+
+      <!-- inline 类型 -->
+      <div class="provider-card" onclick="toggleProviderDetail(this)">
+        <div class="provider-header">
+          <span class="dot dot-green"></span>
+          <span class="provider-name">家庭节点</span>
+          <span class="badge badge-purple" style="font-family:var(--mono);">inline</span>
+          <span class="badge badge-green">2 个节点</span>
+          <span style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showModal('modal-inline-provider')">✏️ 编辑节点</button>
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">删除</button>
+          </span>
+        </div>
+        <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+          <span class="tag" style="border-color:var(--purple); color:var(--purple);">家庭 SS</span>
+          <span class="tag" style="border-color:var(--purple); color:var(--purple);">公司 VPN 跳板</span>
+        </div>
+        <div class="provider-meta" style="margin-top:8px;">
+          <span>📝 节点内容直接存储，无需刷新</span>
+        </div>
+        <div class="provider-detail" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <div style="margin-bottom:6px; font-size:11px; color:var(--text3);">被引用于：</div>
+          <div style="display:flex; gap:6px;">
+            <span class="badge badge-blue">订阅「主力」</span>
+            <span class="badge badge-gray">订阅「备用」</span>
+          </div>
+          <div style="margin-top:10px;">
+            <table class="table" style="background:var(--bg3); border-radius:var(--radius); overflow:hidden;">
+              <thead><tr><th>节点名</th><th>协议</th><th>服务器</th><th>端口</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>家庭 SS</strong></td>
+                  <td><span class="badge badge-purple" style="font-family:var(--mono); font-size:10px;">ss</span></td>
+                  <td class="mono">home.example.com</td>
+                  <td class="mono">8388</td>
+                </tr>
+                <tr>
+                  <td><strong>公司 VPN 跳板</strong></td>
+                  <td><span class="badge badge-orange" style="font-family:var(--mono); font-size:10px;">vmess</span></td>
+                  <td class="mono">corp.internal</td>
+                  <td class="mono">443</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 规则集
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-rulesets">
+    <div class="topbar">
+      <div class="topbar-title">规则集</div>
+      <div class="topbar-sub">外部引用 + 自托管，统一管理 rule-providers</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-ruleset')">+ 添加规则集</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(this, 'tab-rulesets-all')">全部 (8)</div>
+        <div class="tab" onclick="switchTab(this, 'tab-rulesets-ext')">外部引用 (5)</div>
+        <div class="tab" onclick="switchTab(this, 'tab-rulesets-hosted')">自托管 (3)</div>
+      </div>
+
+      <div id="tab-rulesets-all">
+        <div class="quick-bar">
+          <span class="quick-bar-label">🌐 外部引用</span>
+          <span style="color:var(--text3);">规则文件托管在第三方，生成的 YAML 里 rule-providers 会写对应 URL</span>
+          <span class="quick-bar-sep">|</span>
+          <span class="quick-bar-label">🗄 自托管</span>
+          <span style="color:var(--text3);">规则内容存在本服务器，由 <span style="font-family:var(--mono);">/ruleset/:token/:name</span> 分发</span>
+        </div>
+
+        <table class="table" style="background:var(--bg2); border-radius:var(--radius); overflow:hidden;">
+          <thead><tr><th>名称</th><th>类型</th><th>格式</th><th>行为</th><th>来源</th><th>被引用</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>MUST-Proxy</strong></td>
+              <td><span class="badge badge-purple">自托管</span></td>
+              <td class="mono">yaml</td>
+              <td class="mono">classical</td>
+              <td style="font-size:11px; color:var(--text3);">/ruleset/.../MUST-Proxy</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-ghost btn-sm">预览</button></td>
+            </tr>
+            <tr>
+              <td><strong>LLM</strong></td>
+              <td><span class="badge badge-purple">自托管</span></td>
+              <td class="mono">yaml</td>
+              <td class="mono">domain</td>
+              <td style="font-size:11px; color:var(--text3);">/ruleset/.../LLM</td>
+              <td><span class="badge badge-blue">1 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-ghost btn-sm">预览</button></td>
+            </tr>
+            <tr>
+              <td><strong>SZ-Home</strong></td>
+              <td><span class="badge badge-purple">自托管</span></td>
+              <td class="mono">yaml</td>
+              <td class="mono">ipcidr</td>
+              <td style="font-size:11px; color:var(--text3);">/ruleset/.../SZ-Home</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-ghost btn-sm">预览</button></td>
+            </tr>
+            <tr>
+              <td><strong>google</strong></td>
+              <td><span class="badge badge-gray">外部引用</span></td>
+              <td class="mono">mrs</td>
+              <td class="mono">domain</td>
+              <td style="font-size:11px; color:var(--text3);">github/MetaCubeX/meta-rules-dat</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button></td>
+            </tr>
+            <tr>
+              <td><strong>apple</strong></td>
+              <td><span class="badge badge-gray">外部引用</span></td>
+              <td class="mono">mrs</td>
+              <td class="mono">domain</td>
+              <td style="font-size:11px; color:var(--text3);">github/MetaCubeX/meta-rules-dat</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button></td>
+            </tr>
+            <tr>
+              <td><strong>gfw</strong></td>
+              <td><span class="badge badge-gray">外部引用</span></td>
+              <td class="mono">mrs</td>
+              <td class="mono">domain</td>
+              <td style="font-size:11px; color:var(--text3);">github/MetaCubeX/meta-rules-dat</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button></td>
+            </tr>
+            <tr>
+              <td><strong>proxy</strong></td>
+              <td><span class="badge badge-gray">外部引用</span></td>
+              <td class="mono">mrs</td>
+              <td class="mono">domain</td>
+              <td style="font-size:11px; color:var(--text3);">github/MetaCubeX/meta-rules-dat</td>
+              <td><span class="badge badge-blue">1 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button></td>
+            </tr>
+            <tr>
+              <td><strong>telegramcidr</strong></td>
+              <td><span class="badge badge-gray">外部引用</span></td>
+              <td class="mono">mrs</td>
+              <td class="mono">ipcidr</td>
+              <td style="font-size:11px; color:var(--text3);">github/MetaCubeX/meta-rules-dat</td>
+              <td><span class="badge badge-blue">2 个订阅</span></td>
+              <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="tab-rulesets-ext" style="display:none;"></div>
+      <div id="tab-rulesets-hosted" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 自定义配置
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-config">
+    <div class="topbar">
+      <div class="topbar-title">自定义配置</div>
+      <div class="topbar-sub">special</div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showModal('modal-yaml-preview')">👁 YAML 预览</button>
+        <button class="btn btn-secondary btn-sm">切换配置 ▾</button>
+        <button class="btn btn-primary btn-sm">+ 新建配置</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(this, 'tab-groups')">代理组 (10)</div>
+        <div class="tab" onclick="switchTab(this, 'tab-rules')">规则 (34)</div>
+        <div class="tab" onclick="switchTab(this, 'tab-general')">全局设置</div>
+      </div>
+
+      <!-- TAB: 代理组 -->
+      <div id="tab-groups">
+        <div class="section-header">
+          <div>
+            <div class="section-title">代理组</div>
+            <div class="section-meta">拖拽排序 · 点击展开编辑</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-group')">+ 添加代理组</button>
+        </div>
+
+        <div class="group-item">
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="drag-handle">⠿</span>
+            <span class="dot dot-green"></span>
+            <span class="group-name">Proxy</span>
+            <span class="badge badge-blue group-type-badge">select</span>
+            <span style="font-size:11px; color:var(--text3); margin-left:8px;">使用 ISP-A 机场, ISP-B 机场, 家庭节点 · 3 个 provider</span>
+            <span style="margin-left:auto; display:flex; gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">×</button>
+              <span style="color:var(--text3); font-size:14px;">▾</span>
+            </span>
+          </div>
+          <div class="group-body open" style="padding: 0 14px 12px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div class="form-group">
+                <label class="form-label">节点来源 use[]</label>
+                <div class="tag-list" style="gap:6px;">
+                  <span class="tag blue">ISP-A 机场</span>
+                  <span class="tag blue">ISP-B 机场</span>
+                  <span class="tag" style="border-color:var(--purple); color:var(--purple);">家庭节点 <span style="font-size:9px; opacity:.7;">inline</span></span>
+                  <button class="btn btn-ghost btn-sm">+ 添加</button>
+                </div>
+                <div class="form-hint" style="margin-top:4px;">引用 proxy-providers（含 inline 私有节点），节点自动同步</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">附加固定策略 proxies[]</label>
+                <div class="tag-list">
+                  <span class="tag">DIRECT</span>
+                  <span class="tag">REJECT</span>
+                  <button class="btn btn-ghost btn-sm">+ 选择</button>
+                </div>
+                <div class="form-hint" style="margin-top:4px;">通常只放 DIRECT / REJECT 等内置策略；私有节点已通过 use[] 引入</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">节点过滤 (filter)</label>
+                <input class="form-input mono" value="(?i)港|台|日|美" placeholder="正则表达式">
+              </div>
+              <div class="form-group">
+                <label class="form-label">排除过滤 (exclude-filter)</label>
+                <input class="form-input mono" value="" placeholder="正则表达式（可选）">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-item">
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="drag-handle">⠿</span>
+            <span class="dot dot-green"></span>
+            <span class="group-name">Auto</span>
+            <span class="badge badge-orange group-type-badge">url-test</span>
+            <span style="font-size:11px; color:var(--text3); margin-left:8px;">自动测速 · ISP-A 机场 · 每 300s</span>
+            <span style="margin-left:auto; display:flex; gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">×</button>
+              <span style="color:var(--text3); font-size:14px;">▸</span>
+            </span>
+          </div>
+          <div class="group-body"></div>
+        </div>
+
+        <div class="group-item">
+          <div class="group-header" onclick="toggleGroup(this)">
+            <span class="drag-handle">⠿</span>
+            <span class="dot dot-green"></span>
+            <span class="group-name">W Resource</span>
+            <span class="badge badge-gray group-type-badge">select</span>
+            <span style="font-size:11px; color:var(--text3); margin-left:8px;">工作资源直连组</span>
+            <span style="margin-left:auto; display:flex; gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation()">×</button>
+              <span style="color:var(--text3); font-size:14px;">▸</span>
+            </span>
+          </div>
+          <div class="group-body"></div>
+        </div>
+
+        <div style="text-align:center; margin-top:8px; font-size:11px; color:var(--text3);">+ 7 个代理组（折叠中）… <button class="btn btn-ghost btn-sm">展开全部</button></div>
+      </div>
+
+      <!-- TAB: 规则 -->
+      <div id="tab-rules" style="display:none;">
+        <div class="section-header">
+          <div>
+            <div class="section-title">路由规则</div>
+            <div class="section-meta">34 条规则 · 16 个 RULE-SET 引用 · 拖拽排序</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-secondary btn-sm">快速插入 ▾</button>
+            <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-rule')">+ 添加规则</button>
+          </div>
+        </div>
+
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px;">
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">1</span>
+            <span class="rule-type">RULE-SET</span>
+            <span class="rule-value">SZ-Home</span>
+            <span class="rule-target direct">SZ-Home</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">2</span>
+            <span class="rule-type">IP-CIDR</span>
+            <span class="rule-value">10.10.1.0/24</span>
+            <span class="rule-target direct">SZ-Home</span>
+            <span class="badge badge-gray" style="font-size:10px; margin-left:4px;">no-resolve</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">3</span>
+            <span class="rule-type">IP-CIDR</span>
+            <span class="rule-value">192.168.40.0/24</span>
+            <span class="rule-target direct">W Resource</span>
+            <span class="badge badge-gray" style="font-size:10px; margin-left:4px;">no-resolve</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">5</span>
+            <span class="rule-type" style="color:var(--orange);">AND</span>
+            <span class="rule-value">((NETWORK,UDP),(DST-PORT,443))</span>
+            <span class="rule-target reject">REJECT</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">6</span>
+            <span class="rule-type">DOMAIN</span>
+            <span class="rule-value">ipxy.cc</span>
+            <span class="rule-target proxy">Proxy</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row">
+            <span class="drag-handle">⠿</span>
+            <span class="rule-index">7</span>
+            <span class="rule-type">RULE-SET</span>
+            <span class="rule-value">MUST-Proxy</span>
+            <span class="rule-target proxy">Proxy</span>
+            <span class="rule-actions">
+              <button class="btn btn-ghost btn-sm">↑</button><button class="btn btn-ghost btn-sm">↓</button>
+              <button class="btn btn-danger btn-sm">×</button>
+            </span>
+          </div>
+          <div class="rule-row" style="border-bottom:none; color:var(--text3); font-size:11px; justify-content:center;">
+            … 28 条规则折叠中 · <button class="btn btn-ghost btn-sm">展开全部</button>
+          </div>
+          <div class="rule-row" style="background:var(--bg3);">
+            <span class="drag-handle" style="opacity:0;">⠿</span>
+            <span class="rule-index" style="color:var(--text3);">末</span>
+            <span class="rule-type" style="color:var(--text2);">MATCH</span>
+            <span class="rule-value" style="color:var(--text3);">（兜底规则）</span>
+            <span class="rule-target proxy">Proxy</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: 手动节点 已移至节点源 inline 类型 -->
+
+      <!-- TAB: 全局设置 -->
+      <div id="tab-general" style="display:none;">
+        <div style="max-width:600px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">mixed-port</label>
+              <input class="form-input mono" value="7890">
+              <div class="form-hint">HTTP/SOCKS5 混合监听端口</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">mode</label>
+              <select class="form-input">
+                <option selected>rule</option><option>global</option><option>direct</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">log-level</label>
+              <select class="form-input">
+                <option>silent</option><option>error</option><option selected>warning</option><option>info</option><option>debug</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ipv6</label>
+              <select class="form-input"><option>false</option><option>true</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">allow-lan</label>
+              <select class="form-input"><option selected>true</option><option>false</option></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">unified-delay</label>
+              <select class="form-input"><option selected>true</option><option>false</option></select>
+            </div>
+          </div>
+          <button class="btn btn-primary">保存全局设置</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 配置模板
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-templates">
+    <div class="topbar">
+      <div class="topbar-title">配置模板</div>
+      <div class="topbar-sub">可复用的骨架配置，新建订阅时可选择继承</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm">+ 新建模板</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="quick-bar">
+        💡 模板定义 DNS、Tun、嗅探等基础配置，自定义配置在模板基础上叠加 proxy-groups 和 rules
+      </div>
+      <table class="table" style="background:var(--bg2); border-radius:var(--radius);">
+        <thead><tr><th>模板名称</th><th>描述</th><th>被引用</th><th>更新时间</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>tun-default</strong></td>
+            <td style="color:var(--text2);">Tun 模式 + DNS 劫持 + 嗅探</td>
+            <td><span class="badge badge-blue">2 个自定义配置</span></td>
+            <td class="mono" style="color:var(--text3);">2 天前</td>
+            <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-ghost btn-sm">预览</button></td>
+          </tr>
+          <tr>
+            <td><strong>mixed-port-only</strong></td>
+            <td style="color:var(--text2);">仅 mixed-port，无 Tun，适合软路由</td>
+            <td><span class="badge badge-gray">0 个引用</span></td>
+            <td class="mono" style="color:var(--text3);">1 周前</td>
+            <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-ghost btn-sm">预览</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 订阅管理（核心发布页）
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-subscriptions">
+    <div class="topbar">
+      <div class="topbar-title">订阅管理</div>
+      <div class="topbar-sub">组装并发布最终 YAML</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" onclick="showModal('modal-new-sub')">+ 新建订阅</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="quick-bar">
+        💡 每个订阅 = <strong style="color:var(--text);">配置模板</strong> + <strong style="color:var(--text);">自定义配置</strong>（已含 proxy-groups / rules / 选定的节点源和规则集）→ 生成一个带 Token 的 URL，导入客户端即可。
+      </div>
+
+      <!-- Sub 1 -->
+      <div class="sub-card">
+        <div class="sub-card-header" onclick="toggleSubBody(this)">
+          <span class="dot dot-green"></span>
+          <div style="flex:1;">
+            <div class="sub-name">主力</div>
+            <div style="font-size:11px; color:var(--text3);">上次下发：2 分钟前 · 下发 47 次</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); copyText('http://localhost:26406/sub/abc123token')">📋 复制链接</button>
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">↻ 强制刷新节点源</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showModal('modal-yaml-preview')">👁 预览 YAML</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+            <span style="color:var(--text3); font-size:14px;">▾</span>
+          </div>
+        </div>
+        <div class="sub-body open">
+          <!-- 订阅 URL -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">订阅链接</div>
+            <div class="sub-url-box">
+              <span style="flex:1;">http://localhost:26406/sub/abc123token</span>
+              <button class="btn btn-secondary btn-sm" onclick="copyText('http://localhost:26406/sub/abc123token')">复制</button>
+              <button class="btn btn-ghost btn-sm">🔄 重新生成 Token</button>
+            </div>
+          </div>
+
+          <!-- 组成要素 -->
+          <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">组成要素</div>
+          <div class="sub-components">
+            <div class="sub-component-block">
+              <div class="sub-component-title">📡 节点源（proxy-providers）</div>
+              <div class="tag-list">
+                <span class="tag blue">ISP-A 机场</span>
+                <span class="tag blue">ISP-B 机场</span>
+                <button class="btn btn-ghost btn-sm">+ 添加/更换</button>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">节点会自动合并到代理组 use 字段</div>
+            </div>
+            <div class="sub-component-block">
+              <div class="sub-component-title">⚙️ 自定义配置</div>
+              <div class="tag-list">
+                <span class="tag blue">special</span>
+                <button class="btn btn-ghost btn-sm">更换</button>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">包含 10 个代理组、34 条规则</div>
+            </div>
+            <div class="sub-component-block">
+              <div class="sub-component-title">📋 规则集（rule-providers）</div>
+              <div class="tag-list">
+                <span class="tag">SZ-Home</span><span class="tag">MUST-Proxy</span>
+                <span class="tag">google</span><span class="tag">LLM</span>
+                <span class="tag">+ 4 个</span>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">自动从自定义配置的 RULE-SET 引用推断</div>
+            </div>
+            <div class="sub-component-block">
+              <div class="sub-component-title">📄 配置模板</div>
+              <div class="tag-list">
+                <span class="tag blue">tun-default</span>
+                <button class="btn btn-ghost btn-sm">更换</button>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">提供 DNS / Tun / 嗅探等基础配置</div>
+            </div>
+          </div>
+
+          <!-- 访问控制 -->
+          <div style="margin-top:14px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">访问控制</div>
+            <div style="display:flex; gap:8px;">
+              <span class="badge badge-green">允许所有 IP</span>
+              <button class="btn btn-ghost btn-sm">设置 IP 白名单</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub 2 -->
+      <div class="sub-card">
+        <div class="sub-card-header" onclick="toggleSubBody(this)">
+          <span class="dot dot-green"></span>
+          <div style="flex:1;">
+            <div class="sub-name">备用</div>
+            <div style="font-size:11px; color:var(--text3);">上次下发：3 小时前 · 下发 12 次</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); copyText('http://localhost:26406/sub/def456token')">📋 复制链接</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">编辑</button>
+            <span style="color:var(--text3); font-size:14px;">▸</span>
+          </div>
+        </div>
+        <div class="sub-body"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: UA 库
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-ua">
+    <div class="topbar">
+      <div class="topbar-title">UA 库</div>
+      <div class="topbar-sub">管理常用 User-Agent，节点源可引用</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm">+ 添加</button>
+      </div>
+    </div>
+    <div class="content">
+      <table class="table" style="background:var(--bg2); border-radius:var(--radius);">
+        <thead><tr><th>名称</th><th>User-Agent 值</th><th>被引用</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Mihomo 1.18</strong></td>
+            <td class="mono">mihomo/1.18.3</td>
+            <td><span class="badge badge-blue">2 个节点源</span></td>
+            <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-danger btn-sm">删除</button></td>
+          </tr>
+          <tr>
+            <td><strong>ClashX</strong></td>
+            <td class="mono">ClashX/1.100.0</td>
+            <td><span class="badge badge-gray">未使用</span></td>
+            <td style="text-align:right;"><button class="btn btn-ghost btn-sm">编辑</button> <button class="btn btn-danger btn-sm">删除</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PAGE: 设置
+  ══════════════════════════════════════════════ -->
+  <div class="page" id="page-settings">
+    <div class="topbar"><div class="topbar-title">设置</div></div>
+    <div class="content">
+      <div style="max-width:560px; display:flex; flex-direction:column; gap:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">基础配置</span></div>
+          <div class="card-body">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label class="form-label">BASE_URL（订阅链接前缀）</label>
+              <input class="form-input mono" value="http://localhost:26406">
+              <div class="form-hint">用于生成 /sub/:token 链接，公网访问请填公网地址</div>
+            </div>
+            <button class="btn btn-primary">保存</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">账户</span></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">新密码</label>
+                <input class="form-input" type="password" placeholder="留空则不更改">
+              </div>
+            </div>
+            <button class="btn btn-secondary">修改密码</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════ -->
+
+<!-- Add Provider Modal -->
+<div class="modal-overlay" id="modal-add-provider" onclick="closeModalOnBg(event)">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <span class="modal-title">添加节点源</span>
+      <button class="close-btn" onclick="closeModal('modal-add-provider')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 类型选择 -->
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="form-label">节点源类型</label>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <label style="flex:1; cursor:pointer;">
+            <input type="radio" name="provider-type" value="http" checked onchange="switchProviderType('http')" style="display:none;">
+            <div class="provider-type-btn active-type" id="ptype-http" style="border:1px solid var(--accent); background:var(--accent-dim); border-radius:var(--radius); padding:10px 14px; text-align:center;">
+              <div style="font-size:16px; margin-bottom:4px;">🌐</div>
+              <div style="font-size:12px; font-weight:600;">远端订阅</div>
+              <div style="font-size:11px; color:var(--text3); margin-top:2px;">机场订阅 URL</div>
+            </div>
+          </label>
+          <label style="flex:1; cursor:pointer;">
+            <input type="radio" name="provider-type" value="inline" onchange="switchProviderType('inline')" style="display:none;">
+            <div class="provider-type-btn" id="ptype-inline" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; text-align:center; transition:all .1s;">
+              <div style="font-size:16px; margin-bottom:4px;">✏️</div>
+              <div style="font-size:12px; font-weight:600;">私有节点</div>
+              <div style="font-size:11px; color:var(--text3); margin-top:2px;">手动填写节点信息</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 名称（所有类型共用） -->
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">节点源名称 *</label>
+        <input class="form-input" placeholder="e.g. ISP-A 机场 / 家庭节点">
+        <div class="form-hint">代理组的 use[] 里用此名称引用</div>
+      </div>
+
+      <!-- http 专属字段 -->
+      <div id="provider-fields-http">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">订阅 URL *</label>
+          <input class="form-input mono" placeholder="https://...">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">User-Agent</label>
+            <select class="form-input">
+              <option value="">默认</option><option>Mihomo 1.18</option><option>ClashX</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">更新间隔（秒）</label>
+            <input class="form-input mono" value="3600">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">节点过滤 filter</label>
+            <input class="form-input mono" placeholder="(?i)港|日|美">
+          </div>
+          <div class="form-group">
+            <label class="form-label">排除过滤 exclude-filter</label>
+            <input class="form-input mono" placeholder="过期|×1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">节点名前缀</label>
+            <input class="form-input mono" placeholder="[A] ">
+          </div>
+          <div class="form-group">
+            <label class="form-label">节点名后缀</label>
+            <input class="form-input mono" placeholder="">
+          </div>
+        </div>
+        <details style="margin-top:4px;">
+          <summary style="font-size:12px; color:var(--text2); cursor:pointer;">高级：健康检查 &amp; 覆写</summary>
+          <div style="margin-top:10px; padding:10px; background:var(--bg3); border-radius:var(--radius);">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">health-check URL</label>
+                <input class="form-input mono" value="https://www.gstatic.com/generate_204">
+              </div>
+              <div class="form-group">
+                <label class="form-label">health-check interval（秒）</label>
+                <input class="form-input mono" value="300">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">override: udp</label>
+                <select class="form-input"><option value="">不覆写</option><option>true</option><option>false</option></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">override: skip-cert-verify</label>
+                <select class="form-input"><option value="">不覆写</option><option>true</option><option>false</option></select>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- inline 专属字段 -->
+      <div id="provider-fields-inline" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-size:12px; color:var(--text2); font-weight:600;">节点列表</div>
+          <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-proxy')">+ 添加节点</button>
+        </div>
+        <div style="background:var(--bg3); border:1px dashed var(--border2); border-radius:var(--radius); padding:32px; text-align:center; color:var(--text3); font-size:12px;">
+          还没有节点，点击「+ 添加节点」开始填写
+        </div>
+        <div class="form-hint" style="margin-top:8px;">
+          节点会以 <span style="font-family:var(--mono);">type: inline</span> + <span style="font-family:var(--mono);">payload</span> 的形式写入最终 YAML，和 http 订阅节点在代理组里平等使用。
+        </div>
+      </div>
+
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-provider')">取消</button>
+      <button class="btn btn-primary" id="provider-save-btn" onclick="toast('节点源已添加'); closeModal('modal-add-provider')">保存并拉取</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Ruleset Modal -->
+<div class="modal-overlay" id="modal-add-ruleset" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">添加规则集</span>
+      <button class="close-btn" onclick="closeModal('modal-add-ruleset')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">来源类型</label>
+        <select class="form-input" onchange="toggleRulesetType(this)">
+          <option value="external">🌐 外部引用（使用第三方 URL）</option>
+          <option value="hosted">🗄 自托管（内容存本服务）</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">名称 *</label>
+        <input class="form-input mono" placeholder="e.g. google">
+        <div class="form-hint">在 rules 里写 RULE-SET,google,Proxy 来引用</div>
+      </div>
+      <div id="external-url-group" class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">规则集 URL *</label>
+        <input class="form-input mono" placeholder="https://raw.githubusercontent.com/.../Google.yaml">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">行为 behavior</label>
+          <select class="form-input"><option>domain</option><option>ipcidr</option><option>classical</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">格式 format</label>
+          <select class="form-input"><option>yaml</option><option>text</option><option>mrs</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">更新间隔（秒）</label>
+          <input class="form-input mono" value="600">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-ruleset')">取消</button>
+      <button class="btn btn-primary" onclick="toast('规则集已添加'); closeModal('modal-add-ruleset')">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Inline Provider Editor Modal -->
+<div class="modal-overlay" id="modal-inline-provider" onclick="closeModalOnBg(event)">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <span class="modal-title">编辑私有节点 — 家庭节点</span>
+      <button class="close-btn" onclick="closeModal('modal-inline-provider')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:12px; color:var(--text3);">这些节点会以 <span style="font-family:var(--mono); color:var(--text2);">type: inline</span> 写入 YAML，所有引用了「家庭节点」的代理组均可使用</div>
+        <button class="btn btn-primary btn-sm" onclick="showModal('modal-add-proxy')">+ 添加节点</button>
+      </div>
+
+      <table class="table" style="background:var(--bg3); border-radius:var(--radius); overflow:hidden;">
+        <thead><tr><th>节点名</th><th>协议</th><th>服务器</th><th>端口</th><th>加密/UUID</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>家庭 SS</strong></td>
+            <td><span class="badge badge-purple" style="font-family:var(--mono);">ss</span></td>
+            <td class="mono">home.example.com</td>
+            <td class="mono">8388</td>
+            <td class="mono" style="color:var(--text3);">chacha20-ietf-poly1305</td>
+            <td style="text-align:right;">
+              <button class="btn btn-ghost btn-sm" onclick="showModal('modal-add-proxy')">编辑</button>
+              <button class="btn btn-danger btn-sm">删除</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>公司 VPN 跳板</strong></td>
+            <td><span class="badge badge-orange" style="font-family:var(--mono);">vmess</span></td>
+            <td class="mono">corp.internal</td>
+            <td class="mono">443</td>
+            <td class="mono" style="color:var(--text3);">auto</td>
+            <td style="text-align:right;">
+              <button class="btn btn-ghost btn-sm" onclick="showModal('modal-add-proxy')">编辑</button>
+              <button class="btn btn-danger btn-sm">删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:14px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius);">
+        <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">生成的 YAML 片段预览</div>
+        <div class="code-block" style="border:none; padding:0; background:transparent;">
+<span class="code-key">proxy-providers</span>:
+  <span class="code-key">家庭节点</span>:
+    <span class="code-key">type</span>: <span class="code-str">inline</span>
+    <span class="code-key">payload</span>:
+      - <span class="code-key">name</span>: <span class="code-str">家庭 SS</span>
+        <span class="code-key">type</span>: <span class="code-str">ss</span>
+        <span class="code-key">server</span>: <span class="code-str">home.example.com</span>
+        <span class="code-key">port</span>: <span class="code-num">8388</span>
+        <span class="code-key">cipher</span>: <span class="code-str">chacha20-ietf-poly1305</span>
+        <span class="code-key">password</span>: <span class="code-str">••••••••</span>
+        <span class="code-key">udp</span>: <span class="code-str">true</span>
+      - <span class="code-key">name</span>: <span class="code-str">公司 VPN 跳板</span>
+        <span class="code-key">type</span>: <span class="code-str">vmess</span>
+        <span class="code-key">server</span>: <span class="code-str">corp.internal</span>
+        <span class="code-key">port</span>: <span class="code-num">443</span>
+        <span class="code-key">uuid</span>: <span class="code-str">••••••••</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-inline-provider')">关闭</button>
+      <button class="btn btn-primary" onclick="toast('已保存'); closeModal('modal-inline-provider')">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Proxy Modal -->
+<div class="modal-overlay" id="modal-add-proxy" onclick="closeModalOnBg(event)">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <span class="modal-title">添加手动节点</span>
+      <button class="close-btn" onclick="closeModal('modal-add-proxy')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 基础字段：所有协议共用 -->
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">节点名 *</label>
+          <input class="form-input mono" id="proxy-name" placeholder="e.g. 家庭 SS" value="家庭 SS">
+          <div class="form-hint">在代理组 proxies[] 里用此名称引用</div>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">协议类型 *</label>
+          <select class="form-input mono" id="proxy-type-select" onchange="switchProxyType(this.value)">
+            <option value="ss" selected>ss（Shadowsocks）</option>
+            <option value="vmess">vmess（V2Ray）</option>
+            <option value="vless">vless</option>
+            <option value="trojan">trojan</option>
+            <option value="hysteria2">hysteria2</option>
+            <option value="tuic">tuic v5</option>
+            <option value="http">http</option>
+            <option value="socks5">socks5</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:3;">
+          <label class="form-label">服务器地址 *</label>
+          <input class="form-input mono" placeholder="域名或 IP，e.g. home.example.com" value="home.example.com">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">端口 *</label>
+          <input class="form-input mono" placeholder="8388" value="8388">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border); margin: 12px 0; padding-top:12px;">
+        <div style="font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">
+          协议参数 — <span id="proto-label" style="color:var(--accent);">Shadowsocks</span>
+        </div>
+
+        <!-- SS fields -->
+        <div id="fields-ss">
+          <div class="form-row">
+            <div class="form-group" style="flex:2;">
+              <label class="form-label">加密方式 cipher *</label>
+              <select class="form-input mono">
+                <option selected>chacha20-ietf-poly1305</option>
+                <option>aes-256-gcm</option>
+                <option>aes-128-gcm</option>
+                <option>2022-blake3-aes-256-gcm</option>
+                <option>2022-blake3-chacha20-poly1305</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:2;">
+              <label class="form-label">密码 password *</label>
+              <input class="form-input mono" type="password" placeholder="••••••••••">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">插件 plugin</label>
+              <select class="form-input">
+                <option value="">无</option>
+                <option>obfs</option>
+                <option>v2ray-plugin</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">UDP 转发</label>
+              <select class="form-input"><option selected>true</option><option>false</option></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- VMess fields -->
+        <div id="fields-vmess" style="display:none;">
+          <div class="form-row">
+            <div class="form-group" style="flex:3;">
+              <label class="form-label">UUID *</label>
+              <input class="form-input mono" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">alterId</label>
+              <input class="form-input mono" value="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">加密 cipher</label>
+              <select class="form-input mono">
+                <option selected>auto</option><option>aes-128-gcm</option><option>chacha20-poly1305</option><option>none</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">传输协议 network</label>
+              <select class="form-input mono" onchange="toggleWsPath(this.value)">
+                <option selected>tcp</option><option>ws</option><option>grpc</option><option>h2</option>
+              </select>
+            </div>
+          </div>
+          <div id="ws-path-group" style="display:none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">WebSocket path</label>
+                <input class="form-input mono" placeholder="/ws">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Host header</label>
+                <input class="form-input mono" placeholder="example.com">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VLESS fields -->
+        <div id="fields-vless" style="display:none;">
+          <div class="form-row">
+            <div class="form-group" style="flex:3;">
+              <label class="form-label">UUID *</label>
+              <input class="form-input mono" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">flow</label>
+              <select class="form-input mono"><option value="">无</option><option>xtls-rprx-vision</option></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trojan fields -->
+        <div id="fields-trojan" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">密码 password *</label>
+              <input class="form-input mono" type="password">
+            </div>
+          </div>
+        </div>
+
+        <!-- Hysteria2 fields -->
+        <div id="fields-hysteria2" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">密码 password *</label>
+              <input class="form-input mono" type="password">
+            </div>
+            <div class="form-group">
+              <label class="form-label">混淆 obfs（可选）</label>
+              <select class="form-input"><option value="">无</option><option>salamander</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">上行带宽 up</label>
+              <input class="form-input mono" placeholder="e.g. 50 Mbps">
+            </div>
+            <div class="form-group">
+              <label class="form-label">下行带宽 down</label>
+              <input class="form-input mono" placeholder="e.g. 200 Mbps">
+            </div>
+          </div>
+        </div>
+
+        <!-- TUIC fields -->
+        <div id="fields-tuic" style="display:none;">
+          <div class="form-row">
+            <div class="form-group" style="flex:2;">
+              <label class="form-label">UUID *</label>
+              <input class="form-input mono" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </div>
+            <div class="form-group" style="flex:2;">
+              <label class="form-label">密码 password *</label>
+              <input class="form-input mono" type="password">
+            </div>
+          </div>
+        </div>
+
+        <!-- HTTP/SOCKS5 fields -->
+        <div id="fields-http" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">用户名（可选）</label>
+              <input class="form-input mono" placeholder="username">
+            </div>
+            <div class="form-group">
+              <label class="form-label">密码（可选）</label>
+              <input class="form-input mono" type="password">
+            </div>
+          </div>
+        </div>
+        <div id="fields-socks5" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">用户名（可选）</label>
+              <input class="form-input mono" placeholder="username">
+            </div>
+            <div class="form-group">
+              <label class="form-label">密码（可选）</label>
+              <input class="form-input mono" type="password">
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /协议参数 -->
+
+      <!-- TLS 通用设置（对 ss 以外的协议展示） -->
+      <div id="tls-section" style="display:none; border-top:1px solid var(--border); margin-top:4px; padding-top:12px;">
+        <div style="font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">TLS 设置</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">启用 TLS</label>
+            <select class="form-input"><option selected>true</option><option>false</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">SNI（servername）</label>
+            <input class="form-input mono" placeholder="example.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">跳过证书验证</label>
+            <select class="form-input"><option selected>false</option><option>true</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">ALPN</label>
+            <input class="form-input mono" placeholder="h2, http/1.1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">指纹 fingerprint</label>
+            <select class="form-input mono">
+              <option value="">不指定</option>
+              <option>chrome</option><option>firefox</option><option>safari</option><option>random</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 通用选项 -->
+      <div style="border-top:1px solid var(--border); margin-top:4px; padding-top:12px;">
+        <div style="font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">通用选项</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">IP 版本偏好</label>
+            <select class="form-input mono">
+              <option value="">默认</option>
+              <option>ipv4</option><option>ipv6</option><option>ipv4-prefer</option><option>ipv6-prefer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">出口网卡 interface-name</label>
+            <input class="form-input mono" placeholder="eth0（可选）">
+          </div>
+        </div>
+      </div>
+
+      <!-- Raw YAML fallback -->
+      <details style="margin-top:8px;">
+        <summary style="font-size:12px; color:var(--text2); cursor:pointer;">✏️ 或直接粘贴原始 YAML 片段</summary>
+        <div style="margin-top:8px;">
+          <textarea class="form-input mono" rows="6" style="resize:vertical; width:100%;" placeholder="- name: 家庭 SS
+  type: ss
+  server: home.example.com
+  port: 8388
+  cipher: chacha20-ietf-poly1305
+  password: mypassword
+  udp: true"></textarea>
+          <div class="form-hint">支持粘贴完整节点 YAML，系统会解析后填入表单；解析失败时以 __raw__ 方式保存</div>
+        </div>
+      </details>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-proxy')">取消</button>
+      <button class="btn btn-secondary btn-sm" onclick="toast('已复制节点 YAML')">复制 YAML</button>
+      <button class="btn btn-primary" onclick="toast('节点已保存'); closeModal('modal-add-proxy')">保存节点</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div class="modal-overlay" id="modal-add-rule" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">添加规则</span>
+      <button class="close-btn" onclick="closeModal('modal-add-rule')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">规则类型</label>
+          <select class="form-input mono">
+            <option>DOMAIN</option><option>DOMAIN-SUFFIX</option><option>DOMAIN-KEYWORD</option>
+            <option>RULE-SET</option><option>IP-CIDR</option><option>GEOIP</option>
+            <option>GEOSITE</option><option>MATCH</option><option>AND</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">匹配值</label>
+          <input class="form-input mono" placeholder="e.g. google.com 或 CN">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">目标策略</label>
+          <select class="form-input mono">
+            <option>Proxy</option><option>Auto</option><option>DIRECT</option><option>REJECT</option>
+            <option>W Resource</option><option>SZ-Home</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">附加参数</label>
+          <select class="form-input">
+            <option value="">无</option><option>no-resolve</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">插入位置</label>
+        <select class="form-input"><option>最前</option><option>最后（MATCH 之前）</option><option>第 7 条之后</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-rule')">取消</button>
+      <button class="btn btn-primary" onclick="toast('规则已添加'); closeModal('modal-add-rule')">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Group Modal -->
+<div class="modal-overlay" id="modal-add-group" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">添加代理组</span>
+      <button class="close-btn" onclick="closeModal('modal-add-group')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">组名 *</label>
+          <input class="form-input mono" placeholder="e.g. Proxy">
+          <div class="form-hint">rules 里的目标策略引用此名称</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">类型 type</label>
+          <select class="form-input mono">
+            <option>select</option><option>url-test</option><option>fallback</option>
+            <option>load-balance</option><option>relay</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">使用节点源 use（proxy-providers）</label>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" checked> ISP-A 机场
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+            <input type="checkbox"> ISP-B 机场
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+            <input type="checkbox"> Free-Nodes
+          </label>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">附加固定节点 proxies</label>
+        <input class="form-input mono" placeholder="DIRECT, REJECT（逗号分隔）">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">节点过滤 filter</label>
+          <input class="form-input mono" placeholder="(?i)港|日|美">
+        </div>
+        <div class="form-group">
+          <label class="form-label">图标（可选）</label>
+          <input class="form-input" placeholder="emoji 或 URL">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-group')">取消</button>
+      <button class="btn btn-primary" onclick="toast('代理组已添加'); closeModal('modal-add-group')">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Sub Modal -->
+<div class="modal-overlay" id="modal-new-sub" onclick="closeModalOnBg(event)">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <span class="modal-title">新建订阅</span>
+      <button class="close-btn" onclick="closeModal('modal-new-sub')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="form-label">订阅名称 *</label>
+        <input class="form-input" placeholder="e.g. 主力订阅">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <div class="form-label" style="margin-bottom:8px;">选择自定义配置 *</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label class="provider-card" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:0;">
+              <input type="radio" name="config-pick" checked>
+              <span style="font-weight:600;">special</span>
+              <span style="font-size:11px; color:var(--text3);">10 组 · 34 规则</span>
+            </label>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:6px;">+ 新建配置</button>
+        </div>
+
+        <div>
+          <div class="form-label" style="margin-bottom:8px;">选择配置模板（可选）</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label class="provider-card" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:0;">
+              <input type="radio" name="tmpl-pick" checked>
+              <span style="font-weight:600;">tun-default</span>
+              <span style="font-size:11px; color:var(--text3);">Tun 模式</span>
+            </label>
+            <label class="provider-card" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:0;">
+              <input type="radio" name="tmpl-pick">
+              <span style="font-weight:600;">mixed-port-only</span>
+              <span style="font-size:11px; color:var(--text3);">软路由</span>
+            </label>
+            <label class="provider-card" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:0;">
+              <input type="radio" name="tmpl-pick">
+              <span style="font-weight:600; color:var(--text3);">不使用模板</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Token 过期时间</label>
+        <select class="form-input">
+          <option>永不过期</option>
+          <option>7 天</option><option>30 天</option><option>90 天</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-sub')">取消</button>
+      <button class="btn btn-primary" onclick="toast('订阅已创建，链接已复制'); closeModal('modal-new-sub')">创建并复制链接</button>
+    </div>
+  </div>
+</div>
+
+<!-- YAML Preview Modal -->
+<div class="modal-overlay" id="modal-yaml-preview" onclick="closeModalOnBg(event)">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <span class="modal-title">YAML 预览 — 主力</span>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-secondary btn-sm">📋 复制</button>
+        <button class="close-btn" onclick="closeModal('modal-yaml-preview')">×</button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div class="code-block" style="border:none; border-radius:0; max-height:60vh; overflow-y:auto; padding:16px 20px;">
+<span class="code-comment"># 由 Clash Config Store 生成 · 2026-06-13 12:00</span>
+<span class="code-comment"># 自定义配置: special | 模板: tun-default</span>
+
+<span class="code-key">mixed-port</span>: <span class="code-num">7890</span>
+<span class="code-key">mode</span>: <span class="code-str">rule</span>
+<span class="code-key">allow-lan</span>: <span class="code-str">true</span>
+<span class="code-key">log-level</span>: <span class="code-str">warning</span>
+<span class="code-key">unified-delay</span>: <span class="code-str">true</span>
+
+<span class="code-key">tun</span>:
+  <span class="code-key">enable</span>: <span class="code-str">true</span>
+  <span class="code-key">stack</span>: <span class="code-str">mixed</span>
+  <span class="code-key">dns-hijack</span>: [<span class="code-str">"any:53"</span>]
+
+<span class="code-key">proxy-providers</span>:
+  <span class="code-key">ISP-A 机场</span>:
+    <span class="code-key">type</span>: <span class="code-str">http</span>
+    <span class="code-key">url</span>: <span class="code-str">"https://example-isp-a.com/sub?..."</span>
+    <span class="code-key">interval</span>: <span class="code-num">3600</span>
+    <span class="code-key">filter</span>: <span class="code-str">"(?i)港|日|美"</span>
+    <span class="code-key">health-check</span>:
+      <span class="code-key">enable</span>: <span class="code-str">true</span>
+      <span class="code-key">url</span>: <span class="code-str">https://www.gstatic.com/generate_204</span>
+      <span class="code-key">interval</span>: <span class="code-num">300</span>
+  <span class="code-key">ISP-B 机场</span>:
+    <span class="code-key">type</span>: <span class="code-str">http</span>
+    <span class="code-key">url</span>: <span class="code-str">"https://example-isp-b.net/..."</span>
+    <span class="code-key">interval</span>: <span class="code-num">7200</span>
+
+<span class="code-key">rule-providers</span>:
+  <span class="code-key">SZ-Home</span>:
+    <span class="code-key">type</span>: <span class="code-str">http</span>
+    <span class="code-key">url</span>: <span class="code-str">"http://localhost:26406/ruleset/abc.../SZ-Home"</span>
+    <span class="code-key">behavior</span>: <span class="code-str">ipcidr</span>
+    <span class="code-key">format</span>: <span class="code-str">yaml</span>
+  <span class="code-key">google</span>:
+    <span class="code-key">type</span>: <span class="code-str">http</span>
+    <span class="code-key">url</span>: <span class="code-str">"https://raw.githubusercontent.com/.../Google.mrs"</span>
+    <span class="code-key">behavior</span>: <span class="code-str">domain</span>
+    <span class="code-key">format</span>: <span class="code-str">mrs</span>
+
+<span class="code-key">proxy-groups</span>:
+  - <span class="code-key">name</span>: <span class="code-str">Proxy</span>
+    <span class="code-key">type</span>: <span class="code-str">select</span>
+    <span class="code-key">use</span>: [<span class="code-str">ISP-A 机场</span>, <span class="code-str">ISP-B 机场</span>]
+    <span class="code-key">proxies</span>: [<span class="code-str">DIRECT</span>]
+  - <span class="code-key">name</span>: <span class="code-str">Auto</span>
+    <span class="code-key">type</span>: <span class="code-str">url-test</span>
+    <span class="code-key">use</span>: [<span class="code-str">ISP-A 机场</span>]
+    <span class="code-key">interval</span>: <span class="code-num">300</span>
+
+<span class="code-key">rules</span>:
+  - <span class="code-str">RULE-SET,SZ-Home,SZ-Home</span>
+  - <span class="code-str">IP-CIDR,10.10.1.0/24,SZ-Home,no-resolve</span>
+  - <span class="code-str">RULE-SET,MUST-Proxy,Proxy</span>
+  - <span class="code-str">RULE-SET,google,Proxy</span>
+  - <span class="code-str">MATCH,Proxy</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function showModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+function closeModalOnBg(e) {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+}
+
+function switchTab(el, contentId) {
+  const parent = el.closest('.content') || el.closest('.page');
+  const allTabs = el.closest('.tabs').querySelectorAll('.tab');
+  allTabs.forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+
+  // Get sibling content divs
+  const tabsEl = el.closest('.tabs');
+  const nextSibling = tabsEl.nextElementSibling;
+  // hide all tab content siblings
+  let sib = tabsEl.nextElementSibling;
+  while (sib) {
+    if (sib.id && sib.id.startsWith('tab-')) sib.style.display = 'none';
+    sib = sib.nextElementSibling;
+  }
+  const target = document.getElementById(contentId);
+  if (target) target.style.display = '';
+}
+
+function toggleGroup(el) {
+  const body = el.nextElementSibling;
+  const arrow = el.querySelector('span:last-child');
+  body.classList.toggle('open');
+  if (arrow) arrow.textContent = body.classList.contains('open') ? '▾' : '▸';
+}
+
+function toggleSubBody(el) {
+  const body = el.nextElementSibling;
+  const arrow = el.querySelector('span:last-child');
+  body.classList.toggle('open');
+  if (arrow) arrow.textContent = body.classList.contains('open') ? '▾' : '▸';
+}
+
+function toggleProviderDetail(card) {
+  const detail = card.querySelector('.provider-detail');
+  if (detail) detail.style.display = detail.style.display === 'none' ? '' : 'none';
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  toast('已复制到剪贴板');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = '✓ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function toggleRulesetType(sel) {
+  const urlGroup = document.getElementById('external-url-group');
+  urlGroup.style.display = sel.value === 'external' ? '' : 'none';
+}
+
+function switchProviderType(val) {
+  ['http','inline'].forEach(t => {
+    const fields = document.getElementById('provider-fields-' + t);
+    if (fields) fields.style.display = t === val ? '' : 'none';
+    const btn = document.getElementById('ptype-' + t);
+    if (btn) {
+      btn.style.border = t === val ? '1px solid var(--accent)' : '1px solid var(--border)';
+      btn.style.background = t === val ? 'var(--accent-dim)' : 'transparent';
+    }
+  });
+  const saveBtn = document.getElementById('provider-save-btn');
+  if (saveBtn) {
+    saveBtn.textContent = val === 'http' ? '保存并拉取' : '保存节点源';
+  }
+}
+
+const PROTO_LABELS = {
+  ss:'Shadowsocks', vmess:'VMess (V2Ray)', vless:'VLESS',
+  trojan:'Trojan', hysteria2:'Hysteria2', tuic:'TUIC v5',
+  http:'HTTP 代理', socks5:'SOCKS5 代理'
+};
+const PROTO_SHOW_TLS = ['vmess','vless','trojan','hysteria2','tuic'];
+
+function switchProxyType(val) {
+  ['ss','vmess','vless','trojan','hysteria2','tuic','http','socks5'].forEach(p => {
+    const el = document.getElementById('fields-' + p);
+    if (el) el.style.display = p === val ? '' : 'none';
+  });
+  const tlsSec = document.getElementById('tls-section');
+  if (tlsSec) tlsSec.style.display = PROTO_SHOW_TLS.includes(val) ? '' : 'none';
+  const lbl = document.getElementById('proto-label');
+  if (lbl) lbl.textContent = PROTO_LABELS[val] || val;
+}
+
+function toggleWsPath(val) {
+  const el = document.getElementById('ws-path-group');
+  if (el) el.style.display = val === 'ws' ? '' : 'none';
+}
+
+// keyboard shortcut: Esc closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});
+</script>
+</body>
+</html>

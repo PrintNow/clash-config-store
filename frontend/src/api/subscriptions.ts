@@ -1,10 +1,8 @@
 import client from './client'
-import { withParsedEnabledProviderIds } from '@/domain/subscription/enabledProviderIds'
-import type { Subscription, AccessRestriction, AccessLog } from '@/types'
+import type { Subscription, AccessRestriction, AccessLog, SubscriptionComponents } from '@/types'
 
 interface SubscriptionPayload {
   name?: string
-  enabled_provider_ids?: number[]
   custom_config_id?: number | null
   config_template_id?: number | null
   rule_insert_mode?: 'prepend' | 'append' | 'replace'
@@ -27,7 +25,7 @@ interface AccessLogResponse {
 export const subscriptionsApi = {
   list: async (): Promise<Subscription[]> => {
     const res = await client.get<{ code: number; data: Subscription[] }>('/subscriptions')
-    return res.data.data.map((s) => withParsedEnabledProviderIds(s))
+    return res.data.data
   },
 
   get: async (id: number): Promise<Subscription> => {
@@ -35,7 +33,7 @@ export const subscriptionsApi = {
       code: number
       data: { subscription: Subscription; access_restrictions: AccessRestriction[] }
     }>(`/subscriptions/${id}`)
-    return withParsedEnabledProviderIds(res.data.data.subscription)
+    return res.data.data.subscription
   },
 
   getWithRestrictions: async (
@@ -46,19 +44,19 @@ export const subscriptionsApi = {
       data: { subscription: Subscription; access_restrictions: AccessRestriction[] }
     }>(`/subscriptions/${id}`)
     return {
-      subscription: withParsedEnabledProviderIds(res.data.data.subscription),
+      subscription: res.data.data.subscription,
       access_restrictions: res.data.data.access_restrictions,
     }
   },
 
   create: async (data: SubscriptionPayload): Promise<Subscription> => {
     const res = await client.post<{ code: number; data: Subscription }>('/subscriptions', data)
-    return withParsedEnabledProviderIds(res.data.data)
+    return res.data.data
   },
 
   update: async (id: number, data: SubscriptionPayload): Promise<Subscription> => {
     const res = await client.put<{ code: number; data: Subscription }>(`/subscriptions/${id}`, data)
-    return withParsedEnabledProviderIds(res.data.data)
+    return res.data.data
   },
 
   delete: async (id: number): Promise<void> => {
@@ -100,5 +98,10 @@ export const subscriptionsApi = {
 
   deleteRestriction: async (subscriptionId: number, restrictionId: number): Promise<void> => {
     await client.delete(`/subscriptions/${subscriptionId}/restrictions/${restrictionId}`)
+  },
+
+  getComponents: async (id: number): Promise<SubscriptionComponents> => {
+    const res = await client.get<{ code: number; data: SubscriptionComponents }>(`/subscriptions/${id}/components`)
+    return res.data.data
   },
 }

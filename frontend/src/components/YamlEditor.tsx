@@ -37,9 +37,17 @@ export interface YamlEditorProps {
   placeholder?: string
   /** 编辑器最小高度，如 200px、300px */
   minHeight?: string
+  /** 编辑器固定高度，设置后内容超出时滚动 */
+  height?: string
+  /** 编辑器最大高度，超出后滚动 */
+  maxHeight?: string
   className?: string
   readOnly?: boolean
   highlightedLine?: number | null
+  /** 语言模式，默认 yaml；text 表示纯文本无语言扩展 */
+  language?: 'yaml' | 'text'
+  /** 长行自动换行，默认 false（水平滚动）；规则列表场景建议开启 */
+  lineWrapping?: boolean
 }
 
 /** YAML 语法高亮编辑区，主题随应用亮/暗/system 切换 */
@@ -47,13 +55,38 @@ export function YamlEditor({
   value,
   onChange,
   placeholder,
-  minHeight = '200px',
+  minHeight,
+  height,
+  maxHeight,
   className,
   readOnly = false,
   highlightedLine = null,
+  language = 'yaml',
+  lineWrapping = false,
 }: YamlEditorProps) {
+  const resolvedMinHeight = minHeight ?? (height ? undefined : '200px')
   const isDark = useResolvedDark()
-  const extensions: Extension[] = [yaml()]
+
+  // 用高优先级 theme 覆盖 CodeMirror 内置 light/dark 主题的固定背景色，使其与 app design token 一致
+  const appThemeExtension = EditorView.theme(
+    {
+      '&': { backgroundColor: 'hsl(var(--background))' },
+      '.cm-gutters': {
+        backgroundColor: 'hsl(var(--muted))',
+        borderRight: '1px solid hsl(var(--border))',
+        color: 'hsl(var(--muted-foreground))',
+      },
+      '.cm-activeLineGutter': { backgroundColor: 'hsl(var(--accent))' },
+      '.cm-activeLine': { backgroundColor: 'hsl(var(--accent) / 0.3)' },
+    },
+    { dark: isDark }
+  )
+
+  const extensions: Extension[] = [appThemeExtension, ...(language === 'yaml' ? [yaml()] : [])]
+
+  if (lineWrapping) {
+    extensions.push(EditorView.lineWrapping)
+  }
 
   if (highlightedLine && highlightedLine > 0) {
     const highlightTheme = EditorView.theme({
@@ -105,10 +138,16 @@ export function YamlEditor({
   }
 
   return (
-    <div className={cn('rounded-md border border-input overflow-hidden', className)}>
+    <div className={cn(
+      'rounded-md border border-input overflow-hidden min-w-0 w-full',
+      height === '100%' && 'h-full',
+      className
+    )}>
       <CodeMirror
         value={value}
-        minHeight={minHeight}
+        minHeight={resolvedMinHeight}
+        height={height}
+        maxHeight={maxHeight}
         theme={isDark ? 'dark' : 'light'}
         extensions={extensions}
         onChange={onChange}
@@ -120,7 +159,8 @@ export function YamlEditor({
           foldGutter: !readOnly,
           highlightActiveLine: true,
         }}
-        className={cn('text-sm font-mono', readOnly && '[&_.cm-content]:cursor-text')}
+        className={cn('text-sm font-mono', height === '100%' && 'h-full', readOnly && '[&_.cm-content]:cursor-text')}
+        style={{ maxWidth: '100%' }}
       />
     </div>
   )
